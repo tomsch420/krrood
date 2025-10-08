@@ -7,17 +7,6 @@ EQL is a relational query language that is pythonic, and intuitive.
 
 The interface side of EQL is inspired by [euROBIN](https://www.eurobin-project.eu/) entity query language white paper.
 
-
-## Installation
-
-```bash
-pip install entity_query_language
-```
-If you want to use the visualization feature, you will also need to install [rustworkx_utils](https://github.com/AbdelrhmanBassiouny/rustworkx_utils).
-```bash
-pip install rustworkx_utils
-```
-
 # Example Usage
 
 ## Basic Example
