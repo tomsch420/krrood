@@ -23,6 +23,7 @@ parts:
         - file: eql/example_with_concatenate
         - file: eql/example_with_for_all
         - file: eql/eql_for_sql_experts
+- caption: Ormatic
 - caption: References
   chapters:
     - file: autoapi/index
