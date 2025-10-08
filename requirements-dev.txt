@@ -1,7 +1,2 @@
--r requirements.txt
-tqdm
-pytest
-pydot
-pdbpp
-omegaconf
+-r requirements-dev-ci.txt
 rustworkx_utils
