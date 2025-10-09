@@ -9,7 +9,7 @@ except ImportError:
 
 from .datasets import Drawer, Handle, FixedConnection, Body, Container, PrismaticConnection, RevoluteConnection, View, \
     Door, Wardrobe
-from entity_query_language import entity, rule_mode, infer, HasType, symbolic_mode, Add, alternative
+from krrood.entity_query_language import entity, rule_mode, infer, HasType, symbolic_mode, Add, alternative
 
 @pytest.mark.skipif(GraphVisualizer is None, reason="requires rustworkx_utils")
 def test_render_rx_graph_as_igraph_simple(handles_and_containers_world):

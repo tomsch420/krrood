@@ -11,8 +11,9 @@ In this example, we place a single "cabinet" view into `world.views`. The cabine
 from dataclasses import dataclass, field
 from typing import List
 
-from entity_query_language import a, set_of, symbolic_mode, let, flatten
-from entity_query_language.predicate import symbol
+from krrood.entity_query_language import a, set_of, symbolic_mode, let, flatten
+from krrood.entity_query_language import symbol
+
 
 # Minimal dataset for the example
 @symbol
@@ -20,20 +21,24 @@ from entity_query_language.predicate import symbol
 class Body:
     name: str
 
+
 @symbol
 @dataclass
 class Handle(Body):
     ...
+
 
 @symbol
 @dataclass
 class Container(Body):
     ...
 
+
 @symbol
 @dataclass
 class View:
     world: object = field(default=None, repr=False, kw_only=True)
+
 
 @symbol
 @dataclass
@@ -41,11 +46,13 @@ class Drawer(View):
     handle: Handle
     container: Container
 
+
 @symbol
 @dataclass
 class World:
     bodies: List[Body] = field(default_factory=list)
     views: List[View] = field(default_factory=list)
+
 
 # Build a small world
 world = World()
@@ -59,11 +66,13 @@ world.bodies.extend([container1, container3, handle1, handle3])
 drawer1 = Drawer(handle=handle1, container=container1)
 drawer2 = Drawer(handle=handle3, container=container3)
 
+
 # A simple view-like class with an iterable attribute
 class CabinetLike(View):
     def __init__(self, drawers):
         super().__init__()
         self.drawers = list(drawers)
+
 
 cabinet = CabinetLike([drawer1, drawer2])
 world.views = [cabinet]

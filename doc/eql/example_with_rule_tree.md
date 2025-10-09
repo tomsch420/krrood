@@ -11,7 +11,8 @@ We will construct objects symbolically using symbolic_rule and Add, with let pla
 ## Example Usage
 
 ```python
-from entity_query_language import entity, an, let, and_, symbolic_mode, symbol, refinement, alternative, Add, rule_mode, \
+from krrood.entity_query_language import entity, an, let, and_, symbolic_mode, symbol, refinement, alternative, Add,
+    rule_mode,
     HasType, infer
 from dataclasses import dataclass, field
 from typing_extensions import List
@@ -34,6 +35,7 @@ class Container(Body):
 class Handle(Body):
     ...
 
+
 @symbol
 @dataclass
 class Connection:
@@ -50,12 +52,14 @@ class FixedConnection(Connection):
 class RevoluteConnection(Connection):
     ...
 
+
 @symbol
 @dataclass
 class World:
     id_: int
     bodies: List[Body]
     connections: List[Connection] = field(default_factory=list)
+
 
 @symbol
 @dataclass
@@ -84,7 +88,8 @@ class Wardrobe(View):
 
 
 # --- Build a small "world"
-container1, body2, body3, container2 = Container("Container1"), Body("Body2", size=2), Body("Body3"), Container("Container2")
+container1, body2, body3, container2 = Container("Container1"), Body("Body2", size=2), Body("Body3"), Container(
+    "Container2")
 handle1, handle2, handle3 = Handle("Handle1"), Handle("Handle2"), Handle("Handle3")
 world = World(1, [container1, container2, body2, body3, handle1, handle2, handle3])
 

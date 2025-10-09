@@ -39,18 +39,21 @@ WHERE body.name = 'Body2';
 EQL
 
 ```python
-from entity_query_language import entity, an, let
+from krrood.entity_query_language import entity, an, let
 from dataclasses import dataclass
 from typing_extensions import List
+
 
 @dataclass(unsafe_hash=True)
 class Body:
     name: str
 
+
 @dataclass(eq=False)
 class World:
     id_: int
     bodies: List[Body]
+
 
 world = World(1, [Body("Body1"), Body("Body2")])
 
@@ -83,7 +86,7 @@ WHERE body.name LIKE 'Body%'
 EQL
 
 ```python
-from entity_query_language import entity, an, let, and_
+from krrood.entity_query_language import entity, an, let, and_
 from dataclasses import dataclass
 from typing_extensions import List
 
@@ -125,18 +128,21 @@ WHERE body.name IN ('Container1', 'Handle1');
 EQL
 
 ```python
-from entity_query_language import entity, an, let, in_, contains
+from krrood.entity_query_language import entity, an, let, in_, contains
 from dataclasses import dataclass
 from typing_extensions import List
+
 
 @dataclass(unsafe_hash=True)
 class Body:
     name: str
 
+
 @dataclass(eq=False)
 class World:
     id_: int
     bodies: List[Body]
+
 
 world = World(1, [Body("Container1"), Body("Container2"), Body("Handle1"), Body("Handle2")])
 
@@ -169,7 +175,7 @@ JOIN bodies AS handle ON handle.id = fixed_connection.child_id;
 EQL
 
 ```python
-from entity_query_language import entity, an, let, and_, set_of
+from krrood.entity_query_language import entity, an, let, and_, set_of
 from dataclasses import dataclass, field
 from typing_extensions import List
 
@@ -241,19 +247,22 @@ can access each variable by its identity if needed.
 - the(...) asserts there is exactly one satisfying assignment; it raises if there are 0 or >1.
 
 ```python
-from entity_query_language import entity, the, let
-from entity_query_language.failures import MultipleSolutionFound
+from krrood.entity_query_language import entity, the, let
+from krrood.entity_query_language.failures import MultipleSolutionFound
 from dataclasses import dataclass
 from typing_extensions import List
+
 
 @dataclass(unsafe_hash=True)
 class Body:
     name: str
 
+
 @dataclass(eq=False)
 class World:
     id_: int
     bodies: List[Body]
+
 
 # Two bodies with the same name to demonstrate uniqueness enforcement
 world = World(1, [Body("Body1"), Body("Body1")])
@@ -277,7 +286,7 @@ EQL can construct new objects from matched patterns using symbolic_mode and @sym
 rule-based reasoning than SQL aggregation. See the Inference example for full context.
 
 ```python
-from entity_query_language import entity, an, let, and_, symbolic_mode, symbol
+from krrood.entity_query_language import entity, an, let, and_, symbolic_mode, symbol
 from dataclasses import dataclass, field
 from typing_extensions import List
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from krrood.owl_to_python import OwlToPythonConverter
+from krrood.experiments.owl_to_python import OwlToPythonConverter
 
 
 def test_age_name_and_tenured_types():

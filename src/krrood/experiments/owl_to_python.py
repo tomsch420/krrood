@@ -728,6 +728,6 @@ class OwlToPythonConverter:
 
 # Usage
 if __name__ == "__main__":
-    from krrood.helpers import generate_lubm_with_predicates
+    from krrood.experiments.helpers import generate_lubm_with_predicates
 
     generate_lubm_with_predicates()

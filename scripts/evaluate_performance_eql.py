@@ -1,9 +1,9 @@
 import os
 
-from krrood import lubm_with_predicates
-from krrood.helpers import evaluate_eql
-from krrood.lubm_eql_queries import get_eql_queries
-from krrood.owl_instances_loader import load_instances
+from krrood.experiments import lubm_with_predicates
+from krrood.experiments.helpers import evaluate_eql
+from krrood import get_eql_queries
+from krrood import load_instances
 
 if __name__ == "__main__":
     # load instances

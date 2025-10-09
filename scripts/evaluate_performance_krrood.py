@@ -2,10 +2,8 @@ from ormatic.dao import to_dao
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from entity_query_language import an, entity, let, contains
-from krrood.lubm import Student
-from krrood.orm.ormatic_interface import Base, PersonDAO
-from krrood.generator import UniversityDataGenerator, GeneratorConfiguration, Dataset
+from krrood.experiments.orm.ormatic_interface import Base, PersonDAO
+from krrood import UniversityDataGenerator, GeneratorConfiguration, Dataset
 
 
 def evaluate_eql():

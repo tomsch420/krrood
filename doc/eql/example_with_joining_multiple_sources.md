@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import List
 
-from entity_query_language import an, set_of, From, symbol, HasType, symbolic_mode
+from krrood.entity_query_language import an, set_of, From, symbol, HasType, symbolic_mode
 
 
 @symbol

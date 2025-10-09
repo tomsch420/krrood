@@ -1,7 +1,7 @@
 import os
 
-from krrood.helpers import evaluate_sparql, make_rdf_graph
-from krrood.lubm_sparql_queries import sparql_queries
+from krrood.experiments.helpers import evaluate_sparql, make_rdf_graph
+from krrood import sparql_queries
 
 
 if __name__ == "__main__":

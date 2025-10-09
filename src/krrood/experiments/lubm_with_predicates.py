@@ -6,9 +6,9 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Union, Any
+from typing import List, Optional
 
-from entity_query_language.property_descriptor import Thing, PropertyDescriptor
+from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
 
 # Property descriptor classes (object properties)

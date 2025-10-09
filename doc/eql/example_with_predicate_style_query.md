@@ -13,17 +13,20 @@ Here we show simple queries using the predicate form to find `Body` objects in a
 ```python
 from dataclasses import dataclass
 from typing_extensions import List
-from entity_query_language import an, entity, let, symbolic_mode, symbol, From
+from krrood.entity_query_language import an, entity, let, symbolic_mode, symbol, From
+
 
 @symbol
 @dataclass(unsafe_hash=True)
 class Body:
     name: str
 
+
 @dataclass(eq=False)
 class World:
     id_: int
     bodies: List[Body]
+
 
 world = World(1, [Body("Container1"), Body("Container2"), Body("Handle1"), Body("Handle2"), Body("Handle3")])
 
@@ -48,7 +51,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from entity_query_language import an, entity, symbolic_mode, symbol, From, a, rule_mode, infer, HasType
+from krrood.entity_query_language import an, entity, symbolic_mode, symbol, From, a, rule_mode, infer, HasType
 
 
 @symbol

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing_extensions import List
 
-from entity_query_language import entity, let, an, predicate, symbolic_mode, symbol, Predicate
+from krrood.entity_query_language import entity, let, an, predicate, symbolic_mode, symbol, Predicate
 
 
 @symbol

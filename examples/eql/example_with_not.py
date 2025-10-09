@@ -1,4 +1,4 @@
-from entity_query_language import entity, let, an, and_, or_, not_, symbol, symbolic_mode
+from krrood.entity_query_language import entity, let, an, and_, or_, not_, symbol, symbolic_mode
 from dataclasses import dataclass
 from typing_extensions import List
 

@@ -1,5 +1,5 @@
-from krrood.generator import UniversityDataGenerator, GeneratorConfiguration
-from krrood.lubm import (
+from krrood.experiments.generator import UniversityDataGenerator, GeneratorConfiguration
+from krrood.experiments.lubm import (
     University,
     Department,
 )

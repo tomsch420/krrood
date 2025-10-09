@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import pytest
 
 
-from entity_query_language import and_, not_, contains, in_, symbolic_mode, From, predicate, symbol, Predicate
-from entity_query_language.cache_data import cache_search_count, cache_match_count, disable_caching
-from entity_query_language import an, entity, set_of, let, the, or_, a
-from entity_query_language.failures import MultipleSolutionFound
-from entity_query_language.predicate import HasType
+from krrood.entity_query_language import and_, not_, contains, in_, symbolic_mode, From, predicate, Predicate
+from krrood.entity_query_language.cache_data import cache_search_count, cache_match_count
+from krrood.entity_query_language import an, entity, set_of, let, the, or_, a
+from krrood.entity_query_language.failures import MultipleSolutionFound
+from krrood.entity_query_language import HasType
 from .datasets import Handle, Body, Container, FixedConnection, PrismaticConnection, World, Connection
 
 

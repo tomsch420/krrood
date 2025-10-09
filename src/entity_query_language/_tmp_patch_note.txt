@@ -1,2 +1,0 @@
-This temporary file documents that GraphVisualizer was introduced and _visualize_impl delegates to it.
-This file can be removed later; it exists only to facilitate step-by-step patching.

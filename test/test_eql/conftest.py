@@ -1,6 +1,6 @@
 import pytest
 
-from entity_query_language.symbolic import Variable
+from krrood.entity_query_language.symbolic import Variable
 from .conf.world.handles_and_containers import World as HandlesAndContainersWorld
 from .conf.world.doors_and_drawers import World as DoorsAndDrawersWorld
 from .datasets import *

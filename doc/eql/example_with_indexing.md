@@ -6,7 +6,8 @@ containers held by your symbolic variable, and the operation will be represented
 ```python
 from dataclasses import dataclass
 from typing_extensions import List, Dict
-from entity_query_language import an, entity, let, symbolic_mode, symbol
+from krrood.entity_query_language import an, entity, let, symbolic_mode, symbol
+
 
 @symbol
 @dataclass
@@ -14,9 +15,11 @@ class Body:
     name: str
     props: Dict[str, int]
 
+
 @dataclass
 class World:
     bodies: List[Body]
+
 
 world = World([
     Body("Body1", {"score": 1}),

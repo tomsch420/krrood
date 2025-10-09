@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from entity_query_language import entity, an, or_, symbolic_mode, symbol, let
+from krrood.entity_query_language import entity, an, or_, symbolic_mode, symbol, let
 
 
 @symbol

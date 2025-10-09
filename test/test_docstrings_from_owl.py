@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import krrood.lubm_with_predicates as lubm
+import krrood.experiments.lubm_with_predicates as lubm
 
 
 def test_class_docstring_from_label():

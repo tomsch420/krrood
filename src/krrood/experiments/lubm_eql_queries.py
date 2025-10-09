@@ -1,12 +1,12 @@
 import os
 from typing import List
 
-from entity_query_language import symbolic_mode, in_, a, flatten
-from entity_query_language.symbolic import ResultQuantifier
+from krrood.entity_query_language import symbolic_mode, a
+from krrood.entity_query_language.symbolic import ResultQuantifier
 
-from krrood import lubm_with_predicates
-from krrood.helpers import evaluate_eql
-from krrood.lubm_with_predicates import (
+from krrood.experiments import lubm_with_predicates
+from krrood.experiments.helpers import evaluate_eql
+from krrood.experiments.lubm_with_predicates import (
     GraduateStudent,
     GraduateCourse,
     Person,
@@ -32,7 +32,7 @@ from krrood.lubm_with_predicates import (
     HasAlumnus,
     TakesCourse,
 )
-from krrood.owl_instances_loader import load_instances
+from krrood.experiments.owl_instances_loader import load_instances
 
 
 def get_eql_queries() -> List[ResultQuantifier]:
@@ -134,7 +134,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
 
 if __name__ == "__main__":
-    instances_path = os.path.join("..", "..", "resources", "lubm_instances.owl")
+    instances_path = os.path.join("../..", "..", "resources", "lubm_instances.owl")
     load_instances(
         instances_path,
         model_module=lubm_with_predicates,

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing_extensions import Dict, List
 
-from entity_query_language import an, entity, let, symbolic_mode, symbol, From
+from krrood.entity_query_language import an, entity, let, symbolic_mode, symbol, From
 
 
 def test_indexing_on_dict_field():
