@@ -5,9 +5,9 @@ from sqlalchemy import Column, ForeignKey, Integer, String, Float, Boolean, Date
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 from typing_extensions import Optional, List, Type
 
-import classes.example_classes
 import datetime
-from classes.example_classes import Element
+import test_ormatic.classes.example_classes
+from test_ormatic.classes.example_classes import Element
 
 from ormatic.dao import DataAccessObject
 from ormatic.custom_types import TypeType
@@ -15,11 +15,11 @@ from ormatic.custom_types import TypeType
 class Base(DeclarativeBase):
     type_mappings = {
         Type: TypeType,
-        classes.example_classes.PhysicalObject: classes.example_classes.ConceptType,
+        test_ormatic.classes.example_classes.PhysicalObject: test_ormatic.classes.example_classes.ConceptType,
     }
 
 
-class AlternativeMappingAggregatorDAO(Base, DataAccessObject[classes.example_classes.AlternativeMappingAggregator]):
+class AlternativeMappingAggregatorDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.AlternativeMappingAggregator]):
     __tablename__ = 'AlternativeMappingAggregatorDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -31,12 +31,12 @@ class AlternativeMappingAggregatorDAO(Base, DataAccessObject[classes.example_cla
     entities2: Mapped[List[CustomEntityDAO]] = relationship('CustomEntityDAO', foreign_keys='[CustomEntityDAO.alternativemappingaggregatordao_entities2_id]', post_update=True)
 
 
-class AtomDAO(Base, DataAccessObject[classes.example_classes.Atom]):
+class AtomDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Atom]):
     __tablename__ = 'AtomDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    element: Mapped[classes.example_classes.Element]
+    element: Mapped[test_ormatic.classes.example_classes.Element]
     type: Mapped[int]
     charge: Mapped[float]
     timestamp: Mapped[datetime.datetime]
@@ -45,7 +45,7 @@ class AtomDAO(Base, DataAccessObject[classes.example_classes.Atom]):
 
 
 
-class BackreferenceMappingDAO(Base, DataAccessObject[classes.example_classes.BackreferenceMapping]):
+class BackreferenceMappingDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.BackreferenceMapping]):
     __tablename__ = 'BackreferenceMappingDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -58,7 +58,7 @@ class BackreferenceMappingDAO(Base, DataAccessObject[classes.example_classes.Bac
     reference: Mapped[ReferenceDAO] = relationship('ReferenceDAO', uselist=False, foreign_keys=[reference_id], post_update=True)
 
 
-class BodyDAO(Base, DataAccessObject[classes.example_classes.Body]):
+class BodyDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Body]):
     __tablename__ = 'BodyDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -75,7 +75,7 @@ class BodyDAO(Base, DataAccessObject[classes.example_classes.Body]):
         'polymorphic_identity': 'BodyDAO',
     }
 
-class ParentBaseMappingDAO(Base, DataAccessObject[classes.example_classes.ParentBaseMapping]):
+class ParentBaseMappingDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.ParentBaseMapping]):
     __tablename__ = 'ParentBaseMappingDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -91,7 +91,7 @@ class ParentBaseMappingDAO(Base, DataAccessObject[classes.example_classes.Parent
         'polymorphic_identity': 'ParentBaseMappingDAO',
     }
 
-class ParentDAO(Base, DataAccessObject[classes.example_classes.Parent]):
+class ParentDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Parent]):
     __tablename__ = 'ParentDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -107,7 +107,7 @@ class ParentDAO(Base, DataAccessObject[classes.example_classes.Parent]):
         'polymorphic_identity': 'ParentDAO',
     }
 
-class ConnectionDAO(Base, DataAccessObject[classes.example_classes.Connection]):
+class ConnectionDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Connection]):
     __tablename__ = 'ConnectionDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -127,7 +127,7 @@ class ConnectionDAO(Base, DataAccessObject[classes.example_classes.Connection]):
         'polymorphic_identity': 'ConnectionDAO',
     }
 
-class ContainerDAO(Base, DataAccessObject[classes.example_classes.Container]):
+class ContainerDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Container]):
     __tablename__ = 'ContainerDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -138,7 +138,7 @@ class ContainerDAO(Base, DataAccessObject[classes.example_classes.Container]):
     items: Mapped[List[ItemWithBackreferenceDAO]] = relationship('ItemWithBackreferenceDAO', foreign_keys='[ItemWithBackreferenceDAO.containerdao_items_id]', post_update=True)
 
 
-class CustomEntityDAO(Base, DataAccessObject[classes.example_classes.CustomEntity]):
+class CustomEntityDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.CustomEntity]):
     __tablename__ = 'CustomEntityDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -156,7 +156,7 @@ class CustomEntityDAO(Base, DataAccessObject[classes.example_classes.CustomEntit
         'polymorphic_identity': 'CustomEntityDAO',
     }
 
-class DoublePositionAggregatorDAO(Base, DataAccessObject[classes.example_classes.DoublePositionAggregator]):
+class DoublePositionAggregatorDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.DoublePositionAggregator]):
     __tablename__ = 'DoublePositionAggregatorDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -168,7 +168,7 @@ class DoublePositionAggregatorDAO(Base, DataAccessObject[classes.example_classes
     positions2: Mapped[List[PositionDAO]] = relationship('PositionDAO', foreign_keys='[PositionDAO.doublepositionaggregatordao_positions2_id]', post_update=True)
 
 
-class EntityAssociationDAO(Base, DataAccessObject[classes.example_classes.EntityAssociation]):
+class EntityAssociationDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.EntityAssociation]):
     __tablename__ = 'EntityAssociationDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -181,7 +181,7 @@ class EntityAssociationDAO(Base, DataAccessObject[classes.example_classes.Entity
     entity: Mapped[CustomEntityDAO] = relationship('CustomEntityDAO', uselist=False, foreign_keys=[entity_id], post_update=True)
 
 
-class ItemWithBackreferenceDAO(Base, DataAccessObject[classes.example_classes.ItemWithBackreference]):
+class ItemWithBackreferenceDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.ItemWithBackreference]):
     __tablename__ = 'ItemWithBackreferenceDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -195,7 +195,7 @@ class ItemWithBackreferenceDAO(Base, DataAccessObject[classes.example_classes.It
     container: Mapped[ContainerDAO] = relationship('ContainerDAO', uselist=False, foreign_keys=[container_id], post_update=True)
 
 
-class KinematicChainDAO(Base, DataAccessObject[classes.example_classes.KinematicChain]):
+class KinematicChainDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.KinematicChain]):
     __tablename__ = 'KinematicChainDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -212,7 +212,7 @@ class KinematicChainDAO(Base, DataAccessObject[classes.example_classes.Kinematic
         'polymorphic_identity': 'KinematicChainDAO',
     }
 
-class MoreShapesDAO(Base, DataAccessObject[classes.example_classes.MoreShapes]):
+class MoreShapesDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.MoreShapes]):
     __tablename__ = 'MoreShapesDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -223,7 +223,7 @@ class MoreShapesDAO(Base, DataAccessObject[classes.example_classes.MoreShapes]):
     shapes: Mapped[List[ShapesDAO]] = relationship('ShapesDAO', foreign_keys='[ShapesDAO.moreshapesdao_shapes_id]', post_update=True)
 
 
-class NodeDAO(Base, DataAccessObject[classes.example_classes.Node]):
+class NodeDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Node]):
     __tablename__ = 'NodeDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -235,7 +235,7 @@ class NodeDAO(Base, DataAccessObject[classes.example_classes.Node]):
     parent: Mapped[NodeDAO] = relationship('NodeDAO', uselist=False, foreign_keys=[parent_id], post_update=True)
 
 
-class ObjectAnnotationDAO(Base, DataAccessObject[classes.example_classes.ObjectAnnotation]):
+class ObjectAnnotationDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.ObjectAnnotation]):
     __tablename__ = 'ObjectAnnotationDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -247,7 +247,7 @@ class ObjectAnnotationDAO(Base, DataAccessObject[classes.example_classes.ObjectA
     object_reference: Mapped[OriginalSimulatedObjectDAO] = relationship('OriginalSimulatedObjectDAO', uselist=False, foreign_keys=[object_reference_id], post_update=True)
 
 
-class OrientationDAO(Base, DataAccessObject[classes.example_classes.Orientation]):
+class OrientationDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Orientation]):
     __tablename__ = 'OrientationDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -261,19 +261,19 @@ class OrientationDAO(Base, DataAccessObject[classes.example_classes.Orientation]
 
 
 
-class OriginalSimulatedObjectDAO(Base, DataAccessObject[classes.example_classes.OriginalSimulatedObject]):
+class OriginalSimulatedObjectDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.OriginalSimulatedObject]):
     __tablename__ = 'OriginalSimulatedObjectDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
     placeholder: Mapped[float]
 
-    concept: Mapped[classes.example_classes.ConceptType] = mapped_column(classes.example_classes.ConceptType, nullable=False)
+    concept: Mapped[test_ormatic.classes.example_classes.ConceptType] = mapped_column(test_ormatic.classes.example_classes.ConceptType, nullable=False)
 
 
 
 
-class PoseDAO(Base, DataAccessObject[classes.example_classes.Pose]):
+class PoseDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Pose]):
     __tablename__ = 'PoseDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -287,7 +287,7 @@ class PoseDAO(Base, DataAccessObject[classes.example_classes.Pose]):
     orientation: Mapped[OrientationDAO] = relationship('OrientationDAO', uselist=False, foreign_keys=[orientation_id], post_update=True)
 
 
-class PositionDAO(Base, DataAccessObject[classes.example_classes.Position]):
+class PositionDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Position]):
     __tablename__ = 'PositionDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -308,7 +308,7 @@ class PositionDAO(Base, DataAccessObject[classes.example_classes.Position]):
         'polymorphic_identity': 'PositionDAO',
     }
 
-class PositionTypeWrapperDAO(Base, DataAccessObject[classes.example_classes.PositionTypeWrapper]):
+class PositionTypeWrapperDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.PositionTypeWrapper]):
     __tablename__ = 'PositionTypeWrapperDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -319,7 +319,7 @@ class PositionTypeWrapperDAO(Base, DataAccessObject[classes.example_classes.Posi
 
 
 
-class PositionsDAO(Base, DataAccessObject[classes.example_classes.Positions]):
+class PositionsDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Positions]):
     __tablename__ = 'PositionsDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -336,7 +336,7 @@ class PositionsDAO(Base, DataAccessObject[classes.example_classes.Positions]):
         'polymorphic_identity': 'PositionsDAO',
     }
 
-class PrivateDefaultFactoryDAO(Base, DataAccessObject[classes.example_classes.PrivateDefaultFactory]):
+class PrivateDefaultFactoryDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.PrivateDefaultFactory]):
     __tablename__ = 'PrivateDefaultFactoryDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -347,7 +347,7 @@ class PrivateDefaultFactoryDAO(Base, DataAccessObject[classes.example_classes.Pr
 
 
 
-class ReferenceDAO(Base, DataAccessObject[classes.example_classes.Reference]):
+class ReferenceDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Reference]):
     __tablename__ = 'ReferenceDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -360,7 +360,7 @@ class ReferenceDAO(Base, DataAccessObject[classes.example_classes.Reference]):
     backreference: Mapped[BackreferenceMappingDAO] = relationship('BackreferenceMappingDAO', uselist=False, foreign_keys=[backreference_id], post_update=True)
 
 
-class RotationMappedDAO(Base, DataAccessObject[classes.example_classes.RotationMapped]):
+class RotationMappedDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.RotationMapped]):
     __tablename__ = 'RotationMappedDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -371,7 +371,7 @@ class RotationMappedDAO(Base, DataAccessObject[classes.example_classes.RotationM
 
 
 
-class ShapeDAO(Base, DataAccessObject[classes.example_classes.Shape]):
+class ShapeDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Shape]):
     __tablename__ = 'ShapeDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -385,7 +385,7 @@ class ShapeDAO(Base, DataAccessObject[classes.example_classes.Shape]):
     origin: Mapped[TransformationMappedDAO] = relationship('TransformationMappedDAO', uselist=False, foreign_keys=[origin_id], post_update=True)
 
 
-class ShapesDAO(Base, DataAccessObject[classes.example_classes.Shapes]):
+class ShapesDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.Shapes]):
     __tablename__ = 'ShapesDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -397,7 +397,7 @@ class ShapesDAO(Base, DataAccessObject[classes.example_classes.Shapes]):
     shapes: Mapped[List[ShapeDAO]] = relationship('ShapeDAO', foreign_keys='[ShapeDAO.shapesdao_shapes_id]', post_update=True)
 
 
-class TransformationMappedDAO(Base, DataAccessObject[classes.example_classes.TransformationMapped]):
+class TransformationMappedDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.TransformationMapped]):
     __tablename__ = 'TransformationMappedDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -411,7 +411,7 @@ class TransformationMappedDAO(Base, DataAccessObject[classes.example_classes.Tra
     rotation: Mapped[RotationMappedDAO] = relationship('RotationMappedDAO', uselist=False, foreign_keys=[rotation_id], post_update=True)
 
 
-class VectorMappedDAO(Base, DataAccessObject[classes.example_classes.VectorMapped]):
+class VectorMappedDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.VectorMapped]):
     __tablename__ = 'VectorMappedDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -423,7 +423,7 @@ class VectorMappedDAO(Base, DataAccessObject[classes.example_classes.VectorMappe
 
 
 
-class VectorsWithPropertyMappedDAO(Base, DataAccessObject[classes.example_classes.VectorsWithPropertyMapped]):
+class VectorsWithPropertyMappedDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.VectorsWithPropertyMapped]):
     __tablename__ = 'VectorsWithPropertyMappedDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -434,7 +434,7 @@ class VectorsWithPropertyMappedDAO(Base, DataAccessObject[classes.example_classe
     vectors: Mapped[List[VectorMappedDAO]] = relationship('VectorMappedDAO', foreign_keys='[VectorMappedDAO.vectorswithpropertymappeddao_vectors_id]', post_update=True)
 
 
-class WorldDAO(Base, DataAccessObject[classes.example_classes.World]):
+class WorldDAO(Base, DataAccessObject[test_ormatic.classes.example_classes.World]):
     __tablename__ = 'WorldDAO'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -447,7 +447,7 @@ class WorldDAO(Base, DataAccessObject[classes.example_classes.World]):
     connections: Mapped[List[ConnectionDAO]] = relationship('ConnectionDAO', foreign_keys='[ConnectionDAO.worlddao_connections_id]', post_update=True)
 
 
-class HandleDAO(BodyDAO, DataAccessObject[classes.example_classes.Handle]):
+class HandleDAO(BodyDAO, DataAccessObject[test_ormatic.classes.example_classes.Handle]):
     __tablename__ = 'HandleDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(BodyDAO.id), primary_key=True)
@@ -461,7 +461,7 @@ class HandleDAO(BodyDAO, DataAccessObject[classes.example_classes.Handle]):
         'inherit_condition': id == BodyDAO.id,
     }
 
-class ContainerBodyDAO(BodyDAO, DataAccessObject[classes.example_classes.ContainerBody]):
+class ContainerBodyDAO(BodyDAO, DataAccessObject[test_ormatic.classes.example_classes.ContainerBody]):
     __tablename__ = 'ContainerBodyDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(BodyDAO.id), primary_key=True)
@@ -475,7 +475,7 @@ class ContainerBodyDAO(BodyDAO, DataAccessObject[classes.example_classes.Contain
         'inherit_condition': id == BodyDAO.id,
     }
 
-class ChildBaseMappingDAO(ParentBaseMappingDAO, DataAccessObject[classes.example_classes.ChildBaseMapping]):
+class ChildBaseMappingDAO(ParentBaseMappingDAO, DataAccessObject[test_ormatic.classes.example_classes.ChildBaseMapping]):
     __tablename__ = 'ChildBaseMappingDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(ParentBaseMappingDAO.id), primary_key=True)
@@ -489,7 +489,7 @@ class ChildBaseMappingDAO(ParentBaseMappingDAO, DataAccessObject[classes.example
         'inherit_condition': id == ParentBaseMappingDAO.id,
     }
 
-class ChildMappedDAO(ParentDAO, DataAccessObject[classes.example_classes.ChildMapped]):
+class ChildMappedDAO(ParentDAO, DataAccessObject[test_ormatic.classes.example_classes.ChildMapped]):
     __tablename__ = 'ChildMappedDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(ParentDAO.id), primary_key=True)
@@ -504,7 +504,7 @@ class ChildMappedDAO(ParentDAO, DataAccessObject[classes.example_classes.ChildMa
         'inherit_condition': id == ParentDAO.id,
     }
 
-class PrismaticDAO(ConnectionDAO, DataAccessObject[classes.example_classes.Prismatic]):
+class PrismaticDAO(ConnectionDAO, DataAccessObject[test_ormatic.classes.example_classes.Prismatic]):
     __tablename__ = 'PrismaticDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(ConnectionDAO.id), primary_key=True)
@@ -518,7 +518,7 @@ class PrismaticDAO(ConnectionDAO, DataAccessObject[classes.example_classes.Prism
         'inherit_condition': id == ConnectionDAO.id,
     }
 
-class FixedDAO(ConnectionDAO, DataAccessObject[classes.example_classes.Fixed]):
+class FixedDAO(ConnectionDAO, DataAccessObject[test_ormatic.classes.example_classes.Fixed]):
     __tablename__ = 'FixedDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(ConnectionDAO.id), primary_key=True)
@@ -532,7 +532,7 @@ class FixedDAO(ConnectionDAO, DataAccessObject[classes.example_classes.Fixed]):
         'inherit_condition': id == ConnectionDAO.id,
     }
 
-class DerivedEntityDAO(CustomEntityDAO, DataAccessObject[classes.example_classes.DerivedEntity]):
+class DerivedEntityDAO(CustomEntityDAO, DataAccessObject[test_ormatic.classes.example_classes.DerivedEntity]):
     __tablename__ = 'DerivedEntityDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(CustomEntityDAO.id), primary_key=True)
@@ -547,7 +547,7 @@ class DerivedEntityDAO(CustomEntityDAO, DataAccessObject[classes.example_classes
         'inherit_condition': id == CustomEntityDAO.id,
     }
 
-class TorsoDAO(KinematicChainDAO, DataAccessObject[classes.example_classes.Torso]):
+class TorsoDAO(KinematicChainDAO, DataAccessObject[test_ormatic.classes.example_classes.Torso]):
     __tablename__ = 'TorsoDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(KinematicChainDAO.id), primary_key=True)
@@ -562,7 +562,7 @@ class TorsoDAO(KinematicChainDAO, DataAccessObject[classes.example_classes.Torso
         'inherit_condition': id == KinematicChainDAO.id,
     }
 
-class Position4DDAO(PositionDAO, DataAccessObject[classes.example_classes.Position4D]):
+class Position4DDAO(PositionDAO, DataAccessObject[test_ormatic.classes.example_classes.Position4D]):
     __tablename__ = 'Position4DDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(PositionDAO.id), primary_key=True)
@@ -577,7 +577,7 @@ class Position4DDAO(PositionDAO, DataAccessObject[classes.example_classes.Positi
         'inherit_condition': id == PositionDAO.id,
     }
 
-class PositionsSubclassWithAnotherPositionDAO(PositionsDAO, DataAccessObject[classes.example_classes.PositionsSubclassWithAnotherPosition]):
+class PositionsSubclassWithAnotherPositionDAO(PositionsDAO, DataAccessObject[test_ormatic.classes.example_classes.PositionsSubclassWithAnotherPosition]):
     __tablename__ = 'PositionsSubclassWithAnotherPositionDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(PositionsDAO.id), primary_key=True)
@@ -593,7 +593,7 @@ class PositionsSubclassWithAnotherPositionDAO(PositionsDAO, DataAccessObject[cla
         'inherit_condition': id == PositionsDAO.id,
     }
 
-class Position5DDAO(Position4DDAO, DataAccessObject[classes.example_classes.Position5D]):
+class Position5DDAO(Position4DDAO, DataAccessObject[test_ormatic.classes.example_classes.Position5D]):
     __tablename__ = 'Position5DDAO'
 
     id: Mapped[int] = mapped_column(ForeignKey(Position4DDAO.id), primary_key=True)

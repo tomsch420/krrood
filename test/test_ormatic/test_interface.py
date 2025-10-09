@@ -3,8 +3,8 @@ import unittest
 from sqlalchemy import create_engine, Engine, select
 from sqlalchemy.orm import Session, configure_mappers
 
-from classes import *
-from classes import *
+from .classes.example_classes import *
+from .classes.sqlalchemy_interface import *
 from ormatic.dao import to_dao, NoDAOFoundDuringParsingError, is_data_column
 from ormatic.utils import drop_database
 

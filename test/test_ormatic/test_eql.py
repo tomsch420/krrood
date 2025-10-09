@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, configure_mappers, aliased
 from entity_query_language.entity import let, an, entity, the, set_of, contains
 from entity_query_language import and_, or_, in_, symbolic_mode
 
-from classes.example_classes import (
+from .classes.example_classes import (
     Position,
     Pose,
     Orientation,
@@ -19,7 +19,7 @@ from classes.example_classes import (
     Container,
     ContainerBody,
 )
-from classes.sqlalchemy_interface import (
+from .classes.sqlalchemy_interface import (
     Base,
     PositionDAO,
     PoseDAO,
@@ -149,7 +149,7 @@ class EQLTestCase(unittest.TestCase):
         with symbolic_mode():
             query = an(
                 entity(
-                    position := let(type_=Position, domain=[]),
+                    position := Position(),
                     in_(position.x, [1, 7]),
                 )
             )
