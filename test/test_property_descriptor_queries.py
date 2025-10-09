@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from entity_query_language import symbolic_mode, in_, a
 from entity_query_language.symbolic import From
 
-from krrood.lubm_with_predicates import (
+from krrood.experiments.lubm_with_predicates import (
     Organization,
     Person,
     Employee,

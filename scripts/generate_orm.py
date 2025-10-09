@@ -6,15 +6,13 @@ from ormatic.dao import AlternativeMapping
 from ormatic.ormatic import ORMatic
 from ormatic.utils import classes_of_module, recursive_subclasses
 
-
-import krrood.lubm
-import krrood.generator
+import krrood.experiments.generator
 
 
 # create of classes that should be mapped
 classes = set(recursive_subclasses(AlternativeMapping))
-classes |= set(classes_of_module(krrood.lubm))
-classes |= {krrood.generator.Dataset}
+classes |= set(classes_of_module(krrood.experiments.lubm))
+classes |= {krrood.experiments.generator.Dataset}
 
 # remove classes that should not be mapped
 # classes -= {

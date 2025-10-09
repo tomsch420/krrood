@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from typing import get_args, get_origin, Any
-
-import krrood.lubm_with_predicates as lubm_pd_module
-from krrood.lubm_with_predicates import Person, Software
+import krrood as lubm_pd_module
 
 
 def _eval_if_str(ann):

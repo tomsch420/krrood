@@ -1,4 +1,0 @@
-2025-09-22: Introduced ReusedVariable wrapper and modified copy behavior to wrap Variables rather than deep-copy their subtrees to preserve IDs and share state while providing a separate view node.
-
-2025-09-22: Introduced ReusedVariable wrapper and modified copy behavior to wrap Variables rather than deep-copy their subtrees to preserve IDs and share state while providing a separate view node.
-2025-09-22: Refinement and fixes — limited wrapping to Variables only (non-Variable CanBehaveLikeAVariable nodes are copied) to avoid recursion/structure issues; added safe attribute access in ReusedVarLike to prevent recursion; ensured wrapper represents the whole variable subtree as a single node and children aren’t duplicated; all tests pass (64/64).

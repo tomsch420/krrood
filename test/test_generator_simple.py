@@ -1,19 +1,9 @@
 #!/usr/bin/env python3
 """Simple standalone test script for the LUBM data generator."""
 
-from krrood.generator import UniversityDataGenerator, GeneratorConfiguration
-from krrood.lubm import (
+from krrood.experiments.generator import UniversityDataGenerator, GeneratorConfiguration
+from krrood.experiments.lubm import (
     University,
-    Department,
-    FullProfessor,
-    AssociateProfessor,
-    AssistantProfessor,
-    Lecturer,
-    UndergraduateStudent,
-    GraduateStudent,
-    Course,
-    GraduateCourse,
-    Professor,
 )
 
 

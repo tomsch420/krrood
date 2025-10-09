@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import get_args, get_origin
 
-import krrood.lubm_with_predicates as lubm_pd_module
-from krrood.lubm_with_predicates import (
+import krrood.experiments.lubm_with_predicates as lubm_pd_module
+from krrood.experiments.lubm_with_predicates import (
     Person,
     Chair,
     Dean,

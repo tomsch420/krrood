@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Test enum functionality after refactoring."""
 
-from krrood.lubm import (
+from krrood.experiments.lubm import (
     DepartmentName,
     ResearchArea,
     CoursePrefix,
     CourseSubject,
     PublicationTitlePrefix,
-    Faculty,
     FullProfessor,
 )
-from krrood.generator import UniversityDataGenerator, GeneratorConfiguration
+from krrood.experiments.generator import UniversityDataGenerator, GeneratorConfiguration
 
 
 def test_enum_imports():

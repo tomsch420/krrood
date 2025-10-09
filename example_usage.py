@@ -6,7 +6,7 @@ This script demonstrates how to use the customizable LUBM data generator
 to create university data following the LUBM benchmark specifications.
 """
 
-from krrood.generator import UniversityDataGenerator, GeneratorConfiguration
+from krrood import UniversityDataGenerator, GeneratorConfiguration
 
 
 def example_basic_usage():

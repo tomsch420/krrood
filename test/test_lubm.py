@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Simple test to verify the LUBM class hierarchy implementation."""
 
-from krrood.lubm import (
+from krrood.experiments.lubm import (
     Person,
     Organization,
     University,
     Department,
-    College,
     Professor,
     AssistantProfessor,
     FullProfessor,
