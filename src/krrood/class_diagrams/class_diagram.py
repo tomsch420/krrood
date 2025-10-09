@@ -70,7 +70,9 @@ class ParseError(TypeError):
 class WrappedClass:
     index: Optional[int] = field(init=False, default=None)
     clazz: Type
-    _class_diagram: Optional[ClassDiagram] = field(init=False, hash=False, default=None)
+    _class_diagram: Optional[ClassDiagram] = field(
+        init=False, hash=False, default=None, repr=False
+    )
 
     @cached_property
     def fields(self) -> List[WrappedField]:
@@ -94,8 +96,17 @@ class ClassDiagram:
     def wrapped_classes(self):
         return self._dependency_graph.nodes()
 
-    def get_wrapped_class(self, clazz: Type) -> WrappedClass:
-        return [cls for cls in self.wrapped_classes if cls.clazz == clazz][0]
+    @property
+    def associations(self) -> List[Association]:
+        return [
+            edge
+            for edge in self._dependency_graph.edges()
+            if isinstance(edge, Association)
+        ]
+
+    def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
+        base = [cls for cls in self.wrapped_classes if cls.clazz == clazz]
+        return base[0] if base else None
 
     def add_node(self, clazz: WrappedClass):
         clazz.index = self._dependency_graph.add_node(clazz)
@@ -109,9 +120,10 @@ class ClassDiagram:
     def _create_inheritance_relations(self):
         for clazz in self.wrapped_classes:
             for superclass in clazz.clazz.__bases__:
-                if not is_builtin_class(superclass):
+                source = self.get_wrapped_class(superclass)
+                if source:
                     relation = Inheritance(
-                        source=self.get_wrapped_class(superclass),
+                        source=source,
                         target=clazz,
                     )
                     self.add_relation(relation)
@@ -123,14 +135,18 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-                if wrapped_field.is_container or wrapped_field.is_optional:
-                    target_type = wrapped_field.contained_type
-                else:
-                    target_type = wrapped_field.resolved_type
-                try:
-                    wrapped_target_class = self.get_wrapped_class(target_type)
-                except IndexError:
+
+                target_type = (
+                    wrapped_field.contained_type
+                    if wrapped_field.is_container or wrapped_field.is_optional
+                    else wrapped_field.resolved_type
+                )
+
+                wrapped_target_class = self.get_wrapped_class(target_type)
+
+                if not wrapped_target_class:
                     continue
+
                 relation = Association(
                     field=wrapped_field,
                     source=clazz,
@@ -165,12 +181,12 @@ class ClassDiagram:
                 parent_node = node_map[source_idx]
                 child_node = node_map[target_idx]
                 child_node.add_parent(parent_node)
-            elif isinstance(relation, Association):
-                # For associations, add as parent relationship with label
-                source_node = node_map[source_idx]
-                target_node = node_map[target_idx]
-                # Association goes from source to target
-                target_node.add_parent(source_node)
+            # elif isinstance(relation, Association):
+            #     # For associations, add as parent relationship with label
+            #     source_node = node_map[source_idx]
+            #     target_node = node_map[target_idx]
+            #     # Association goes from source to target
+            #     target_node.add_parent(source_node)
 
         # Find root nodes (nodes without parents)
         root_nodes = [node for node in node_map.values() if not node.parents]

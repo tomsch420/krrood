@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 import logging
 import sys
@@ -65,7 +66,14 @@ class WrappedField:
 
     @cached_property
     def resolved_type(self):
-        return get_type_hints(self.clazz.clazz)[self.field.name]
+        try:
+            result = get_type_hints(self.clazz.clazz)[self.field.name]
+        except NameError as e:
+            found_clazz = manually_search_for_class_name(e.name)
+            module = importlib.import_module(found_clazz.__module__)
+            locals()[e.name] = getattr(module, e.name)
+            result = get_type_hints(self.clazz.clazz, localns=locals())[self.field.name]
+        return result
 
     @cached_property
     def is_builtin_type(self) -> bool:
