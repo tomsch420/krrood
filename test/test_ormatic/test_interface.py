@@ -3,8 +3,8 @@ import unittest
 from sqlalchemy import create_engine, Engine, select
 from sqlalchemy.orm import Session, configure_mappers
 
-from .classes.example_classes import *
-from .classes.sqlalchemy_interface import *
+from dataset.example_classes import *
+from dataset.sqlalchemy_interface import *
 from ormatic.dao import to_dao, NoDAOFoundDuringParsingError, is_data_column
 from ormatic.utils import drop_database
 
@@ -18,7 +18,7 @@ class InterfaceTestCase(unittest.TestCase):
         # Logger configuration is now handled in ormatic/__init__.py
         configure_mappers()
 
-        cls.engine = create_engine('sqlite:///:memory:')
+        cls.engine = create_engine("sqlite:///:memory:")
         cls.session = Session(cls.engine)
 
     def setUp(self):
@@ -26,7 +26,7 @@ class InterfaceTestCase(unittest.TestCase):
 
     def tearDown(self):
         drop_database(self.engine)
-        #Base.metadata.drop_all(self.engine)
+        # Base.metadata.drop_all(self.engine)
 
     @classmethod
     def tearDownClass(cls):
@@ -121,7 +121,7 @@ class InterfaceTestCase(unittest.TestCase):
         self.assertEqual(pose, queried)
 
     def test_atom(self):
-        atom = Atom(Element.C, 1, 2.)
+        atom = Atom(Element.C, 1, 2.0)
         atomdao = AtomDAO.to_dao(atom)
         self.assertEqual(atomdao.element, Element.C)
 
@@ -308,12 +308,14 @@ class InterfaceTestCase(unittest.TestCase):
         self.assertEqual(reconstructed, association)
 
     def test_assertion(self):
-        p = Pose([1,2,3], "a")
+        p = Pose([1, 2, 3], "a")
         self.assertRaises(NoDAOFoundDuringParsingError, to_dao, p)
 
     def test_PositionsSubclassWithAnotherPosition(self):
         position = Position(1, 2, 3)
-        obj = PositionsSubclassWithAnotherPosition([position], ["a","b", "c"], position)
+        obj = PositionsSubclassWithAnotherPosition(
+            [position], ["a", "b", "c"], position
+        )
         dao: PositionsSubclassWithAnotherPositionDAO = to_dao(obj)
 
         self.session.add(dao)
@@ -335,14 +337,18 @@ class InterfaceTestCase(unittest.TestCase):
         queried_position_5d = self.session.scalars(select(Position5DDAO)).one()
         queried_position_4d = self.session.scalars(select(Position4DDAO)).all()
         queried_position = self.session.scalars(select(PositionDAO)).all()
-        columns = [column for column in queried_position_5d.__table__.columns if is_data_column(column)]
+        columns = [
+            column
+            for column in queried_position_5d.__table__.columns
+            if is_data_column(column)
+        ]
         self.assertTrue(queried_position_5d in queried_position_4d)
         self.assertTrue(queried_position_5d in queried_position)
         self.assertTrue(queried_position_4d[0] in queried_position)
-        self.assertEqual(len(columns), 1) #w column
+        self.assertEqual(len(columns), 1)  # w column
 
     def test_backreference_with_mapping(self):
-        back_ref = Backreference({1:1})
+        back_ref = Backreference({1: 1})
         ref = Reference(0, back_ref)
         back_ref.reference = ref
 
@@ -376,7 +382,6 @@ class InterfaceTestCase(unittest.TestCase):
         reconstructed = queried.from_dao()
         self.assertIs(reconstructed.entities1[1], reconstructed.entities2[0])
 
-
     def test_container_item(self):
         i1 = ItemWithBackreference(0)
         i2 = ItemWithBackreference(1)
@@ -394,7 +399,6 @@ class InterfaceTestCase(unittest.TestCase):
 
         reconstructed_item = queried_items[0].from_dao()
         self.assertEqual(len(reconstructed_item.container.items), 2)
-
 
     def test_nested_mappings(self):
         shape_1 = Shape("rectangle", Transformation(Vector(1), Rotation(1)))
@@ -449,5 +453,5 @@ class InterfaceTestCase(unittest.TestCase):
         self.assertEqual(reconstructed._private_list, [])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
