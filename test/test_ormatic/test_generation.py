@@ -3,11 +3,11 @@ import unittest
 
 from sqlalchemy.orm import registry, Session
 
-from dataset import example_classes
+from dataset import example_classes, semantic_world_like_classes
 from dataset.example_classes import *
-from ormatic.ormatic import ORMatic
-from ormatic.utils import classes_of_module, recursive_subclasses
-from ormatic.dao import AlternativeMapping, DataAccessObject
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module, recursive_subclasses
+from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
 
 
 class SQLAlchemyGenerationTestCase(unittest.TestCase):
@@ -20,6 +20,7 @@ class SQLAlchemyGenerationTestCase(unittest.TestCase):
         # Logger configuration is now handled in ormatic/__init__.py
         # Note: Default log level is INFO, was DEBUG here
         all_classes = set(classes_of_module(example_classes))
+        all_classes.update(set(classes_of_module(semantic_world_like_classes)))
         all_classes -= set(recursive_subclasses(DataAccessObject))
         all_classes -= set(recursive_subclasses(Enum))
         all_classes -= set(recursive_subclasses(TypeDecorator))
@@ -41,7 +42,7 @@ class SQLAlchemyGenerationTestCase(unittest.TestCase):
         # Generate SQLAlchemy declarative mappings
         with open(
             os.path.join(
-                os.path.dirname(__file__), "classes", "sqlalchemy_interface.py"
+                os.path.dirname(__file__), "..", "dataset", "sqlalchemy_interface.py"
             ),
             "w",
         ) as f:
@@ -50,7 +51,7 @@ class SQLAlchemyGenerationTestCase(unittest.TestCase):
     def test_file_generation(self):
         # Check that the file was created
         file_path = os.path.join(
-            os.path.dirname(__file__), "classes", "sqlalchemy_interface.py"
+            os.path.dirname(__file__), "..", "dataset", "sqlalchemy_interface.py"
         )
         self.assertTrue(os.path.exists(file_path))
 

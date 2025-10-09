@@ -8,7 +8,7 @@ from krrood.entity_query_language.cache_data import cache_search_count, cache_ma
 from krrood.entity_query_language import an, entity, set_of, let, the, or_, a
 from krrood.entity_query_language.failures import MultipleSolutionFound
 from krrood.entity_query_language import HasType
-from .datasets import Handle, Body, Container, FixedConnection, PrismaticConnection, World, Connection
+from dataset.semantic_world_like_classes import Handle, Body, Container, FixedConnection, PrismaticConnection, World, Connection
 
 
 # disable_caching()

@@ -2,9 +2,9 @@ import builtins
 import os
 from enum import Enum
 
-from ormatic.dao import AlternativeMapping
-from ormatic.ormatic import ORMatic
-from ormatic.utils import classes_of_module, recursive_subclasses
+from krrood.ormatic.dao import AlternativeMapping
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module, recursive_subclasses
 
 import krrood.experiments.generator
 

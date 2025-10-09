@@ -7,7 +7,7 @@ try:
 except ImportError:
     GraphVisualizer = None
 
-from .datasets import Drawer, Handle, FixedConnection, Body, Container, PrismaticConnection, RevoluteConnection, View, \
+from dataset.semantic_world_like_classes import Drawer, Handle, FixedConnection, Body, Container, PrismaticConnection, RevoluteConnection, View, \
     Door, Wardrobe
 from krrood.entity_query_language import entity, rule_mode, infer, HasType, symbolic_mode, Add, alternative
 

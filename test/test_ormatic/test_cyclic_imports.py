@@ -2,7 +2,7 @@ import unittest
 from dataclasses import fields
 
 from dataset.cyclic_imports import PoseAnnotation
-from ormatic.field_info import FieldInfo
+from krrood.ormatic.field_info import FieldInfo
 
 
 class UnfinishedTypeTestCase(unittest.TestCase):

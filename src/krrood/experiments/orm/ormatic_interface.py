@@ -8,8 +8,8 @@ from typing_extensions import Optional, List, Type
 import krrood.experiments.generator
 import krrood.experiments.lubm
 
-from ormatic.dao import DataAccessObject
-from ormatic.custom_types import TypeType
+from krrood.ormatic.dao import DataAccessObject
+from krrood.ormatic.custom_types import TypeType
 
 class Base(DeclarativeBase):
     type_mappings = {

@@ -6,7 +6,7 @@ from krrood.entity_query_language import infer
 from krrood.entity_query_language import HasType
 from krrood.entity_query_language.rule import refinement, alternative, next_rule
 from krrood.entity_query_language import rule_mode, From, symbolic_mode
-from .datasets import Container, Handle, FixedConnection, PrismaticConnection, Drawer, View, Door, Body, \
+from dataset.semantic_world_like_classes import Container, Handle, FixedConnection, PrismaticConnection, Drawer, View, Door, Body, \
     RevoluteConnection, Wardrobe
 
 
