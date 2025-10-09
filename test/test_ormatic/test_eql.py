@@ -1,36 +1,29 @@
 import unittest
 from sqlalchemy import create_engine, select
 from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.orm import Session, configure_mappers, aliased
+from sqlalchemy.orm import Session, configure_mappers
 
-from entity_query_language.entity import let, an, entity, the, set_of, contains
+from entity_query_language.entity import let, an, entity, the, contains
 from entity_query_language import and_, or_, in_, symbolic_mode
 
-from .classes.example_classes import (
+from dataset.example_classes import (
     Position,
     Pose,
-    Orientation,
-    Parent,
     World,
     Prismatic,
     Fixed,
     Body,
     Handle,
-    Container,
     ContainerBody,
 )
-from .classes.sqlalchemy_interface import (
+from dataset.sqlalchemy_interface import (
     Base,
     PositionDAO,
     PoseDAO,
     OrientationDAO,
-    ParentDAO,
-    WorldDAO,
     FixedDAO,
     PrismaticDAO,
     BodyDAO,
-    ContainerBodyDAO,
-    HandleDAO,
 )
 from ormatic.dao import to_dao
 

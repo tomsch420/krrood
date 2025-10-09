@@ -3,9 +3,8 @@ import unittest
 
 from sqlalchemy.orm import registry, Session
 
-
-from .classes import example_classes
-from .classes.example_classes import *
+from dataset import example_classes
+from dataset.example_classes import *
 from ormatic.ormatic import ORMatic
 from ormatic.utils import classes_of_module, recursive_subclasses
 from ormatic.dao import AlternativeMapping, DataAccessObject

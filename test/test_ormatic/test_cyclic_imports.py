@@ -1,16 +1,8 @@
-import logging
-import sys
 import unittest
 from dataclasses import fields
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import registry, Session, clear_mappers
-
-import ormatic
-from .classes.cyclic_imports import PoseAnnotation
-from .classes.example_classes import Pose
+from dataset.cyclic_imports import PoseAnnotation
 from ormatic.field_info import FieldInfo
-from ormatic.ormatic import ORMatic
 
 
 class UnfinishedTypeTestCase(unittest.TestCase):
