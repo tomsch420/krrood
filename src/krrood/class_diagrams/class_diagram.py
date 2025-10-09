@@ -104,6 +104,14 @@ class ClassDiagram:
             if isinstance(edge, Association)
         ]
 
+    @property
+    def inheritance_relations(self) -> List[Inheritance]:
+        return [
+            edge
+            for edge in self._dependency_graph.edges()
+            if isinstance(edge, Inheritance)
+        ]
+
     def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
         base = [cls for cls in self.wrapped_classes if cls.clazz == clazz]
         return base[0] if base else None

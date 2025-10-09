@@ -45,3 +45,20 @@ def test_class_diagram_visualization():
         )
         == 1
     )
+
+    wrapped_positions_subclass = diagram.get_wrapped_class(
+        example_classes.PositionsSubclassWithAnotherPosition
+    )
+    inheritances = diagram.inheritance_relations
+
+    assert (
+        len(
+            [
+                a
+                for a in inheritances
+                if a.source == wrapped_positions
+                and a.target == wrapped_positions_subclass
+            ]
+        )
+        == 1
+    )
