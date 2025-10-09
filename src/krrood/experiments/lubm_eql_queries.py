@@ -1,8 +1,8 @@
 import os
 from typing import List
 
-from entity_query_language import symbolic_mode, a
-from entity_query_language.symbolic import ResultQuantifier
+from krrood.entity_query_language import symbolic_mode, a
+from krrood.entity_query_language.symbolic import ResultQuantifier
 
 from krrood.experiments import lubm_with_predicates
 from krrood.experiments.helpers import evaluate_eql

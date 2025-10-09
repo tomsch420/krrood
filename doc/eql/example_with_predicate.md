@@ -10,7 +10,7 @@ in EQL. These two become symbolic variables when used within `symbolic_mode()`.
 from dataclasses import dataclass
 from typing_extensions import List
 
-from entity_query_language import entity, let, an, predicate, symbolic_mode, symbol, Predicate
+from krrood.entity_query_language import entity, let, an, predicate, symbolic_mode, symbol, Predicate
 
 
 @symbol
@@ -28,6 +28,7 @@ class Handle(Body):
 class Container(Body):
     pass
 
+
 @symbol
 @dataclass
 class World:
@@ -39,6 +40,7 @@ class World:
 @predicate
 def is_handle(body_: Body) -> bool:
     return body_.name.startswith("Handle")
+
 
 @dataclass
 class HasThreeInItsName(Predicate):

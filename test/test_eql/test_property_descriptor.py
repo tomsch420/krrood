@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-from entity_query_language.property_descriptor import PropertyDescriptor, Thing
+from krrood.entity_query_language.property_descriptor import PropertyDescriptor, Thing
 
 
 # Concrete descriptor used in tests

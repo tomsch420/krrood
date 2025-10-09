@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 
-from typing_extensions import List, Optional, ClassVar
+from typing_extensions import List, Optional
 
-from entity_query_language import symbol
+from krrood.entity_query_language import symbol
 
 
 @dataclass(unsafe_hash=True)

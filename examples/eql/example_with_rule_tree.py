@@ -1,4 +1,4 @@
-from entity_query_language import entity, an, let, and_, symbolic_mode, symbol, refinement, alternative, Add, rule_mode, \
+from krrood.entity_query_language import entity, let, symbolic_mode, symbol, refinement, alternative, Add, rule_mode, \
     HasType, infer
 from dataclasses import dataclass, field
 from typing_extensions import List

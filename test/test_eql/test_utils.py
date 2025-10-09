@@ -1,4 +1,4 @@
-from entity_query_language.cache_data import CacheDict, IndexedCache
+from krrood.entity_query_language.cache_data import CacheDict, IndexedCache
 
 
 def test_cache_insert():

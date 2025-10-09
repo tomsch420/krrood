@@ -1,11 +1,11 @@
-from entity_query_language import let, an, entity, and_, a
-from entity_query_language.cache_data import cache_enter_count, cache_search_count, cache_match_count, \
+from krrood.entity_query_language import let, an, entity, and_, a
+from krrood.entity_query_language.cache_data import cache_enter_count, cache_search_count, cache_match_count, \
     cache_lookup_time, cache_update_time
-from entity_query_language.conclusion import Add
-from entity_query_language.entity import infer
-from entity_query_language.predicate import HasType
-from entity_query_language.rule import refinement, alternative, next_rule
-from entity_query_language.symbolic import rule_mode, From, symbolic_mode
+from krrood.entity_query_language import Add
+from krrood.entity_query_language import infer
+from krrood.entity_query_language import HasType
+from krrood.entity_query_language.rule import refinement, alternative, next_rule
+from krrood.entity_query_language import rule_mode, From, symbolic_mode
 from .datasets import Container, Handle, FixedConnection, PrismaticConnection, Drawer, View, Door, Body, \
     RevoluteConnection, Wardrobe
 

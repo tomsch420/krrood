@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import List
 
-from entity_query_language import entity, symbol, infer, From, HasType, rule_mode, let
+from krrood.entity_query_language import entity, symbol, infer, From, HasType, rule_mode, let
 
 
 @symbol

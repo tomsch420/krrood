@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 
-from entity_query_language import symbolic_mode, symbol, in_, a
-from entity_query_language.property_descriptor import PropertyDescriptor, Thing
-from entity_query_language.symbolic import From
+from krrood.entity_query_language import symbolic_mode, in_, a
+from krrood.entity_query_language.property_descriptor import PropertyDescriptor, Thing
+from krrood.entity_query_language import From
 
 
 @dataclass(frozen=True)

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from entity_query_language import symbolic_mode, in_, a
-from entity_query_language.symbolic import From
+from krrood.entity_query_language import symbolic_mode, in_, a
+from krrood.entity_query_language import From
 
 from krrood.experiments.lubm_with_predicates import (
     Organization,

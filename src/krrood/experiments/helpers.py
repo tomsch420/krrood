@@ -1,7 +1,7 @@
 import os
 from typing import List
 
-from entity_query_language.symbolic import SymbolicExpression, ResultQuantifier
+from krrood.entity_query_language.symbolic import ResultQuantifier
 from owlrl import DeductiveClosure, OWLRL_Semantics
 from rdflib import Graph
 

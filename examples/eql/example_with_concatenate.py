@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From
-from entity_query_language.predicate import symbol
+from krrood.entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From
+from krrood.entity_query_language import symbol
 
 
 # Minimal dataset for the example
