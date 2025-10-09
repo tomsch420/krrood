@@ -1,22 +1,47 @@
+from dataclasses import is_dataclass
 from pathlib import Path
 
+from matplotlib import pyplot as plt
 
+from dataset.example_classes import Pose, Positions
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from ..dataset import example_classes
+import rustworkx.visualization
 
 
 def test_class_diagram_visualization():
-    classes = classes_of_module(example_classes)
+    classes = filter(
+        is_dataclass,
+        classes_of_module(example_classes),
+    )
     diagram = ClassDiagram(classes)
+    assert len(diagram.wrapped_classes) > 0
+    assert len(diagram._dependency_graph.edges()) > 0
+    associations = diagram.associations
 
-    output_file = "test_class_diagram.pdf"
-    diagram.visualize(filename=output_file, title="Test Class Diagram")
+    wrapped_pose = diagram.get_wrapped_class(example_classes.Pose)
+    wrapped_position = diagram.get_wrapped_class(example_classes.Position)
+    wrapped_positions = diagram.get_wrapped_class(example_classes.Positions)
 
-    # Verify the output file was created
-    assert Path(
-        output_file
-    ).exists(), f"Visualization file {output_file} was not created"
+    assert (
+        len(
+            [
+                a
+                for a in associations
+                if a.source == wrapped_pose and a.target == wrapped_position
+            ]
+        )
+        == 1
+    )
 
-    # Clean up
-    # Path(output_file).unlink()
+    assert (
+        len(
+            [
+                a
+                for a in associations
+                if a.source == wrapped_positions and a.target == wrapped_position
+            ]
+        )
+        == 1
+    )

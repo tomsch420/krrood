@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-
+from .utils import is_builtin_class
 from abc import ABC
 from dataclasses import field, InitVar, fields
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
@@ -20,26 +20,10 @@ from typing_extensions import Type
 from krrood.class_diagrams.wrapped_field import WrappedField
 
 
-class Direction(Enum):
-    OUTBOUND = False
-    INBOUND = True
-
-
-class Multiplicity(Enum):
-    """Enumeration of common UML multiplicity values."""
-
-    ZERO_OR_ONE = "0..1"  # Optional[T]
-    EXACTLY_ONE = "1"  # T
-    ZERO_OR_MORE = "*"  # Collection[T]
-
-
 @dataclass
 class Relation(ABC):
     """
     Abstract base class representing a relationship between two classes in a UML class diagram.
-
-    All UML relations connect a source class to a target class and may have additional properties
-    like multiplicity, role names, and navigation direction.
     """
 
     source: WrappedClass
@@ -82,63 +66,13 @@ class ParseError(TypeError):
     pass
 
 
-def manually_search_for_class_name(target_class_name: str) -> Type:
-    """
-    Searches for a class with the specified name in the current module's `globals()` dictionary
-    and all loaded modules present in `sys.modules`. This function attempts to find and resolve
-    the first class that matches the given name. If multiple classes are found with the same
-    name, a warning is logged, and the first one is returned. If no matching class is found,
-    an exception is raised.
-
-    :param target_class_name: Name of the class to search for.
-    :return: The resolved class with the matching name.
-
-    :raises ValueError: Raised when no class with the specified name can be found.
-    """
-    found_classes = []
-
-    # Search 1: In the current module's globals()
-    for name, obj in globals().items():
-        if inspect.isclass(obj) and obj.__name__ == target_class_name:
-            found_classes.append(obj)
-
-    # Search 2: In all loaded modules (via sys.modules)
-    for module_name, module in sys.modules.items():
-        if module is None or not hasattr(module, "__dict__"):
-            continue  # Skip built-in modules or modules without a __dict__
-
-        for name, obj in module.__dict__.items():
-            if inspect.isclass(obj) and obj.__name__ == target_class_name:
-                # Avoid duplicates if a class is imported into multiple namespaces
-                if (obj, f"from module '{module_name}'") not in found_classes:
-                    found_classes.append(obj)
-
-    # If you wanted to "resolve" the forward ref based on this
-    if len(found_classes) == 0:
-        raise ValueError(
-            f"Could not find any class with name {target_class_name} in globals or sys.modules."
-        )
-    elif len(found_classes) == 1:
-        resolved_class = found_classes[0]
-    else:
-        warn_multiple_classes(target_class_name, tuple(found_classes))
-        resolved_class = found_classes[0]
-
-    return resolved_class
-
-
-@lru_cache(maxsize=None)
-def warn_multiple_classes(target_class_name, found_classes):
-    logging.warning(
-        f"Found multiple classes with name {target_class_name}. Found classes: {found_classes} "
-    )
-
-
 @dataclass
 class WrappedClass:
-    index: int = field(init=False)
+    index: Optional[int] = field(init=False, default=None)
     clazz: Type
-    _class_diagram: ClassDiagram = field(init=False, hash=False)
+    _class_diagram: Optional[ClassDiagram] = field(
+        init=False, hash=False, default=None, repr=False
+    )
 
     @cached_property
     def fields(self) -> List[WrappedField]:
@@ -162,8 +96,17 @@ class ClassDiagram:
     def wrapped_classes(self):
         return self._dependency_graph.nodes()
 
-    def get_wrapped_class(self, clazz: Type) -> WrappedClass:
-        return [cls for cls in self.wrapped_classes if cls.clazz == clazz][0]
+    @property
+    def associations(self) -> List[Association]:
+        return [
+            edge
+            for edge in self._dependency_graph.edges()
+            if isinstance(edge, Association)
+        ]
+
+    def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
+        base = [cls for cls in self.wrapped_classes if cls.clazz == clazz]
+        return base[0] if base else None
 
     def add_node(self, clazz: WrappedClass):
         clazz.index = self._dependency_graph.add_node(clazz)
@@ -177,9 +120,10 @@ class ClassDiagram:
     def _create_inheritance_relations(self):
         for clazz in self.wrapped_classes:
             for superclass in clazz.clazz.__bases__:
-                if not is_builtin_class(superclass):
+                source = self.get_wrapped_class(superclass)
+                if source:
                     relation = Inheritance(
-                        source=self.get_wrapped_class(superclass),
+                        source=source,
                         target=clazz,
                     )
                     self.add_relation(relation)
@@ -191,14 +135,18 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-                if wrapped_field.is_container or wrapped_field.is_optional:
-                    target_type = wrapped_field.contained_type
-                else:
-                    target_type = wrapped_field.resolved_type
-                try:
-                    wrapped_target_class = self.get_wrapped_class(target_type)
-                except IndexError:
+
+                target_type = (
+                    wrapped_field.contained_type
+                    if wrapped_field.is_container or wrapped_field.is_optional
+                    else wrapped_field.resolved_type
+                )
+
+                wrapped_target_class = self.get_wrapped_class(target_type)
+
+                if not wrapped_target_class:
                     continue
+
                 relation = Association(
                     field=wrapped_field,
                     source=clazz,
@@ -233,12 +181,12 @@ class ClassDiagram:
                 parent_node = node_map[source_idx]
                 child_node = node_map[target_idx]
                 child_node.add_parent(parent_node)
-            elif isinstance(relation, Association):
-                # For associations, add as parent relationship with label
-                source_node = node_map[source_idx]
-                target_node = node_map[target_idx]
-                # Association goes from source to target
-                target_node.add_parent(source_node)
+            # elif isinstance(relation, Association):
+            #     # For associations, add as parent relationship with label
+            #     source_node = node_map[source_idx]
+            #     target_node = node_map[target_idx]
+            #     # Association goes from source to target
+            #     target_node.add_parent(source_node)
 
         # Find root nodes (nodes without parents)
         root_nodes = [node for node in node_map.values() if not node.parents]
@@ -289,7 +237,3 @@ class ClassDiagram:
             edge_style=edge_style,
             **kwargs,
         )
-
-
-def is_builtin_class(clazz: Type) -> bool:
-    return clazz.__module__ == "builtins"

@@ -1,14 +1,42 @@
 from __future__ import annotations
 
+import importlib
+import inspect
+import logging
+import sys
 import typing
 from dataclasses import dataclass, Field
 from datetime import datetime
-from functools import cached_property
+from functools import cached_property, lru_cache
 from types import NoneType
-from typing import ClassVar, List, Type
-from typing_extensions import get_type_hints, get_origin, get_args
+from typing import Optional
 
-from krrood.class_diagrams.class_diagram import WrappedClass, is_builtin_class
+from typing_extensions import (
+    get_type_hints,
+    get_origin,
+    get_args,
+    ClassVar,
+    List,
+    Type,
+    TYPE_CHECKING,
+)
+
+from .utils import is_builtin_class
+
+if TYPE_CHECKING:
+    from .class_diagram import WrappedClass
+
+
+@dataclass
+class TypeResolutionError(TypeError):
+    """
+    Error raised when a type cannot be resolved, even if searched for manually.
+    """
+
+    name: str
+
+    def __post_init__(self):
+        super().__init__(f"Could not resolve type for {self.name}")
 
 
 @dataclass
@@ -38,15 +66,29 @@ class WrappedField:
 
     @cached_property
     def resolved_type(self):
-        return get_type_hints(self.clazz.clazz)[self.field.name]
+        try:
+            result = get_type_hints(self.clazz.clazz)[self.field.name]
+        except NameError as e:
+            found_clazz = manually_search_for_class_name(e.name)
+            module = importlib.import_module(found_clazz.__module__)
+            locals()[e.name] = getattr(module, e.name)
+            result = get_type_hints(self.clazz.clazz, localns=locals())[self.field.name]
+        return result
 
     @cached_property
     def is_builtin_type(self) -> bool:
-        return self.resolved_type in [int, float, str, bool, datetime, NoneType]
+        type_to_check = self.contained_type if self.is_optional else self.resolved_type
+        return type_to_check in [int, float, str, bool, datetime, NoneType]
 
     @cached_property
-    def is_container(self):
+    def is_container(self) -> bool:
         return get_origin(self.resolved_type) in self.container_types
+
+    @cached_property
+    def container_type(self) -> Optional[Type]:
+        if not self.is_container:
+            return None
+        return get_origin(self.resolved_type)
 
     @cached_property
     def is_collection_of_builtins(self):
@@ -60,21 +102,76 @@ class WrappedField:
         if origin not in [typing.Union, typing.Optional]:
             return False
         if origin == typing.Union:
-            args = get_args(self.field.type)
-            if len(args) != 2:
-                return False
-            if NoneType not in args:
-                return False
-            else:
-                return True
-        else:
-            return True
+            args = get_args(self.resolved_type)
+            return len(args) == 2 and NoneType in args
+        return True
 
     @cached_property
     def contained_type(self):
         if not self.is_container and not self.is_optional:
             raise ValueError("Field is not a container")
         if self.is_optional:
-            return get_args(self.resolved_type)[1]
+            return get_args(self.resolved_type)[0]
         else:
             return get_args(self.resolved_type)[0]
+
+
+@lru_cache(maxsize=None)
+def manually_search_for_class_name(target_class_name: str) -> Type:
+    """
+    Searches for a class with the specified name in the current module's `globals()` dictionary
+    and all loaded modules present in `sys.modules`. This function attempts to find and resolve
+    the first class that matches the given name. If multiple classes are found with the same
+    name, a warning is logged, and the first one is returned. If no matching class is found,
+    an exception is raised.
+
+    :param target_class_name: Name of the class to search for.
+    :return: The resolved class with the matching name.
+
+    :raises ValueError: Raised when no class with the specified name can be found.
+    """
+    found_classes = search_class_in_globals(target_class_name)
+    found_classes += search_class_in_sys_modules(target_class_name)
+
+    if len(found_classes) == 0:
+        raise TypeResolutionError(target_class_name)
+    elif len(found_classes) == 1:
+        resolved_class = found_classes[0]
+    else:
+        logging.warning(
+            f"Found multiple classes with name {target_class_name}. Found classes: {found_classes} "
+        )
+        resolved_class = found_classes[0]
+
+    return resolved_class
+
+
+def search_class_in_globals(target_class_name: str) -> List[Type]:
+    """
+    Searches for a class with the given name in the current module's globals.
+
+    :param target_class_name: The name of the class to search for.
+    :return: The resolved classes with the matching name.
+    """
+    return [
+        obj
+        for obj in globals().items()
+        if inspect.isclass(obj) and obj.__name__ == target_class_name
+    ]
+
+
+def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
+    """
+    Searches for a class with the given name in all loaded modules (via sys.modules).
+    """
+    found_classes = []
+    for module_name, module in sys.modules.items():
+        if module is None or not hasattr(module, "__dict__"):
+            continue  # Skip built-in modules or modules without a __dict__
+
+        for name, obj in module.__dict__.items():
+            if inspect.isclass(obj) and obj.__name__ == target_class_name:
+                # Avoid duplicates if a class is imported into multiple namespaces
+                if (obj, f"from module '{module_name}'") not in found_classes:
+                    found_classes.append(obj)
+    return found_classes
