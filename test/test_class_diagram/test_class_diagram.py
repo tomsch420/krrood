@@ -3,10 +3,11 @@ from pathlib import Path
 
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
+from ..dataset import example_classes
 
 
 def test_class_diagram_visualization():
-    classes = classes_of_module(datasets)
+    classes = classes_of_module(example_classes)
     diagram = ClassDiagram(classes)
 
     output_file = "test_class_diagram.pdf"
