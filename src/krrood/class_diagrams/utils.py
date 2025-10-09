@@ -16,3 +16,7 @@ def classes_of_module(module) -> List[Type]:
         if inspect.isclass(obj) and obj.__module__ == module.__name__:
             result.append(obj)
     return result
+
+
+def is_builtin_class(clazz: Type) -> bool:
+    return clazz.__module__ == "builtins"
