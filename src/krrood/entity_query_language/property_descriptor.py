@@ -124,20 +124,29 @@ class PropertyDescriptor(Generic[T], Predicate):
         setattr(obj, self.attr_name, value)
 
     def __call__(self) -> bool:
-        if hasattr(self.domain_value, self.attr_name):
-            return make_set(self.range_value).issubset(
-                make_set(getattr(self.domain_value, self.attr_name))
-            )
+        if self.check_relation_exists():
+            return True
         else:
-            for prop_type, prop_data in self.domain_value._properties_.items():
-                if issubclass(prop_type, self.__class__):
-                    for prop_name, prop_val in prop_data.items():
-                        if hasattr(self.domain_value, prop_name):
-                            if make_set(self.range_value).issubset(
-                                make_set(getattr(self.domain_value, prop_name))
-                            ):
-                                return True
+            return self.check_relation_exists_for_subclasses_of_property()
+
+    def check_relation_exists_for_subclasses_of_property(self):
+        sub_properties = [
+            prop_data
+            for prop_type, prop_data in self.domain_value._properties_.items()
+            if issubclass(prop_type, self.__class__)
+        ]
+        for prop_data in sub_properties:
+            for prop_name, prop_val in prop_data.items():
+                if self.check_relation_exists(prop_name):
+                    return True
+        return False
+
+    def check_relation_exists(self, attr_name: Optional[str] = None):
+        attr_name = attr_name or self.attr_name
+        if not hasattr(self.domain_value, attr_name):
             return False
+        attr_value = getattr(self.domain_value, attr_name)
+        return make_set(self.range_value).issubset(make_set(attr_value))
 
 
 class DescriptionMeta(type):
