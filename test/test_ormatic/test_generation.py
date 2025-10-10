@@ -43,6 +43,8 @@ def test_generation_process():
         == 1
     )
 
+    instance.make_all_tables()
+
     file_path = os.path.join(
         os.path.dirname(__file__), "..", "dataset", "sqlalchemy_interface.py"
     )

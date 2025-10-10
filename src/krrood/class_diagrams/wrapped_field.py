@@ -55,11 +55,7 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
-    container_types: ClassVar[List[Type]] = [
-        list,
-        set,
-        tuple,
-    ]
+    container_types: ClassVar[List[Type]] = [list, set, tuple, type]
     """
     A list of container types that are supported by the parser.
     """
@@ -114,6 +110,10 @@ class WrappedField:
             return get_args(self.resolved_type)[0]
         else:
             return get_args(self.resolved_type)[0]
+
+    @cached_property
+    def is_type_type(self) -> bool:
+        return get_origin(self.resolved_type) is type
 
 
 @lru_cache(maxsize=None)
