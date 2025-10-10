@@ -15,6 +15,7 @@ from typing_extensions import List, Type, Dict
 from .dao import AlternativeMapping
 from .field_info import FieldInfo
 from .sqlalchemy_generator import SQLAlchemyGenerator
+from ..class_diagrams.class_diagram import ClassDiagram
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +25,38 @@ class InheritanceStrategy(Enum):
     SINGLE = "single"
 
 
+@dataclass
 class ORMatic:
     """
     ORMatic is a tool for generating SQLAlchemy ORM models from a set of dataclasses.
     """
 
-    class_dict: Dict[Type, WrappedTable]
+    #
+    # class_dict: Dict[Type, WrappedTable]
+    # """
+    # A dictionary mapping classes to their corresponding WrappedTable objects. This is used to gather all the columns and
+    # relationships between the classes before creating the SQL tables.
+    # """
+
+    class_dependency_graph: ClassDiagram
     """
-    A dictionary mapping classes to their corresponding WrappedTable objects. This is used to gather all the columns and
-    relationships between the classes before creating the SQL tables.
+    The class diagram to add the orm for.
+    """
+
+    alternative_mappings: List[Type[AlternativeMapping]] = field(default_factory=list)
+    """
+    List of alternative mappings that should be used to map classes.
+    """
+
+    type_mappings: Dict[Type, TypeDecorator] = field(default_factory=dict)
+    """
+    A dict that maps classes to custom types that should be used to save the classes.
+    They keys of the type mappings must be disjoint with the classes given..
+    """
+
+    inheritance_strategy: InheritanceStrategy = InheritanceStrategy.JOINED
+    """
+    The inheritance strategy to use.
     """
 
     foreign_key_postfix = "_id"
@@ -40,85 +64,33 @@ class ORMatic:
     The postfix that will be added to foreign key columns (not the relationships).
     """
 
-    class_dependency_graph: rx.PyDAG[WrappedTable]
-    """
-    A direct acyclic graph containing the class hierarchy.
-    """
-
-    imports: Set[str]
+    imports: Set[str] = field(default_factory=set, init=False)
     """
     A set of modules that need to be imported.
     """
 
-    extra_imports: Dict[str, Set[str]]
+    extra_imports: Dict[str, Set[str]] = field(default_factory=dict, init=False)
     """
     A dict that maps modules to classes that should be imported via from module import class.
     The key is the module, the value is the set of classes that are needed
     """
 
-    type_mappings: Dict[Type, TypeDecorator]
-    """
-    A dict that maps classes to custom types that should be used to save the classes.
-    They keys of the type mappings must be disjoint with the classes given..
-    """
-
-    type_annotation_map: Dict[str, str]
+    type_annotation_map: Dict[str, str] = field(default_factory=dict, init=False)
     """
     The string version of type mappings that is used in jinja.
     """
 
-    def __init__(self, classes: List[Type],
-                 type_mappings: Dict[Type, TypeDecorator] = None,
-                 inheritance_strategy: "InheritanceStrategy | str" = InheritanceStrategy.JOINED):
-        """
-        :param classes: The list of classes to be mapped.
-        :param type_mappings: A dict that maps classes to custom types that should be used instead of the class.
-        :param inheritance_strategy: Inheritance strategy to use; can be an InheritanceStrategy enum member or one of the strings "joined"/"single". Default is InheritanceStrategy.JOINED.
-        """
+    def __post_init__(self):
+        self._add_alternative_mappings_to_class_diagram()
 
-        # Normalize inheritance strategy to enum (backward-compatible for string inputs)
-        if isinstance(inheritance_strategy, InheritanceStrategy):
-            self.inheritance_strategy = inheritance_strategy
-        elif isinstance(inheritance_strategy, str):
-            try:
-                self.inheritance_strategy = InheritanceStrategy(inheritance_strategy.lower())
-            except ValueError:
-                raise ValueError("inheritance_strategy must be either InheritanceStrategy.JOINED/InheritanceStrategy.SINGLE or the strings 'joined'/'single'")
-        else:
-            raise TypeError("inheritance_strategy must be an InheritanceStrategy or a string 'joined'/'single'")
-
-        if type_mappings is None:
-            self.type_mappings = dict()
-        else:
-            intersection_of_classes_and_types = set(classes) & set(type_mappings.keys())
-            if len(intersection_of_classes_and_types) > 0:
-                raise ValueError(f"The type mappings given are not disjoint with the classes given."
-                                 f"The intersection is {intersection_of_classes_and_types}")
-            self.type_mappings = type_mappings
-        self.create_type_annotations_map()
-
-        self.class_dict = {}
-        self.imports = set()
-        for cls in classes:
-            if issubclass(cls, AlternativeMapping):
-                # if the class is a DAO, we use the original class for the mapping
-                self.class_dict[cls.original_class()] = WrappedTable(clazz=cls, ormatic=self)
-            else:
-                self.class_dict[cls] = WrappedTable(clazz=cls, ormatic=self)
-            self.imports.add(cls.__module__)
-
-        self.make_class_dependency_graph()
-        self.extra_imports = defaultdict(set)
-
-        self.make_all_tables()
+    def _add_alternative_mappings_to_class_diagram(self): ...
 
     def create_type_annotations_map(self):
-        self.type_annotation_map = {
-            "Type": "TypeType"
-        }
+        self.type_annotation_map = {"Type": "TypeType"}
         for clazz, custom_type in self.type_mappings.items():
-            self.type_annotation_map[
-                f"{clazz.__module__}.{clazz.__name__}"] = f"{custom_type.__module__}.{custom_type.__name__}"
+            self.type_annotation_map[f"{clazz.__module__}.{clazz.__name__}"] = (
+                f"{custom_type.__module__}.{custom_type.__name__}"
+            )
 
     def make_class_dependency_graph(self):
         """
@@ -129,18 +101,25 @@ class ORMatic:
         for clazz, wrapped_table in self.class_dict.items():
             self._add_wrapped_table(wrapped_table)
 
-            bases = [base for base in clazz.__bases__ if
-                     base.__module__ not in ["builtins"] and base in self.class_dict]
+            bases = [
+                base
+                for base in clazz.__bases__
+                if base.__module__ not in ["builtins"] and base in self.class_dict
+            ]
 
             if len(bases) == 0:
                 continue
 
             if len(bases) > 1:
-                logger.warning(f"Found more than one base class for {clazz}. Will only use the first one ({bases[0]}) "
-                               f"for inheritance in SQL.")
+                logger.warning(
+                    f"Found more than one base class for {clazz}. Will only use the first one ({bases[0]}) "
+                    f"for inheritance in SQL."
+                )
             base = bases[0]
             self._add_wrapped_table(self.class_dict[base])
-            self.class_dependency_graph.add_edge(self.class_dict[base].index, wrapped_table.index, None)
+            self.class_dependency_graph.add_edge(
+                self.class_dict[base].index, wrapped_table.index, None
+            )
 
     def _add_wrapped_table(self, wrapped_table: WrappedTable):
         if wrapped_table.index is None:
@@ -239,7 +218,9 @@ class WrappedTable:
 
     def __post_init__(self):
         if not is_dataclass(self.clazz):
-            raise TypeError(f"ORMatic can only process dataclasses. Got {self.clazz} which is not a dataclass.")
+            raise TypeError(
+                f"ORMatic can only process dataclasses. Got {self.clazz} which is not a dataclass."
+            )
 
     @cached_property
     def primary_key(self):
@@ -258,22 +239,34 @@ class WrappedTable:
 
         # this is the root of an inheritance structure
         if self.parent_table is None and len(self.child_tables) > 0:
-            self.custom_columns.append((self.polymorphic_on_name, "Mapped[str]", "mapped_column(String(255), nullable=False)"))
-            self.mapper_args.update({
-                "'polymorphic_on'": f"'{self.polymorphic_on_name}'",
-                "'polymorphic_identity'": f"'{self.tablename}'",
-            })
+            self.custom_columns.append(
+                (
+                    self.polymorphic_on_name,
+                    "Mapped[str]",
+                    "mapped_column(String(255), nullable=False)",
+                )
+            )
+            self.mapper_args.update(
+                {
+                    "'polymorphic_on'": f"'{self.polymorphic_on_name}'",
+                    "'polymorphic_identity'": f"'{self.tablename}'",
+                }
+            )
 
         # this inherits from something
         if self.parent_table is not None:
-            self.mapper_args.update({
-                "'polymorphic_identity'": f"'{self.tablename}'",
-            })
+            self.mapper_args.update(
+                {
+                    "'polymorphic_identity'": f"'{self.tablename}'",
+                }
+            )
             # only needed for joined-table inheritance
             if self.ormatic.inheritance_strategy == InheritanceStrategy.JOINED:
-                self.mapper_args.update({
-                    "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.full_primary_key_name}"
-                })
+                self.mapper_args.update(
+                    {
+                        "'inherit_condition'": f"{self.primary_key_name} == {self.parent_table.full_primary_key_name}"
+                    }
+                )
 
     @cached_property
     def full_primary_key_name(self):
@@ -304,15 +297,22 @@ class WrappedTable:
         if self.parent_table is not None:
             self.skip_fields += self.parent_table.skip_fields + self.parent_table.fields
 
-        result = [field for field in fields(self.clazz) if field not in self.skip_fields]
+        result = [
+            field for field in fields(self.clazz) if field not in self.skip_fields
+        ]
 
         if self.parent_table is not None:
             if issubclass(self.parent_table.clazz, AlternativeMapping):
                 og_parent_class = self.parent_table.clazz.original_class()
-                fields_in_og_class_but_not_in_dao = [f for f in fields(og_parent_class)
-                                                     if f not in self.parent_table.fields]
+                fields_in_og_class_but_not_in_dao = [
+                    f
+                    for f in fields(og_parent_class)
+                    if f not in self.parent_table.fields
+                ]
 
-                result = [r for r in result if r not in fields_in_og_class_but_not_in_dao]
+                result = [
+                    r for r in result if r not in fields_in_og_class_but_not_in_dao
+                ]
 
         return result
 
@@ -339,7 +339,9 @@ class WrappedTable:
             logger.info(f"Parsing as type.")
             self.create_type_type_column(field_info)
 
-        elif field_info.is_builtin_class or field_info.is_enum or field_info.is_datetime:
+        elif (
+            field_info.is_builtin_class or field_info.is_enum or field_info.is_datetime
+        ):
             logger.info(f"Parsing as builtin type.")
             self.create_builtin_column(field_info)
 
@@ -349,7 +351,9 @@ class WrappedTable:
             self.create_one_to_one_relationship(field_info)
 
         elif not field_info.container and field_info.type in self.ormatic.type_mappings:
-            logger.info(f"Parsing as custom type {self.ormatic.type_mappings[field_info.type]}.")
+            logger.info(
+                f"Parsing as custom type {self.ormatic.type_mappings[field_info.type]}."
+            )
             self.create_custom_type(field_info)
 
         elif field_info.container:
@@ -364,7 +368,9 @@ class WrappedTable:
 
     def create_builtin_column(self, field_info: FieldInfo):
         if field_info.is_enum:
-            self.ormatic.extra_imports[field_info.type.__module__] |= {field_info.type.__name__}
+            self.ormatic.extra_imports[field_info.type.__module__] |= {
+                field_info.type.__name__
+            }
 
         if not field_info.is_builtin_class:
             self.ormatic.imports |= {field_info.type.__module__}
@@ -375,13 +381,23 @@ class WrappedTable:
             inner_type = f"Optional[{inner_type}]"
 
         if issubclass(field_info.type, str):
-            self.custom_columns.append((field_info.name, f"Mapped[{inner_type}]", f"mapped_column(String(255), nullable={field_info.optional})"))
+            self.custom_columns.append(
+                (
+                    field_info.name,
+                    f"Mapped[{inner_type}]",
+                    f"mapped_column(String(255), nullable={field_info.optional})",
+                )
+            )
         else:
             self.builtin_columns.append((field_info.name, f"Mapped[{inner_type}]"))
 
     def create_type_type_column(self, field_info: FieldInfo):
         column_name = field_info.name
-        column_type = f"Mapped[TypeType]" if not field_info.optional else f"Mapped[Optional[TypeType]]"
+        column_type = (
+            f"Mapped[TypeType]"
+            if not field_info.optional
+            else f"Mapped[Optional[TypeType]]"
+        )
         column_constructor = f"mapped_column(TypeType, nullable={field_info.optional})"
         self.custom_columns.append((column_name, column_type, column_constructor))
 
@@ -427,8 +443,11 @@ class WrappedTable:
     def create_custom_type(self, field_info: FieldInfo):
         custom_type = self.ormatic.type_mappings[field_info.type]
         column_name = field_info.name
-        column_type = f"Mapped[{custom_type.__module__}.{custom_type.__name__}]" if not field_info.optional \
+        column_type = (
+            f"Mapped[{custom_type.__module__}.{custom_type.__name__}]"
+            if not field_info.optional
             else f"Mapped[Optional[{custom_type.__module__}.{custom_type.__name__}]]"
+        )
 
         constructor = f"mapped_column({custom_type.__module__}.{custom_type.__name__}, nullable={field_info.optional})"
 

@@ -9,6 +9,7 @@ from typing import Type, List, Iterable
 
 import sqlalchemy
 from sqlalchemy import Engine, text, MetaData
+from typing_extensions import TypeVar
 
 
 class classproperty:
@@ -38,12 +39,17 @@ def classes_of_module(module) -> List[Type]:
     return result
 
 
-def recursive_subclasses(cls):
+T = TypeVar("T")
+
+
+def recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
     """
     :param cls: The class.
     :return: A list of the classes subclasses.
     """
-    return cls.__subclasses__() + [g for s in cls.__subclasses__() for g in recursive_subclasses(s)]
+    return cls.__subclasses__() + [
+        g for s in cls.__subclasses__() for g in recursive_subclasses(s)
+    ]
 
 
 leaf_types = (int, float, str, Enum, datetime.datetime, bool)
@@ -83,18 +89,18 @@ def _drop_fk_constraints(engine: Engine, tables: Iterable[str]) -> None:
 
 def drop_database(engine: Engine) -> None:
     """
-    Drops all tables in the given database engine. This function removes foreign key
-    constraints and tables in reverse dependency order to ensure that proper
-    dropping of objects occurs without conflict. For MySQL/MariaDB, foreign key
-   checks are disabled temporarily during the process.
+     Drops all tables in the given database engine. This function removes foreign key
+     constraints and tables in reverse dependency order to ensure that proper
+     dropping of objects occurs without conflict. For MySQL/MariaDB, foreign key
+    checks are disabled temporarily during the process.
 
-    This method differs from sqlalchemy `MetaData.drop_all <https://docs.sqlalchemy.org/en/20/core/metadata.html#sqlalchemy.schema.MetaData.drop_all>`_\ such that databases containing cyclic
-    backreferences are also droppable.
+     This method differs from sqlalchemy `MetaData.drop_all <https://docs.sqlalchemy.org/en/20/core/metadata.html#sqlalchemy.schema.MetaData.drop_all>`_\ such that databases containing cyclic
+     backreferences are also droppable.
 
-    :param engine: The SQLAlchemy Engine instance connected to the target database
-        where tables will be dropped.
-    :type engine: Engine
-    :return: None
+     :param engine: The SQLAlchemy Engine instance connected to the target database
+         where tables will be dropped.
+     :type engine: Engine
+     :return: None
     """
     metadata = MetaData()
     metadata.reflect(bind=engine)
