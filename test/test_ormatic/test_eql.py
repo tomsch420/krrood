@@ -6,29 +6,28 @@ from sqlalchemy.orm import Session, configure_mappers
 from entity_query_language.entity import let, an, entity, the, contains
 from entity_query_language import and_, or_, in_, symbolic_mode
 
-from dataset.example_classes import (
-    Position,
-    Pose,
+from dataset.example_classes import Position, Pose
+from dataset.semantic_world_like_classes import (
     World,
-    Prismatic,
-    Fixed,
     Body,
+    FixedConnection,
+    PrismaticConnection,
     Handle,
-    ContainerBody,
+    Container,
 )
 from dataset.sqlalchemy_interface import (
     Base,
     PositionDAO,
     PoseDAO,
     OrientationDAO,
-    FixedDAO,
-    PrismaticDAO,
+    FixedConnectionDAO,
+    PrismaticConnectionDAO,
     BodyDAO,
 )
-from ormatic.dao import to_dao
+from krrood.ormatic.dao import to_dao
 
-from ormatic.eql_interface import eql_to_sql
-from ormatic.utils import drop_database
+from krrood.ormatic.eql_interface import eql_to_sql
+from krrood.ormatic.utils import drop_database
 
 
 class EQLTestCase(unittest.TestCase):
@@ -187,8 +186,8 @@ class EQLTestCase(unittest.TestCase):
             1,
             [Body("Container1"), Body("Container2"), Body("Handle1"), Body("Handle2")],
         )
-        c1_c2 = Prismatic(world.bodies[0], world.bodies[1])
-        c2_h2 = Fixed(world.bodies[1], world.bodies[3])
+        c1_c2 = PrismaticConnection(world.bodies[0], world.bodies[1])
+        c2_h2 = FixedConnection(world.bodies[1], world.bodies[3])
         world.connections = [c1_c2, c2_h2]
 
         dao = to_dao(world)
@@ -199,10 +198,12 @@ class EQLTestCase(unittest.TestCase):
         # Declare the placeholders
         with symbolic_mode():
             prismatic_connection = let(
-                type_=Prismatic, domain=world.connections, name="prismatic_connection"
+                type_=PrismaticConnection,
+                domain=world.connections,
+                name="prismatic_connection",
             )
             fixed_connection = let(
-                type_=Fixed, domain=world.connections, name="fixed_connection"
+                type_=FixedConnection, domain=world.connections, name="fixed_connection"
             )
 
             # Write the query body
@@ -214,15 +215,16 @@ class EQLTestCase(unittest.TestCase):
             )
         translator = eql_to_sql(query, self.session)
 
-        query_by_hand = select(FixedDAO).join(
-            PrismaticDAO, onclause=PrismaticDAO.child_id == FixedDAO.parent_id
+        query_by_hand = select(FixedConnectionDAO).join(
+            PrismaticConnectionDAO,
+            onclause=PrismaticConnectionDAO.child_id == FixedConnectionDAO.parent_id,
         )
         self.assertEqual(str(translator.sql_query), str(query_by_hand))
 
         result = translator.evaluate()
 
         self.assertEqual(len(result), 1)
-        self.assertIsInstance(result[0], FixedDAO)
+        self.assertIsInstance(result[0], FixedConnectionDAO)
         self.assertEqual(result[0].parent.name, "Container2")
         self.assertEqual(result[0].child.name, "Handle2")
 
@@ -232,15 +234,15 @@ class EQLTestCase(unittest.TestCase):
         world = World(
             1,
             [
-                ContainerBody("Container1"),
-                ContainerBody("Container2"),
+                Container("Container1"),
+                Container("Container2"),
                 Handle("Handle1"),
                 Handle("Handle2"),
             ],
         )
-        c1_c2 = Prismatic(world.bodies[0], world.bodies[1])
-        c2_h2 = Fixed(world.bodies[1], world.bodies[3])
-        c1_h2_fixed = Fixed(world.bodies[0], world.bodies[3])
+        c1_c2 = PrismaticConnection(world.bodies[0], world.bodies[1])
+        c2_h2 = FixedConnection(world.bodies[1], world.bodies[3])
+        c1_h2_fixed = FixedConnection(world.bodies[0], world.bodies[3])
         world.connections = [c1_c2, c2_h2, c1_h2_fixed]
 
         dao = to_dao(world)
@@ -250,14 +252,16 @@ class EQLTestCase(unittest.TestCase):
         # Query for the kinematic tree of the drawer which has more than one component.
         # Declare the placeholders
         parent_container = let(
-            type_=ContainerBody, domain=world.bodies, name="parent_connection"
+            type_=Container, domain=world.bodies, name="parent_connection"
         )
         prismatic_connection = let(
-            type_=Prismatic, domain=world.connections, name="prismatic_connection"
+            type_=PrismaticConnection,
+            domain=world.connections,
+            name="prismatic_connection",
         )
-        drawer_body = let(type_=ContainerBody, domain=world.bodies, name="drawer_body")
+        drawer_body = let(type_=Container, domain=world.bodies, name="drawer_body")
         fixed_connection = let(
-            type_=Fixed, domain=world.connections, name="fixed_connection"
+            type_=FixedConnection, domain=world.connections, name="fixed_connection"
         )
         handle = let(type_=Handle, domain=world.bodies, name="handle")
 

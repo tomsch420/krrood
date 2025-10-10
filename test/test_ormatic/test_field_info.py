@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import fields
 
-from ormatic.ormatic import FieldInfo
+from krrood.ormatic.ormatic import FieldInfo
 from dataset.example_classes import *
 
 

@@ -1,6 +1,6 @@
 from krrood.entity_query_language import symbolic_mode, From
 from krrood.entity_query_language import flatten, entity, an, not_, in_, concatenate, the, for_all
-from .datasets import View, Drawer, Container, Cabinet
+from dataset.semantic_world_like_classes import View, Drawer, Container, Cabinet
 
 
 # Make a simple View-like container with an iterable attribute `drawers` to be flattened

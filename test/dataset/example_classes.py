@@ -10,7 +10,7 @@ from sqlalchemy import types, TypeDecorator
 from typing_extensions import List, Optional, Type
 
 from entity_query_language import symbol
-from ormatic.dao import DataAccessObject, AlternativeMapping, T
+from krrood.ormatic.dao import DataAccessObject, AlternativeMapping, T
 
 
 # check that custom enums works
@@ -282,12 +282,12 @@ class AlternativeMappingAggregator:
 @dataclass
 class ItemWithBackreference:
     value: int = 0
-    container: Container = None
+    container: ContainerGeneration = None
 
 
 @symbol
 @dataclass
-class Container:
+class ContainerGeneration:
     items: List[ItemWithBackreference]
 
     def __post_init__(self):
@@ -440,44 +440,3 @@ class ChildBaseMapping(ParentBaseMapping, AlternativeMapping[ChildBase]):
 class PrivateDefaultFactory:
     public_value: int = 0
     _private_list: List[int] = field(default_factory=list)
-
-
-@symbol
-@dataclass
-class Body:
-    name: str
-
-
-@symbol
-@dataclass
-class Handle(Body): ...
-
-
-@symbol
-@dataclass
-class ContainerBody(Body): ...
-
-
-@symbol
-@dataclass
-class Connection:
-    parent: Body
-    child: Body
-
-
-@symbol
-@dataclass
-class Prismatic(Connection): ...
-
-
-@symbol
-@dataclass
-class Fixed(Connection): ...
-
-
-@symbol
-@dataclass
-class World:
-    id_: int
-    bodies: List[Body]
-    connections: List[Connection] = field(default_factory=list)
