@@ -1,4 +1,4 @@
-from ormatic.dao import to_dao
+from krrood.ormatic.dao import to_dao
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 

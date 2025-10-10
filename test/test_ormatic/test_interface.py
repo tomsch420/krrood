@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session, configure_mappers
 
 from dataset.example_classes import *
 from dataset.sqlalchemy_interface import *
-from ormatic.dao import to_dao, NoDAOFoundDuringParsingError, is_data_column
-from ormatic.utils import drop_database
+from krrood.ormatic.dao import to_dao, NoDAOFoundDuringParsingError, is_data_column
+from krrood.ormatic.utils import drop_database
 
 
 class InterfaceTestCase(unittest.TestCase):
@@ -385,7 +385,7 @@ class InterfaceTestCase(unittest.TestCase):
     def test_container_item(self):
         i1 = ItemWithBackreference(0)
         i2 = ItemWithBackreference(1)
-        container = Container([i1, i2])
+        container = ContainerGeneration([i1, i2])
 
         dao = to_dao(container)
         self.session.add(dao)

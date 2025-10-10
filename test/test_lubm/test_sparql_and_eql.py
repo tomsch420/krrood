@@ -11,7 +11,7 @@ from krrood.experiments.owl_instances_loader import load_instances
 
 def test_eql_counts_match_sparql():
     instances_path = os.path.join(
-        os.path.dirname(__file__), "..", "resources", "lubm_instances.owl"
+        os.path.dirname(__file__), "..", "..", "resources", "lubm_instances.owl"
     )
     instances_path = os.path.abspath(instances_path)
 
