@@ -15,7 +15,7 @@ from typing_extensions import List, Type, Dict
 from .dao import AlternativeMapping
 from .field_info import FieldInfo
 from .sqlalchemy_generator import SQLAlchemyGenerator
-from ..class_diagrams.class_diagram import ClassDiagram
+from ..class_diagrams.class_diagram import ClassDiagram, Relation, WrappedClass
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,13 @@ logger = logging.getLogger(__name__)
 class InheritanceStrategy(Enum):
     JOINED = "joined"
     SINGLE = "single"
+
+
+class AlternativelyMaps(Relation):
+    """
+    Edge type that says that the source alternativly maps the target, e. g.
+    `AlternativeMaps(source=PointMapping, target=Point)` means that PointMapping is the mapping for Point.
+    """
 
 
 @dataclass
@@ -80,10 +87,46 @@ class ORMatic:
     The string version of type mappings that is used in jinja.
     """
 
+    inheritance_graph: rx.PyDiGraph[int] = field(default=None, init=False)
+    """
+    A graph that represents the inheritance structure of the classes. Extracted from the class dependency graph.
+    """
+
     def __post_init__(self):
+        self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
 
-    def _add_alternative_mappings_to_class_diagram(self): ...
+    def _create_inheritance_graph(self):
+        self.inheritance_graph = rx.PyDiGraph()
+        self.inheritance_graph.add_nodes_from(
+            [w.index for w in self.class_dependency_graph.wrapped_classes]
+        )
+        for edge in self.class_dependency_graph.inheritance_relations:
+            self.inheritance_graph.add_edge(edge.source.index, edge.target.index, None)
+
+    def _add_alternative_mappings_to_class_diagram(self):
+        """
+        Add alternative mappings to the class diagram.
+        """
+        for alternative_mapping in self.alternative_mappings:
+            wrapped_alternative_mapping = WrappedClass(clazz=alternative_mapping)
+            self.class_dependency_graph.add_node(wrapped_alternative_mapping)
+            self.class_dependency_graph.add_relation(
+                AlternativelyMaps(
+                    source=wrapped_alternative_mapping,
+                    target=self.class_dependency_graph.get_wrapped_class(
+                        alternative_mapping.original_class()
+                    ),
+                )
+            )
+
+    @property
+    def alternatively_maps_relations(self):
+        return [
+            edge
+            for edge in self.class_dependency_graph._dependency_graph.edges()
+            if isinstance(edge, AlternativelyMaps)
+        ]
 
     def create_type_annotations_map(self):
         self.type_annotation_map = {"Type": "TypeType"}
@@ -92,49 +135,19 @@ class ORMatic:
                 f"{custom_type.__module__}.{custom_type.__name__}"
             )
 
-    def make_class_dependency_graph(self):
-        """
-        Create a direct acyclic graph containing the class hierarchy.
-        """
-        self.class_dependency_graph = rx.PyDAG()
-
-        for clazz, wrapped_table in self.class_dict.items():
-            self._add_wrapped_table(wrapped_table)
-
-            bases = [
-                base
-                for base in clazz.__bases__
-                if base.__module__ not in ["builtins"] and base in self.class_dict
-            ]
-
-            if len(bases) == 0:
-                continue
-
-            if len(bases) > 1:
-                logger.warning(
-                    f"Found more than one base class for {clazz}. Will only use the first one ({bases[0]}) "
-                    f"for inheritance in SQL."
-                )
-            base = bases[0]
-            self._add_wrapped_table(self.class_dict[base])
-            self.class_dependency_graph.add_edge(
-                self.class_dict[base].index, wrapped_table.index, None
-            )
-
-    def _add_wrapped_table(self, wrapped_table: WrappedTable):
-        if wrapped_table.index is None:
-            wrapped_table.index = self.class_dependency_graph.add_node(wrapped_table)
-
     @property
     def wrapped_tables(self) -> List[WrappedTable]:
         """
         :return: List of all tables in topological order.
         """
+
         result = []
-        sorter = rx.TopologicalSorter(self.class_dependency_graph)
+        sorter = rx.TopologicalSorter(self.inheritance_graph)
         while sorter.is_active():
             nodes = sorter.get_ready()
-            result.extend([self.class_dependency_graph[n] for n in nodes])
+            result.extend(
+                [self.class_dependency_graph._dependency_graph[n] for n in nodes]
+            )
             sorter.done(nodes)
         return result
 
