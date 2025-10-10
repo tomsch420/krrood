@@ -7,7 +7,6 @@ from functools import cached_property, lru_cache
 from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Tuple
 
 from .dao import AlternativeMapping
-from .field_info import FieldInfo
 from ..class_diagrams.class_diagram import (
     WrappedClass,
 )
@@ -20,6 +19,35 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class ColumnConstructor:
+    """
+    Represents a column constructor that can be used to create a column in SQLAlchemy.
+    """
+
+    name: str
+    """
+    The name of the column.
+    """
+
+    type: str
+    """
+    The type of the column.
+    Needs to be like "Mapped[<type>]".
+    """
+
+    constructor: Optional[str] = None
+    """
+    The constructor call for sqlalchemy of the column.
+    """
+
+    def __str__(self) -> str:
+        if self.constructor:
+            return f"{self.name}: {self.type} = {self.constructor}"
+        else:
+            return f"{self.name}: {self.type}"
+
+
+@dataclass
 class WrappedTable:
     """
     A class that wraps a dataclass and contains all the information needed to create a SQLAlchemy table from it.
@@ -27,7 +55,7 @@ class WrappedTable:
 
     wrapped_clazz: WrappedClass
     """
-    The dataclass that this WrappedTable wraps.
+    The wrapped class that this table wraps.
     """
 
     ormatic: ORMatic
@@ -35,22 +63,22 @@ class WrappedTable:
     Reference to the ORMatic instance that created this WrappedTable.
     """
 
-    builtin_columns: List[Tuple[str, str]] = field(default_factory=list, init=False)
+    builtin_columns: List[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List of columns that can be directly mapped using builtin types
     """
 
-    custom_columns: List[Tuple[str, str, str]] = field(default_factory=list, init=False)
+    custom_columns: List[ColumnConstructor] = field(default_factory=list, init=False)
     """
-    List for custom columns that need to by fully qualified
-    """
-
-    foreign_keys: List[Tuple[str, str, str]] = field(default_factory=list, init=False)
-    """
-    List of columns that represent foreign keys
+    List for custom columns that need to by fully qualified as triple of (name, type, constructor)
     """
 
-    relationships: List[Tuple[str, str, str]] = field(default_factory=list, init=False)
+    foreign_keys: List[ColumnConstructor] = field(default_factory=list, init=False)
+    """
+    List of columns that represent foreign keys as triple of (name, type, constructor)
+    """
+
+    relationships: List[ColumnConstructor] = field(default_factory=list, init=False)
     """
     List of relationships that should be added to the table.
     """
@@ -96,9 +124,11 @@ class WrappedTable:
         if self.parent_table is None and len(self.child_tables) > 0:
             self.custom_columns.append(
                 (
-                    self.polymorphic_on_name,
-                    "Mapped[str]",
-                    "mapped_column(String(255), nullable=False)",
+                    ColumnConstructor(
+                        self.polymorphic_on_name,
+                        "Mapped[str]",
+                        "mapped_column(String(255), nullable=False)",
+                    )
                 )
             )
             self.mapper_args.update(
@@ -199,80 +229,105 @@ class WrappedTable:
 
         self.create_mapper_args()
 
-    def parse_field(self, field_info: WrappedField):
-        if field_info.is_type_type:
+    def parse_field(self, wrapped_field: WrappedField):
+        """
+        Parses a given `WrappedField` and determines its type or relationship to create the
+        appropriate column or define relationships in an ORM context.
+        The method processes several
+        types of fields, such as type types, built-in types, enumerations, one-to-one relationships,
+        custom types, JSON containers, and one-to-many relationships.
+
+        This creates the right information in the right place in the table definition to be read later by the jinja
+        template.
+
+        :param wrapped_field: An instance of `WrappedField` that contains metadata about the field
+            such as its data type, whether it represents a built-in or user-defined type, or if it has
+            specific ORM container properties.
+        """
+        if wrapped_field.is_type_type:
             logger.info(f"Parsing as type.")
-            self.create_type_type_column(field_info)
+            self.create_type_type_column(wrapped_field)
 
-        elif (
-            field_info.is_builtin_class or field_info.is_enum or field_info.is_datetime
-        ):
+        elif wrapped_field.is_builtin_type or wrapped_field.is_enum:
             logger.info(f"Parsing as builtin type.")
-            self.create_builtin_column(field_info)
+            self.create_builtin_column(wrapped_field)
 
-        # handle on to one relationships
-        elif not field_info.container and field_info.type in self.ormatic.class_dict:
+        # handle one to one relationships
+        elif (
+            wrapped_field.is_one_to_one_relationship
+            and wrapped_field.contained_type in self.ormatic.mapped_classes
+        ):
             logger.info(f"Parsing as one to one relationship.")
-            self.create_one_to_one_relationship(field_info)
+            self.create_one_to_one_relationship(wrapped_field)
 
-        elif not field_info.container and field_info.type in self.ormatic.type_mappings:
+        # handle custom types
+        elif (
+            wrapped_field.is_one_to_one_relationship
+            and wrapped_field.contained_type in self.ormatic.type_mappings
+        ):
             logger.info(
-                f"Parsing as custom type {self.ormatic.type_mappings[field_info.type]}."
+                f"Parsing as custom type {self.ormatic.type_mappings[wrapped_field.resolved_type]}."
             )
-            self.create_custom_type(field_info)
+            self.create_custom_type(wrapped_field)
 
-        elif field_info.container:
-            if field_info.is_container_of_builtin:
-                logger.info(f"Parsing as JSON.")
-                self.create_container_of_builtins(field_info)
-            elif field_info.type in self.ormatic.class_dict:
-                logger.info(f"Parsing as one to many relationship.")
-                self.create_one_to_many_relationship(field_info)
+        # handle JSON containers
+        elif wrapped_field.is_collection_of_builtins:
+            logger.info(f"Parsing as JSON.")
+            self.create_container_of_builtins(wrapped_field)
+
+        # handle one to many relationships
+        elif wrapped_field.is_one_to_many_relationship:
+            logger.info(f"Parsing as one to many relationship.")
+            self.create_one_to_many_relationship(wrapped_field)
         else:
             logger.info("Skipping due to not handled type.")
 
-    def create_builtin_column(self, field_info: FieldInfo):
-        if field_info.is_enum:
-            self.ormatic.extra_imports[field_info.type.__module__] |= {
-                field_info.type.__name__
-            }
+    def create_builtin_column(self, wrapped_field: WrappedField):
+        """
+        Creates a built-in column mapping for the given wrapped field. Depending on the
+        properties of the `wrapped_field`, this function determines whether it's an enum,
+        a built-in type, or requires additional imports. It then constructs appropriate
+        column definitions and adds them to the respective list of database mappings.
 
-        if not field_info.is_builtin_class:
-            self.ormatic.imports |= {field_info.type.__module__}
-            inner_type = f"{field_info.type.__module__}.{field_info.type.__name__}"
-        else:
-            inner_type = f"{field_info.type.__name__}"
-        if field_info.optional:
-            inner_type = f"Optional[{inner_type}]"
+        :param wrapped_field: The WrappedField instance representing the field
+            to create a built-in column for.
+        """
 
-        if issubclass(field_info.type, str):
-            self.custom_columns.append(
-                (
-                    field_info.name,
-                    f"Mapped[{inner_type}]",
-                    f"mapped_column(String(255), nullable={field_info.optional})",
-                )
+        self.ormatic.imported_modules.add(wrapped_field.type_endpoint.__module__)
+        inner_type = (
+            f"{wrapped_field.type_endpoint}.{wrapped_field.type_endpoint.__name__}"
+        )
+        type_annotation = (
+            f"Optional[{inner_type}]" if wrapped_field.is_optional else inner_type
+        )
+
+        self.builtin_columns.append(
+            ColumnConstructor(
+                name=wrapped_field.field.name, type=f"Mapped[{type_annotation}]"
             )
-        else:
-            self.builtin_columns.append((field_info.name, f"Mapped[{inner_type}]"))
+        )
 
-    def create_type_type_column(self, field_info: FieldInfo):
-        column_name = field_info.name
+    def create_type_type_column(self, wrapped_field: WrappedField):
+        column_name = wrapped_field.field.name
         column_type = (
             f"Mapped[TypeType]"
-            if not field_info.optional
+            if not wrapped_field.is_optional
             else f"Mapped[Optional[TypeType]]"
         )
-        column_constructor = f"mapped_column(TypeType, nullable={field_info.optional})"
+        column_constructor = (
+            f"mapped_column(TypeType, nullable={wrapped_field.is_optional})"
+        )
         self.custom_columns.append((column_name, column_type, column_constructor))
 
-    def create_one_to_one_relationship(self, field_info: FieldInfo):
+    def create_one_to_one_relationship(self, wrapped_field: WrappedField):
         # create foreign key
-        fk_name = f"{field_info.name}{self.ormatic.foreign_key_postfix}"
-        fk_type = f"Mapped[Optional[int]]" if field_info.optional else "Mapped[int]"
+        fk_name = f"{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
+        fk_type = (
+            f"Mapped[Optional[int]]" if wrapped_field.is_optional else "Mapped[int]"
+        )
 
         # columns have to be nullable and use_alter=True since the insertion order might be incorrect otherwise
-        fk_column_constructor = f"mapped_column(ForeignKey('{self.ormatic.class_dict[field_info.type].full_primary_key_name}', use_alter=True), nullable=True)"
+        fk_column_constructor = f"mapped_column(ForeignKey('{self.ormatic.wrapped_tables[wrapped_field.field.type].full_primary_key_name}', use_alter=True), nullable=True)"
 
         self.foreign_keys.append((fk_name, fk_type, fk_column_constructor))
 

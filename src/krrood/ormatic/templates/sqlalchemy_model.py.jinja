@@ -9,10 +9,6 @@ from typing_extensions import Optional, List, Type
 import {{ module }}
 {% endfor %}
 
-{%- for module, classes in extra_imports.items() %}
-from {{ module }} import {{ ", ".join(classes) }}
-{%- endfor %}
-
 
 from krrood.ormatic.dao import DataAccessObject
 from krrood.ormatic.custom_types import TypeType

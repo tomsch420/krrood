@@ -11,7 +11,7 @@ from sqlalchemy import TypeDecorator
 from typing_extensions import List, Type, Dict
 
 from .dao import AlternativeMapping
-from .field_info import FieldInfo
+
 from .sqlalchemy_generator import SQLAlchemyGenerator
 from .wrapped_table import WrappedTable
 from ..class_diagrams.class_diagram import (
@@ -19,6 +19,7 @@ from ..class_diagrams.class_diagram import (
     Relation,
     WrappedClass,
 )
+from ..class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +68,9 @@ class ORMatic:
     The postfix that will be added to foreign key columns (not the relationships).
     """
 
-    imports: Set[str] = field(default_factory=set, init=False)
+    imported_modules: Set[str] = field(default_factory=set, init=False)
     """
     A set of modules that need to be imported.
-    """
-
-    extra_imports: Dict[str, Set[str]] = field(default_factory=dict, init=False)
-    """
-    A dict that maps modules to classes that should be imported via from module import class.
-    The key is the module, the value is the set of classes that are needed
     """
 
     type_annotation_map: Dict[str, str] = field(default_factory=dict, init=False)
@@ -101,7 +96,6 @@ class ORMatic:
         self._create_wrapped_tables()
 
     def _create_wrapped_tables(self):
-        self.class_dict = {}
         for wrapped_clazz in self.wrapped_classes_in_topological_order:
 
             # check if the class has an alternative mapping
@@ -188,15 +182,19 @@ class ORMatic:
             sorter.done(nodes)
         return result
 
+    @property
+    def mapped_classes(self) -> List[Type]:
+        return [key.clazz for key in self.wrapped_tables.keys()]
+
     def make_all_tables(self):
         for table in self.wrapped_tables.values():
             table.parse_fields()
 
-    def foreign_key_name(self, field_info: FieldInfo):
+    def foreign_key_name(self, wrapped_field: WrappedField) -> str:
         """
         :return: A foreign key name for the given field.
         """
-        return f"{field_info.clazz.__name__.lower()}_{field_info.name}{self.foreign_key_postfix}"
+        return f"{wrapped_field.clazz.clazz.__name__.lower()}_{wrapped_field.field.name}{self.foreign_key_postfix}"
 
     def to_sqlalchemy_file(self, file: TextIO):
         """
