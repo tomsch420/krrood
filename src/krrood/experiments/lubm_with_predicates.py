@@ -286,8 +286,6 @@ class Director(Person):
 @dataclass(eq=False)
 class Employee(Person):
     """Employee"""
-    # is the head of
-    head_of: List[Organization] = HeadOf(default_factory=list)
     # Works For
     works_for: List[Organization] = WorksForOrganization(default_factory=list)
 
