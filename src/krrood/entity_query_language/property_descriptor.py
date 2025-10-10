@@ -3,7 +3,17 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field, MISSING
 from functools import cached_property
-from typing import Generic, TypeVar, ClassVar, Set, Optional, Callable, Type, Iterable
+from typing import (
+    Generic,
+    TypeVar,
+    ClassVar,
+    Set,
+    Optional,
+    Callable,
+    Type,
+    Iterable,
+    Any,
+)
 
 from . import Predicate, symbol
 from .typing_utils import get_range_types
@@ -123,30 +133,65 @@ class PropertyDescriptor(Generic[T], Predicate):
             return
         setattr(obj, self.attr_name, value)
 
-    def __call__(self) -> bool:
-        if self.check_relation_exists():
+    def __call__(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        if self.check_relation_exists(
+            domain_value=domain_value, range_value=range_value
+        ):
             return True
         else:
-            return self.check_relation_exists_for_subclasses_of_property()
+            return self.check_relation_exists_for_subclasses_of_property(
+                domain_value=domain_value, range_value=range_value
+            )
 
-    def check_relation_exists_for_subclasses_of_property(self):
+    def check_relation_exists_for_subclasses_of_property(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
         sub_properties = [
             prop_data
-            for prop_type, prop_data in self.domain_value._properties_.items()
+            for prop_type, prop_data in domain_value._properties_.items()
             if issubclass(prop_type, self.__class__)
         ]
         for prop_data in sub_properties:
             for prop_name, prop_val in prop_data.items():
-                if self.check_relation_exists(prop_name):
+                if self.check_relation_exists(
+                    prop_name, domain_value=domain_value, range_value=range_value
+                ):
                     return True
         return False
 
-    def check_relation_exists(self, attr_name: Optional[str] = None):
+    def check_relation_exists(
+        self,
+        attr_name: Optional[str] = None,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+    ) -> bool:
         attr_name = attr_name or self.attr_name
-        if not hasattr(self.domain_value, attr_name):
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        if not hasattr(domain_value, attr_name):
             return False
-        attr_value = getattr(self.domain_value, attr_name)
-        return make_set(self.range_value).issubset(make_set(attr_value))
+        return self.check_relation_value(attr_name, domain_value, range_value)
+
+    def check_relation_value(
+        self,
+        attr_name: str,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+    ):
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        attr_value = getattr(domain_value, attr_name)
+        if make_set(range_value).issubset(make_set(attr_value)):
+            return True
+        elif self.transitive:
+            for v in attr_value:
+                if self.__call__(domain_value=v, range_value=range_value):
+                    return True
+        return False
 
 
 class DescriptionMeta(type):
