@@ -6,9 +6,9 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 
-from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor
+from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
 
 # Property descriptor classes (object properties)
@@ -35,8 +35,10 @@ class DegreeFrom(PropertyDescriptor):
 @dataclass(frozen=True)
 class HasAlumnus(PropertyDescriptor):
     """has as an alumnus"""
-    # Inverse of degreeFrom
-    inverse_of = DegreeFrom
+    @property
+    def inverse(self):
+        # Inverse of degreeFrom
+        return DegreeFrom(self.value, self.obj)
 
 
 @dataclass(frozen=True)
@@ -52,8 +54,10 @@ class Member(PropertyDescriptor):
 @dataclass(frozen=True)
 class MemberOf(PropertyDescriptor):
     """member of"""
-    # Inverse of member
-    inverse_of = Member
+    @property
+    def inverse(self):
+        # Inverse of member
+        return Member(self.value, self.obj)
 
 
 @dataclass(frozen=True)

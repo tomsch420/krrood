@@ -13,8 +13,18 @@ from typing_extensions import ClassVar
 from .cache_data import yield_class_values_from_cache, get_cache_keys_for_class_
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
-from .symbolic import T, SymbolicExpression, in_symbolic_mode, Variable, An, Entity, From, \
-    properties_to_expression_tree, ResultQuantifier, AND
+from .symbolic import (
+    T,
+    SymbolicExpression,
+    in_symbolic_mode,
+    Variable,
+    An,
+    Entity,
+    From,
+    properties_to_expression_tree,
+    ResultQuantifier,
+    AND,
+)
 from .utils import is_iterable
 
 
@@ -33,17 +43,25 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     @wraps(function)
     def wrapper(*args, **kwargs) -> Optional[Any]:
         if in_symbolic_mode():
-            function_arg_names = [pname for pname, p in inspect.signature(function).parameters.items()
-                                  if p.default == inspect.Parameter.empty]
+            function_arg_names = [
+                pname
+                for pname, p in inspect.signature(function).parameters.items()
+                if p.default == inspect.Parameter.empty
+            ]
             kwargs.update(dict(zip(function_arg_names, args)))
-            return Variable(function.__name__, function, _kwargs_=kwargs,
-                            _predicate_type_=PredicateType.DecoratedMethod)
+            return Variable(
+                function.__name__,
+                function,
+                _kwargs_=kwargs,
+                _predicate_type_=PredicateType.DecoratedMethod,
+            )
         return function(*args, **kwargs)
 
     return wrapper
 
 
 symbols_registry: List[Type] = []
+
 
 @dataclass_transform()
 def symbol(cls):
@@ -57,45 +75,63 @@ def symbol(cls):
     :param cls: The class to decorate.
     :return: The same class with a patched ``__new__``.
     """
-    original_new = cls.__new__ if '__new__' in cls.__dict__ else object.__new__
+    original_new = cls.__new__ if "__new__" in cls.__dict__ else object.__new__
     symbols_registry.append(cls)
 
     def symbolic_new(symbolic_cls, *args, **kwargs):
-        predicate_type = PredicateType.SubClassOfPredicate if issubclass(symbolic_cls, Predicate) else None
+        predicate_type = (
+            PredicateType.SubClassOfPredicate
+            if issubclass(symbolic_cls, Predicate)
+            else None
+        )
         node = SymbolicExpression._current_parent_()
-        args = bind_first_argument_of_predicate_if_in_query_context(node, predicate_type, *args)
-        domain, kwargs = update_domain_and_kwargs_from_args(symbolic_cls, *args, **kwargs)
+        args = bind_first_argument_of_predicate_if_in_query_context(
+            node, predicate_type, *args
+        )
+        domain, kwargs = update_domain_and_kwargs_from_args(
+            symbolic_cls, *args, **kwargs
+        )
         # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
         # because they also need to be inferred. So basically this mode is when there is no domain availabe and
         # we need to infer new values.
         if not domain and (in_symbolic_mode(EQLMode.Rule) or predicate_type):
-            var = Variable(symbolic_cls.__name__, symbolic_cls, _kwargs_=kwargs, _predicate_type_=predicate_type,
-                            _is_indexed_=index_class_cache(symbolic_cls))
+            var = Variable(
+                symbolic_cls.__name__,
+                symbolic_cls,
+                _kwargs_=kwargs,
+                _predicate_type_=predicate_type,
+                _is_indexed_=index_class_cache(symbolic_cls),
+            )
             update_query_child_expression_if_in_query_context(node, predicate_type, var)
             return var
         else:
             # In this mode, we either have a domain through the `domain` provided here, or through the cache if
             # the domain is not provided. Then we filter this domain by the provided constraints on the variable
             # attributes given as keyword arguments.
-            var, expression = extract_selected_variable_and_expression(symbolic_cls, domain, predicate_type,
-                                                                       **kwargs)
+            var, expression = extract_selected_variable_and_expression(
+                symbolic_cls, domain, predicate_type, **kwargs
+            )
             return An(Entity(expression, [var])) if expression else var
 
     def hybrid_new(symbolic_cls, *args, **kwargs):
         if in_symbolic_mode():
             return symbolic_new(symbolic_cls, *args, **kwargs)
         else:
-            instance = instantiate_class_and_update_cache(symbolic_cls, original_new, *args, **kwargs)
+            instance = instantiate_class_and_update_cache(
+                symbolic_cls, original_new, *args, **kwargs
+            )
             return instance
 
     cls.__new__ = hybrid_new
     return cls
 
+
 cls_args = {}
 
-def bind_first_argument_of_predicate_if_in_query_context(node: SymbolicExpression,
-                                                         predicate_type: Optional[PredicateType],
-                                                         *args):
+
+def bind_first_argument_of_predicate_if_in_query_context(
+    node: SymbolicExpression, predicate_type: Optional[PredicateType], *args
+):
     if predicate_type and node and in_symbolic_mode(EQLMode.Query):
         if not isinstance(node, ResultQuantifier):
             result_quantifier = node._parent_._parent_
@@ -105,9 +141,11 @@ def bind_first_argument_of_predicate_if_in_query_context(node: SymbolicExpressio
     return args
 
 
-def update_query_child_expression_if_in_query_context(node: SymbolicExpression,
-                                                      predicate_type: Optional[PredicateType],
-                                                      var: SymbolicExpression):
+def update_query_child_expression_if_in_query_context(
+    node: SymbolicExpression,
+    predicate_type: Optional[PredicateType],
+    var: SymbolicExpression,
+):
     if predicate_type and node and in_symbolic_mode(EQLMode.Query):
         if node._child_._child_:
             node._child_._child_ = AND(node._child_._child_, var)
@@ -131,17 +169,22 @@ def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
         if isinstance(arg, From):
             domain = arg
             if i > 0:
-                raise ValueError(f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
-                                 f" a domain using `From()`.")
+                raise ValueError(
+                    f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
+                    f" a domain using `From()`."
+                )
         else:
-            arg_name = init_args[i+1] # to skip `self`
+            arg_name = init_args[i + 1]  # to skip `self`
             kwargs[arg_name] = arg
     return domain, kwargs
 
 
-
-def extract_selected_variable_and_expression(symbolic_cls: Type, domain: Optional[From] = None,
-                                             predicate_type: Optional[PredicateType] = None, **kwargs):
+def extract_selected_variable_and_expression(
+    symbolic_cls: Type,
+    domain: Optional[From] = None,
+    predicate_type: Optional[PredicateType] = None,
+    **kwargs,
+):
     """
     :param symbolic_cls: The constructed class.
     :param domain: The domain source for the values of the variable by.
@@ -151,21 +194,36 @@ def extract_selected_variable_and_expression(symbolic_cls: Type, domain: Optiona
     """
     cache_keys = get_cache_keys_for_class_(Variable._cache_, symbolic_cls)
     if not domain and cache_keys:
-        domain = From((v for a, v in yield_class_values_from_cache(Variable._cache_, symbolic_cls, from_index=False,
-                                                                   cache_keys=cache_keys)))
+        domain = From(
+            (
+                v
+                for a, v in yield_class_values_from_cache(
+                    Variable._cache_,
+                    symbolic_cls,
+                    from_index=False,
+                    cache_keys=cache_keys,
+                )
+            )
+        )
     elif domain and is_iterable(domain.domain):
-            domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
+        domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
 
-    var = Variable(symbolic_cls.__name__, symbolic_cls, _domain_source_=domain, _predicate_type_=predicate_type,
-                   _is_indexed_=index_class_cache(symbolic_cls))
+    var = Variable(
+        symbolic_cls.__name__,
+        symbolic_cls,
+        _domain_source_=domain,
+        _predicate_type_=predicate_type,
+        _is_indexed_=index_class_cache(symbolic_cls),
+    )
 
     expression, _ = properties_to_expression_tree(var, kwargs)
 
     return var, expression
 
 
-
-def instantiate_class_and_update_cache(symbolic_cls: Type, original_new: Callable, *args, **kwargs):
+def instantiate_class_and_update_cache(
+    symbolic_cls: Type, original_new: Callable, *args, **kwargs
+):
     """
     :param symbolic_cls: The constructed class.
     :param original_new: The original class __new__ method.
@@ -177,8 +235,13 @@ def instantiate_class_and_update_cache(symbolic_cls: Type, original_new: Callabl
     index = index_class_cache(symbolic_cls)
     if index:
         update_cls_args(symbolic_cls)
-        kwargs = {f: HashedValue(getattr(instance, f)) for f in cls_args[symbolic_cls][1:]}
-        if symbolic_cls not in Variable._cache_ or not Variable._cache_[symbolic_cls].keys:
+        kwargs = {
+            f: HashedValue(getattr(instance, f)) for f in cls_args[symbolic_cls][1:]
+        }
+        if (
+            symbolic_cls not in Variable._cache_
+            or not Variable._cache_[symbolic_cls].keys
+        ):
             Variable._cache_[symbolic_cls].keys = kwargs.keys()
     else:
         kwargs = {}
@@ -189,7 +252,9 @@ def instantiate_class_and_update_cache(symbolic_cls: Type, original_new: Callabl
 def update_cls_args(symbolic_cls: Type):
     global cls_args
     if symbolic_cls not in cls_args:
-        cls_args[symbolic_cls] = list(inspect.signature(symbolic_cls.__init__).parameters.keys())
+        cls_args[symbolic_cls] = list(
+            inspect.signature(symbolic_cls.__init__).parameters.keys()
+        )
 
 
 def index_class_cache(symbolic_cls: Type) -> bool:
@@ -206,9 +271,9 @@ class Predicate(ABC):
     """
     The super predicate class that represents a filtration operation.
     """
+
     is_expensive: ClassVar[bool] = False
     transitive: ClassVar[bool] = False
-    inverse_of: ClassVar[Optional[Predicate]] = None
 
     def __init_subclass__(cls, **kwargs):
         """
@@ -232,6 +297,10 @@ class Predicate(ABC):
         This method should be implemented by subclasses.
         """
         ...
+
+    @property
+    def inverse(self) -> Optional[Predicate]:
+        return None
 
 
 @dataclass(eq=False, frozen=True)

@@ -24,15 +24,16 @@ def test_query_on_descriptor_field_filters():
     org2 = Company("ABC")
 
     people = [
-        Person("John"),
-        Person("Jane"),
+        Employee("John"),
+        Employee("Jane"),
     ]
     people[0].works_for = [org1]
     people[1].works_for = [org2]
 
     with symbolic_mode():
         query = a(
-            person := Person(From(people)), in_(Organization("ACME"), person.works_for)
+            person := Employee(From(people)),
+            in_(Organization("ACME"), person.works_for),
         )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]

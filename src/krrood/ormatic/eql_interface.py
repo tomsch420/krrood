@@ -8,7 +8,7 @@ import sqlalchemy.inspection
 from sqlalchemy import and_, or_, select, Select, func, literal, not_ as sa_not
 from sqlalchemy.orm import Session
 
-from entity_query_language.symbolic import (
+from krrood.entity_query_language.symbolic import (
     SymbolicExpression,
     Attribute,
     Comparator,
@@ -167,6 +167,7 @@ class EQLTranslator:
         equality between attributes of different symbolic variables.
         Supports ==, !=, <, <=, >, >=, and 'in'.
         """
+
         # Helper: extract underlying Variable and its python type from a leaf-like node
         def _extract_var_and_type(node: Any):
             # direct variable
@@ -302,7 +303,11 @@ class EQLTranslator:
             is_not = name == "not_contains"
 
             # Special-case: in_ semantics produced as contains(Literal(collection), Attribute(column)) by EQL
-            if name in ("contains", "in_") and isinstance(query.left, Literal) and isinstance(query.right, Attribute):
+            if (
+                name in ("contains", "in_")
+                and isinstance(query.left, Literal)
+                and isinstance(query.right, Attribute)
+            ):
                 try:
                     values = [hv.value for hv in query.left._domain_]
                 except Exception:

@@ -26,10 +26,10 @@ class PropertyDescriptor(Generic[T], Predicate):
     range_types: ClassVar[Set[Type]] = set()
     _registry: ClassVar[dict] = {}
 
-    obj: Optional[object] = field(default=None)
-    value: Optional[T] = field(default=None)
-    default: Optional[T] = field(default=NOTSET)
-    default_factory: Optional[Callable[[], T]] = field(default=NOTSET)
+    domain_value: Optional[object] = None
+    range_value: Optional[T] = None
+    default: Optional[T] = NOTSET
+    default_factory: Optional[Callable[[], T]] = NOTSET
 
     def __post_init__(self):
         self._registry[self.name] = self
@@ -58,7 +58,13 @@ class PropertyDescriptor(Generic[T], Predicate):
         setattr(
             cls,
             self.attr_name,
-            field(default_factory=default_factory, default=default, init=False, repr=False, hash=False),
+            field(
+                default_factory=default_factory,
+                default=default,
+                init=False,
+                repr=False,
+                hash=False,
+            ),
         )
         # Preserve the declared annotation for the hidden field
         cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
@@ -75,14 +81,6 @@ class PropertyDescriptor(Generic[T], Predicate):
         self.domain_types.add(cls)
 
     def update_range_types(self, cls: Type, attr_name: str) -> None:
-        # Support postponed annotations (from __future__ import annotations) which store strings
-        # type_hint = cls.__annotations__[attr_name]
-        # if isinstance(type_hint, str):
-        #     type_hint = eval(type_hint, vars(__import__(cls.__module__, fromlist=['*'])))
-        # for new_type in get_range_types(type_hint):
-        #     if any(issubclass(new_type, range_cls) for range_cls in self.range_types):
-        #         continue
-        #     self.range_types.add(new_type)
         type_hint = cls.__annotations__[attr_name]
         if isinstance(type_hint, str):
             try:
@@ -126,14 +124,18 @@ class PropertyDescriptor(Generic[T], Predicate):
         setattr(obj, self.attr_name, value)
 
     def __call__(self) -> bool:
-        if hasattr(self.obj, self.attr_name):
-            return make_set(self.value).issubset(make_set(getattr(self.obj, self.attr_name)))
+        if hasattr(self.domain_value, self.attr_name):
+            return make_set(self.range_value).issubset(
+                make_set(getattr(self.domain_value, self.attr_name))
+            )
         else:
-            for prop_type, prop_data in self.obj._properties_.items():
+            for prop_type, prop_data in self.domain_value._properties_.items():
                 if issubclass(prop_type, self.__class__):
                     for prop_name, prop_val in prop_data.items():
-                        if hasattr(self.obj, prop_name):
-                            if make_set(self.value).issubset(make_set(getattr(self.obj, prop_name))):
+                        if hasattr(self.domain_value, prop_name):
+                            if make_set(self.range_value).issubset(
+                                make_set(getattr(self.domain_value, prop_name))
+                            ):
                                 return True
             return False
 
@@ -149,7 +151,9 @@ class DescriptionMeta(type):
             attr_value.create_managed_attribute_for_class(new_class, attr_name)
         return new_class
 
+
 @symbol
 class Thing(metaclass=DescriptionMeta):
     """Base class for things that can be described by property descriptors."""
+
     ...
