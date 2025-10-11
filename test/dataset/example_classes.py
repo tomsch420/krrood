@@ -9,7 +9,7 @@ from typing import Dict, Any, Sequence
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import List, Optional, Type
 
-from entity_query_language import symbol
+from krrood.entity_query_language import symbol
 from krrood.ormatic.dao import DataAccessObject, AlternativeMapping, T
 
 
