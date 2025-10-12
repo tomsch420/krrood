@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Set, Optional
 from typing import TextIO
 
 import rustworkx as rx
+
 from sqlalchemy import TypeDecorator
 from typing_extensions import List, Type, Dict
 
+from .custom_types import TypeType
 from .dao import AlternativeMapping
 
 from .sqlalchemy_generator import SQLAlchemyGenerator
+from .utils import InheritanceStrategy, module_and_class_name
 from .wrapped_table import WrappedTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,
@@ -22,11 +24,6 @@ from ..class_diagrams.class_diagram import (
 from ..class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
-
-
-class InheritanceStrategy(Enum):
-    JOINED = "joined"
-    SINGLE = "single"
 
 
 class AlternativelyMaps(Relation):
@@ -52,7 +49,7 @@ class ORMatic:
     List of alternative mappings that should be used to map classes.
     """
 
-    type_mappings: Dict[Type, TypeDecorator] = field(default_factory=dict)
+    type_mappings: Dict[Type, Type[TypeDecorator]] = field(default_factory=dict)
     """
     A dict that maps classes to custom types that should be used to save the classes.
     They keys of the type mappings must be disjoint with the classes given..
@@ -91,9 +88,14 @@ class ORMatic:
     """
 
     def __post_init__(self):
+        self.type_mappings[Type] = TypeType
+        self.imported_modules.add(Type.__module__)
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
         self._create_wrapped_tables()
+
+        for wrapped_table in self.wrapped_tables.values():
+            self.imported_modules.add(wrapped_table.wrapped_clazz.clazz.__module__)
 
     def _create_wrapped_tables(self):
         for wrapped_clazz in self.wrapped_classes_in_topological_order:
@@ -163,8 +165,8 @@ class ORMatic:
     def create_type_annotations_map(self):
         self.type_annotation_map = {"Type": "TypeType"}
         for clazz, custom_type in self.type_mappings.items():
-            self.type_annotation_map[f"{clazz.__module__}.{clazz.__name__}"] = (
-                f"{custom_type.__module__}.{custom_type.__name__}"
+            self.type_annotation_map[module_and_class_name(clazz)] = (
+                module_and_class_name(custom_type)
             )
 
     @property
@@ -172,15 +174,10 @@ class ORMatic:
         """
         :return: List of all tables in topological order.
         """
-        result = []
-        sorter = rx.TopologicalSorter(self.inheritance_graph)
-        while sorter.is_active():
-            nodes = sorter.get_ready()
-            result.extend(
-                [self.class_dependency_graph._dependency_graph[n] for n in nodes]
-            )
-            sorter.done(nodes)
-        return result
+        return [
+            self.class_dependency_graph._dependency_graph[index]
+            for index in rx.topological_sort(self.inheritance_graph)
+        ]
 
     @property
     def mapped_classes(self) -> List[Type]:

@@ -5,12 +5,11 @@ import importlib
 import inspect
 import logging
 import sys
-import typing
 from dataclasses import dataclass, Field
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from typing_extensions import (
     get_type_hints,
@@ -20,9 +19,12 @@ from typing_extensions import (
     List,
     Type,
     TYPE_CHECKING,
+    Optional,
+    Union,
 )
 
 from .utils import is_builtin_class
+from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
@@ -61,6 +63,18 @@ class WrappedField:
     A list of container types that are supported by the parser.
     """
 
+    def __hash__(self):
+        return hash((self.clazz.clazz, self.field.name))
+
+    def __eq__(self, other):
+        return (self.clazz.clazz, self.field.name) == (
+            other.clazz.clazz,
+            other.field.name,
+        )
+
+    def __repr__(self):
+        return f"{module_and_class_name(self.clazz.clazz)}.{self.field.name}"
+
     @cached_property
     def resolved_type(self):
         try:
@@ -74,8 +88,8 @@ class WrappedField:
 
     @cached_property
     def is_builtin_type(self) -> bool:
-        type_to_check = self.contained_type if self.is_optional else self.resolved_type
-        return type_to_check in [int, float, str, bool, datetime, NoneType]
+
+        return self.type_endpoint in [int, float, str, bool, datetime, NoneType]
 
     @cached_property
     def is_container(self) -> bool:
@@ -96,9 +110,9 @@ class WrappedField:
     @cached_property
     def is_optional(self):
         origin = get_origin(self.resolved_type)
-        if origin not in [typing.Union, typing.Optional]:
+        if origin not in [Union, Optional]:
             return False
-        if origin == typing.Union:
+        if origin == Union:
             args = get_args(self.resolved_type)
             return len(args) == 2 and NoneType in args
         return True
@@ -127,7 +141,7 @@ class WrappedField:
 
     @cached_property
     def is_one_to_one_relationship(self) -> bool:
-        return self.is_optional and not self.is_builtin_type and not self.is_container
+        return not self.is_container and not self.is_builtin_type
 
     @cached_property
     def is_one_to_many_relationship(self) -> bool:

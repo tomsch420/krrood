@@ -3,8 +3,8 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import Session, configure_mappers
 
-from entity_query_language.entity import let, an, entity, the, contains
-from entity_query_language import and_, or_, in_, symbolic_mode
+from krrood.entity_query_language.entity import let, an, entity, the, contains
+from krrood.entity_query_language import and_, or_, in_, symbolic_mode
 
 from dataset.example_classes import Position, Pose
 from dataset.semantic_world_like_classes import (
