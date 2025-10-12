@@ -49,7 +49,7 @@ class ORMatic:
     List of alternative mappings that should be used to map classes.
     """
 
-    type_mappings: Dict[Type, TypeDecorator] = field(default_factory=dict)
+    type_mappings: Dict[Type, Type[TypeDecorator]] = field(default_factory=dict)
     """
     A dict that maps classes to custom types that should be used to save the classes.
     They keys of the type mappings must be disjoint with the classes given..
@@ -88,7 +88,7 @@ class ORMatic:
     """
 
     def __post_init__(self):
-        self.type_annotation_map[module_and_class_name(Type)] = TypeType.__name__
+        self.type_mappings[Type] = TypeType
         self.imported_modules.add(Type.__module__)
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
@@ -165,8 +165,8 @@ class ORMatic:
     def create_type_annotations_map(self):
         self.type_annotation_map = {"Type": "TypeType"}
         for clazz, custom_type in self.type_mappings.items():
-            self.type_annotation_map[f"{clazz.__module__}.{clazz.__name__}"] = (
-                f"{custom_type.__module__}.{custom_type.__name__}"
+            self.type_annotation_map[module_and_class_name(clazz)] = (
+                module_and_class_name(custom_type)
             )
 
     @property
@@ -174,15 +174,10 @@ class ORMatic:
         """
         :return: List of all tables in topological order.
         """
-        result = []
-        sorter = rx.TopologicalSorter(self.inheritance_graph)
-        while sorter.is_active():
-            nodes = sorter.get_ready()
-            result.extend(
-                [self.class_dependency_graph._dependency_graph[n] for n in nodes]
-            )
-            sorter.done(nodes)
-        return result
+        return [
+            self.class_dependency_graph._dependency_graph[index]
+            for index in rx.topological_sort(self.inheritance_graph)
+        ]
 
     @property
     def mapped_classes(self) -> List[Type]:
