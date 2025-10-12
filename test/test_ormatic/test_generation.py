@@ -20,7 +20,9 @@ def test_generation_process():
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}
 
-    class_diagram = ClassDiagram(list(all_classes))
+    class_diagram = ClassDiagram(
+        list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
+    )
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,

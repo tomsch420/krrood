@@ -24,6 +24,7 @@ from typing_extensions import (
 )
 
 from .utils import is_builtin_class
+from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
@@ -61,6 +62,18 @@ class WrappedField:
     """
     A list of container types that are supported by the parser.
     """
+
+    def __hash__(self):
+        return hash((self.clazz.clazz, self.field.name))
+
+    def __eq__(self, other):
+        return (self.clazz.clazz, self.field.name) == (
+            other.clazz.clazz,
+            other.field.name,
+        )
+
+    def __repr__(self):
+        return f"{module_and_class_name(self.clazz.clazz)}.{self.field.name}"
 
     @cached_property
     def resolved_type(self):

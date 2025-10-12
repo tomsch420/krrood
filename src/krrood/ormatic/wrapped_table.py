@@ -87,7 +87,7 @@ class WrappedTable:
 
     mapper_args: Dict[str, str] = field(default_factory=dict, init=False)
 
-    primary_key_name: str = "id"
+    primary_key_name: str = "database_id"
     """
     The name of the primary key column.
     """
@@ -102,7 +102,7 @@ class WrappedTable:
     A list of fields that should be skipped when processing the dataclass.
     """
 
-    @cached_property
+    @property
     def primary_key(self):
         if self.parent_table is not None:
             column_type = f"ForeignKey({self.parent_table.full_primary_key_name})"
@@ -112,7 +112,7 @@ class WrappedTable:
         return ColumnConstructor(
             self.primary_key_name,
             f"Mapped[{module_and_class_name(int)}]",
-            f"mapped_column({column_type}, primary_key=True)",
+            f"mapped_column({column_type}, primary_key=True, use_existing_column=True)",
         )
 
     @property
@@ -133,7 +133,7 @@ class WrappedTable:
                     ColumnConstructor(
                         self.polymorphic_on_name,
                         "Mapped[str]",
-                        "mapped_column(String(255), nullable=False)",
+                        "mapped_column(String(255), nullable=False, use_existing_column=True)",
                     )
                 )
             )
@@ -161,11 +161,6 @@ class WrappedTable:
 
     @cached_property
     def full_primary_key_name(self):
-        if self.ormatic.inheritance_strategy == InheritanceStrategy.SINGLE:
-            root = self
-            while root.parent_table is not None:
-                root = root.parent_table
-            return f"{root.tablename}.{root.primary_key_name}"
         return f"{self.tablename}.{self.primary_key_name}"
 
     @cached_property
@@ -179,6 +174,7 @@ class WrappedTable:
         parents = self.ormatic.inheritance_graph.predecessors(self.wrapped_clazz.index)
         if len(parents) == 0:
             return None
+
         return self.ormatic.wrapped_tables[
             self.ormatic.class_dependency_graph._dependency_graph[parents[0]]
         ]
@@ -190,26 +186,28 @@ class WrappedTable:
     @cached_property
     def fields(self) -> List[WrappedField]:
         """
-        :return: The list of fields specified in this associated dataclass that should be mapped.
+        :return: The list of fields specified only in this associated dataclass that should be mapped.
         """
-        self.skip_fields = []
 
+        # initialize the skip_fields of this class by excluding all parent fields
+        self.skip_fields = []
         if self.parent_table is not None:
             self.skip_fields += self.parent_table.skip_fields + self.parent_table.fields
 
         # get all new fields given by this class
-        result = [
-            field
-            for field in self.wrapped_clazz.fields
-            if field not in self.skip_fields
-        ]
+        result = [f for f in self.wrapped_clazz.fields if f not in self.skip_fields]
 
         # if the parent table is alternatively mapped, we need to remove the fields that are not present in the original class
         if self.parent_table is not None and self.parent_table.is_alternatively_mapped:
             # get the wrapped class of the original parent class
             og_parent_class = self.parent_table.wrapped_clazz.clazz.original_class()
+            wrapped_og_parent_class = (
+                self.ormatic.class_dependency_graph.get_wrapped_class(og_parent_class)
+            )
             fields_in_og_class_but_not_in_dao = [
-                f for f in fields(og_parent_class) if f not in self.parent_table.fields
+                f
+                for f in wrapped_og_parent_class.fields
+                if f not in self.parent_table.fields
             ]
 
             result = [r for r in result if r not in fields_in_og_class_but_not_in_dao]
@@ -307,9 +305,12 @@ class WrappedTable:
             else inner_type
         )
 
+        constructor = "mapped_column(use_existing_column=True)"
         self.builtin_columns.append(
             ColumnConstructor(
-                name=wrapped_field.field.name, type=f"Mapped[{type_annotation}]"
+                name=wrapped_field.field.name,
+                type=f"Mapped[{type_annotation}]",
+                constructor=constructor,
             )
         )
 
@@ -325,9 +326,7 @@ class WrappedTable:
             if not wrapped_field.is_optional
             else f"Mapped[{module_and_class_name(Optional)}[TypeType]]"
         )
-        column_constructor = (
-            f"mapped_column(TypeType, nullable={wrapped_field.is_optional})"
-        )
+        column_constructor = f"mapped_column(TypeType, nullable={wrapped_field.is_optional}, use_existing_column=True)"
         self.custom_columns.append(
             ColumnConstructor(column_name, column_type, column_constructor)
         )
@@ -355,7 +354,7 @@ class WrappedTable:
         ]
 
         # columns have to be nullable and use_alter=True since the insertion order might be incorrect otherwise
-        fk_column_constructor = f"mapped_column(ForeignKey('{target_wrapped_table.full_primary_key_name}', use_alter=True), nullable=True)"
+        fk_column_constructor = f"mapped_column(ForeignKey('{target_wrapped_table.full_primary_key_name}', use_alter=True), nullable=True, use_existing_column=True)"
 
         self.foreign_keys.append(
             ColumnConstructor(fk_name, fk_type, fk_column_constructor)
@@ -391,7 +390,7 @@ class WrappedTable:
         fk_type = (
             f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
         )
-        fk_column_constructor = f"mapped_column(ForeignKey('{self.full_primary_key_name}', use_alter=True), nullable=True)"
+        fk_column_constructor = f"mapped_column(ForeignKey('{self.full_primary_key_name}', use_alter=True), nullable=True, use_existing_column=True)"
         target_wrapped_table.foreign_keys.append(
             ColumnConstructor(fk_name, fk_type, fk_column_constructor)
         )
@@ -416,9 +415,7 @@ class WrappedTable:
         column_name = wrapped_field.field.name
         container = Set if issubclass(wrapped_field.container_type, set) else List
         column_type = f"Mapped[{module_and_class_name(container)}[{module_and_class_name(wrapped_field.type_endpoint)}]]"
-        column_constructor = (
-            f"mapped_column(JSON, nullable={wrapped_field.is_optional})"
-        )
+        column_constructor = f"mapped_column(JSON, nullable={wrapped_field.is_optional}, use_existing_column=True)"
         self.custom_columns.append(
             ColumnConstructor(column_name, column_type, column_constructor)
         )
@@ -432,7 +429,7 @@ class WrappedTable:
             else f"Mapped[{module_and_class_name(Optional)}[{custom_type.__module__}.{custom_type.__name__}]]"
         )
 
-        constructor = f"mapped_column({custom_type.__module__}.{custom_type.__name__}, nullable={wrapped_field.is_optional})"
+        constructor = f"mapped_column({custom_type.__module__}.{custom_type.__name__}, nullable={wrapped_field.is_optional}, use_existing_column=True)"
 
         self.custom_columns.append(
             ColumnConstructor(column_name, column_type, constructor)
