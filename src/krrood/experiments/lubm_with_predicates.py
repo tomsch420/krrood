@@ -127,11 +127,6 @@ class TakesCourseGraduateCourse(TakesCourse):
 
 
 @dataclass(frozen=True)
-class TeachingAssistantOfCourse(TeachingAssistantOf):
-    """is a teaching assistant for"""
-
-
-@dataclass(frozen=True)
 class UndergraduateDegreeFrom(DegreeFrom):
     """has an undergraduate degree from"""
 
@@ -188,30 +183,30 @@ class UnivBenchOntology(Thing):
 class Organization(UnivBenchOntology):
     """organization"""
     # is affiliated with
-    affiliated_organization_of: List[Organization] = AffiliatedOrganizationOf(default_factory=list)
+    affiliated_organization_of: List[Organization] = AffiliatedOrganizationOf()
     # is affiliated with
-    affiliate_of: List[Person] = AffiliateOf(default_factory=list)
+    affiliate_of: List[Person] = AffiliateOf()
     # has as a member
-    member: List[Person] = Member(default_factory=list)
+    member: List[Person] = Member()
     # publishes
-    org_publication: List[Publication] = OrgPublication(default_factory=list)
+    org_publication: List[Publication] = OrgPublication()
     # is part of
-    sub_organization_of: List[Organization] = SubOrganizationOf(default_factory=list)
+    sub_organization_of: List[Organization] = SubOrganizationOf()
 
 
 @dataclass(eq=False)
 class Person(UnivBenchOntology):
     """person"""
     # is being advised by
-    advisor: List[Professor] = Advisor(default_factory=list)
+    advisor: List[Professor] = Advisor()
     # has a degree from
-    degree_from: List[University] = DegreeFrom(default_factory=list)
+    degree_from: List[University] = DegreeFrom()
     # has a doctoral degree from
-    doctoral_degree_from: List[University] = DoctoralDegreeFrom(default_factory=list)
+    doctoral_degree_from: List[University] = DoctoralDegreeFrom()
     # has a masters degree from
-    masters_degree_from: List[University] = MastersDegreeFrom(default_factory=list)
+    masters_degree_from: List[University] = MastersDegreeFrom()
     # has an undergraduate degree from
-    undergraduate_degree_from: List[University] = UndergraduateDegreeFrom(default_factory=list)
+    undergraduate_degree_from: List[University] = UndergraduateDegreeFrom()
     # is age
     age: Optional[int] = None
     # can be reached at
@@ -226,18 +221,18 @@ class Person(UnivBenchOntology):
 class Publication(UnivBenchOntology):
     """publication"""
     # was written by
-    publication_author: List[Person] = PublicationAuthor(default_factory=list)
+    publication_author: List[Person] = PublicationAuthor()
     # was written on
     publication_date: Optional[str] = None
     # is about
-    publication_research: List[Research] = PublicationResearch(default_factory=list)
+    publication_research: List[Research] = PublicationResearch()
 
 
 @dataclass(eq=False)
 class Schedule(UnivBenchOntology):
     """schedule"""
     # lists as a course
-    listed_course: List[Course] = ListedCourse(default_factory=list)
+    listed_course: List[Course] = ListedCourse()
 
 
 @dataclass(eq=False)
@@ -280,21 +275,21 @@ class Department(Organization):
 class Director(Person):
     """director"""
     # is the head of
-    head_of: List[Program] = HeadOfProgram(default_factory=list)
+    head_of: List[Program] = HeadOfProgram()
 
 
 @dataclass(eq=False)
 class Employee(Person):
     """Employee"""
     # Works For
-    works_for: List[Organization] = WorksForOrganization(default_factory=list)
+    works_for: List[Organization] = WorksForOrganization()
 
 
 @dataclass(eq=False)
 class GraduateStudent(Person):
     """graduate student"""
     # is taking
-    takes_course: List[GraduateCourse] = TakesCourseGraduateCourse(default_factory=list)
+    takes_course: List[GraduateCourse] = TakesCourseGraduateCourse()
 
 
 @dataclass(eq=False)
@@ -325,21 +320,21 @@ class Research(Work):
 class ResearchAssistant(Person):
     """university research assistant"""
     # Works For
-    works_for: List[ResearchGroup] = WorksForResearchGroup(default_factory=list)
+    works_for: List[ResearchGroup] = WorksForResearchGroup()
 
 
 @dataclass(eq=False)
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
-    research_project: List[Research] = ResearchProject(default_factory=list)
+    research_project: List[Research] = ResearchProject()
 
 
 @dataclass(eq=False)
 class Software(Publication):
     """software program"""
     # is documented in
-    software_documentation: List[Publication] = SoftwareDocumentation(default_factory=list)
+    software_documentation: List[Publication] = SoftwareDocumentation()
     # is version
     software_version: Optional[str] = None
 
@@ -354,21 +349,21 @@ class Specification(Publication):
 class Student(Person):
     """student"""
     # is taking
-    takes_course: List[Course] = TakesCourseCourse(default_factory=list)
+    takes_course: List[Course] = TakesCourseCourse()
 
 
 @dataclass(eq=False)
 class TeachingAssistant(Person):
     """university teaching assistant"""
     # is a teaching assistant for
-    teaching_assistant_of: List[Course] = TeachingAssistantOfCourse(default_factory=list)
+    teaching_assistant_of: List[Course] = TeachingAssistantOf()
 
 
 @dataclass(eq=False)
 class University(Organization):
     """university"""
     # has as an alumnus
-    has_alumnus: List[Person] = HasAlumnus(default_factory=list)
+    has_alumnus: List[Person] = HasAlumnus()
 
 
 @dataclass(eq=False)
@@ -393,7 +388,7 @@ class ConferencePaper(Article):
 class Faculty(Employee):
     """faculty member"""
     # teaches
-    teacher_of: List[Course] = TeacherOf(default_factory=list)
+    teacher_of: List[Course] = TeacherOf()
 
 
 @dataclass(eq=False)
@@ -467,14 +462,14 @@ class AssociateProfessor(Professor):
 class Chair(Professor):
     """chair"""
     # is the head of
-    head_of: List[Department] = HeadOfDepartment(default_factory=list)
+    head_of: List[Department] = HeadOfDepartment()
 
 
 @dataclass(eq=False)
 class Dean(Professor):
     """dean"""
     # is the head of
-    head_of: List[College] = HeadOfCollege(default_factory=list)
+    head_of: List[College] = HeadOfCollege()
 
 
 @dataclass(eq=False)

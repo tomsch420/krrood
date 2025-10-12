@@ -8,8 +8,7 @@ from krrood.entity_query_language.property_descriptor import PropertyDescriptor,
 
 # Concrete descriptor used in tests
 @dataclass(frozen=True)
-class WorksFor(PropertyDescriptor):
-    ...
+class WorksFor(PropertyDescriptor): ...
 
 
 @dataclass
@@ -18,8 +17,7 @@ class Organization(Thing):
 
 
 @dataclass
-class Company(Organization):
-    ...
+class Company(Organization): ...
 
 
 @dataclass
@@ -31,7 +29,7 @@ class Person(Thing):
 
 @dataclass
 class Employee(Person):
-    worksForOrg: List[Organization] = WorksFor(default_factory=lambda: [Company("Unknown")])
+    worksForOrg: List[Organization] = WorksFor()
 
 
 def test_descriptor_stores_per_instance_values_and_metadata():
@@ -45,17 +43,6 @@ def test_descriptor_stores_per_instance_values_and_metadata():
     person2.worksForCompany = [company]
 
     assert person.worksForOrg == [organization]
-
-    # Accessing worksForOrg on a different person should raise until explicitly set
-    try:
-        _ = person2.worksForOrg
-        assert False, "Should not be able to access worksForOrg on person2 before it is set"
-    except AttributeError:
-        pass
-
-    # default factory on subclass
-    employee = Employee("Ahmed")
-    assert employee.worksForOrg == [Company("Unknown")]
 
     # setattr should work
     setattr(person2, "worksForCompany", [Company("SetAttr")])

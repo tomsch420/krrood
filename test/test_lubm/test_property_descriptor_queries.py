@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from krrood.entity_query_language import symbolic_mode, in_, a
-from krrood.entity_query_language import From
-
+from krrood.entity_query_language import symbolic_mode
 from krrood.experiments.lubm_with_predicates import (
     Organization,
     Person,
     Employee,
     MemberOf,
     SubOrganizationOf,
+    WorksFor,
 )
 
 
@@ -32,11 +31,9 @@ def test_query_on_descriptor_field_filters():
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(
-            person := Employee(From(people)),
-            in_(Organization("ACME"), person.works_for),
-        )
-    results = list(query.evaluate())
+        with Employee() as employee:
+            WorksFor(Organization("ACME"))
+    results = list(employee.evaluate())
     assert [p.name for p in results] == ["John"]
 
 
@@ -52,10 +49,9 @@ def test_query_on_descriptor_inheritance():
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(
-            person := Person(From(people)), MemberOf(person, Organization("ACME"))
-        )
-    results = list(query.evaluate())
+        with Person() as person:
+            MemberOf(Organization("ACME"))
+    results = list(person.evaluate())
     assert [p.name for p in results] == ["John"]
 
 
@@ -67,6 +63,7 @@ def test_query_on_descriptor_transitivity():
     org3.sub_organization_of = [org2]
 
     with symbolic_mode():
-        query = a(org := Organization(), SubOrganizationOf(org, org1))
-    results = list(query.evaluate())
+        with Organization() as my_org:
+            SubOrganizationOf(org1)
+    results = list(my_org.evaluate())
     assert {p.name for p in results} == {"ACME_sub", "ACME_sub_sub"}

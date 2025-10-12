@@ -21,7 +21,6 @@ from .typing_utils import get_range_types
 from .utils import make_set
 
 T = TypeVar("T")
-NOTSET = object()
 
 
 @dataclass(frozen=True)
@@ -35,15 +34,8 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     domain_types: ClassVar[Set[Type]] = set()
     range_types: ClassVar[Set[Type]] = set()
-    _registry: ClassVar[dict] = {}
-
-    domain_value: Optional[object] = None
-    range_value: Optional[T] = None
-    default: Optional[T] = NOTSET
-    default_factory: Optional[Callable[[], T]] = NOTSET
-
-    def __post_init__(self):
-        self._registry[self.name] = self
+    domain_value: Optional[Any] = None
+    range_value: Optional[Any] = None
 
     @cached_property
     def attr_name(self) -> str:
@@ -60,18 +52,11 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     def create_managed_attribute_for_class(self, cls: Type, attr_name: str) -> None:
         """Create hidden dataclass field to store instance values and update type sets."""
-        default = self.default
-        if default is NOTSET:
-            default = MISSING
-        default_factory = self.default_factory
-        if default_factory is NOTSET:
-            default_factory = MISSING
         setattr(
             cls,
             self.attr_name,
             field(
-                default_factory=default_factory,
-                default=default,
+                default_factory=list,
                 init=False,
                 repr=False,
                 hash=False,

@@ -444,6 +444,10 @@ class OwlToPythonConverter:
                 base = properties_copy.get(prop_name)
                 if not base or base.get("type") != "ObjectProperty":
                     continue
+                if rng_names.issubset(
+                    set(self.properties[prop_name].get("ranges", []))
+                ):
+                    continue
                 # Remove this class from the base property's declared domains (we will attach a specialized one)
                 base_dd = list(base.get("declared_domains", []))
                 if cls_name in base_dd:
