@@ -22,11 +22,11 @@ class Base(DeclarativeBase):
 
 {% for table in ormatic.wrapped_tables.values() %}
 class {{ table.tablename }}({{ table.base_class_name }}, DataAccessObject[{{ table.wrapped_clazz.clazz.__module__ }}.{{ table.wrapped_clazz.clazz.__name__ }}]):
-    {% if inheritance_strategy == 'joined' or table.parent_table is none %}
+
     __tablename__ = '{{ table.tablename }}'
 
     {{ table.primary_key }}
-    {% endif %}
+
 
     {% for column in table.builtin_columns %}
     {{ column }}
