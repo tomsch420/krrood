@@ -252,14 +252,16 @@ class WrappedTable:
             logger.info(f"Parsing as type.")
             self.create_type_type_column(wrapped_field)
 
-        elif wrapped_field.is_builtin_type or wrapped_field.is_enum:
+        elif (
+            wrapped_field.is_builtin_type or wrapped_field.is_enum
+        ) and not wrapped_field.is_container:
             logger.info(f"Parsing as builtin type.")
             self.create_builtin_column(wrapped_field)
 
         # handle one to one relationships
         elif (
             wrapped_field.is_one_to_one_relationship
-            and wrapped_field.contained_type in self.ormatic.mapped_classes
+            and wrapped_field.type_endpoint in self.ormatic.mapped_classes
         ):
             logger.info(f"Parsing as one to one relationship.")
             self.create_one_to_one_relationship(wrapped_field)
@@ -267,7 +269,7 @@ class WrappedTable:
         # handle custom types
         elif (
             wrapped_field.is_one_to_one_relationship
-            and wrapped_field.contained_type in self.ormatic.type_mappings
+            and wrapped_field.type_endpoint in self.ormatic.type_mappings
         ):
             logger.info(
                 f"Parsing as custom type {self.ormatic.type_mappings[wrapped_field.resolved_type]}."

@@ -12,7 +12,7 @@ from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
 
 def test_generation_process():
     all_classes = set(classes_of_module(example_classes))
-    all_classes.update(set(classes_of_module(semantic_world_like_classes)))
+    all_classes |= set(classes_of_module(semantic_world_like_classes))
     all_classes -= set(recursive_subclasses(DataAccessObject))
     all_classes -= set(recursive_subclasses(Enum))
     all_classes -= set(recursive_subclasses(TypeDecorator))

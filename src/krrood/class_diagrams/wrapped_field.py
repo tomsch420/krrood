@@ -88,8 +88,8 @@ class WrappedField:
 
     @cached_property
     def is_builtin_type(self) -> bool:
-        type_to_check = self.contained_type if self.is_optional else self.resolved_type
-        return type_to_check in [int, float, str, bool, datetime, NoneType]
+
+        return self.type_endpoint in [int, float, str, bool, datetime, NoneType]
 
     @cached_property
     def is_container(self) -> bool:
@@ -141,7 +141,7 @@ class WrappedField:
 
     @cached_property
     def is_one_to_one_relationship(self) -> bool:
-        return self.is_optional and not self.is_builtin_type and not self.is_container
+        return not self.is_container and not self.is_builtin_type
 
     @cached_property
     def is_one_to_many_relationship(self) -> bool:
