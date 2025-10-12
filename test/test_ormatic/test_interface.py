@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session, configure_mappers
 
 from dataset.example_classes import *
 from dataset.sqlalchemy_interface import *
-from krrood.ormatic.dao import to_dao, NoDAOFoundDuringParsingError, is_data_column
+from krrood.ormatic.dao import (
+    to_dao,
+    NoDAOFoundDuringParsingError,
+    is_data_column,
+    NoDAOFoundError,
+)
 from krrood.ormatic.utils import drop_database
 
 
@@ -308,8 +313,9 @@ class InterfaceTestCase(unittest.TestCase):
         self.assertEqual(reconstructed, association)
 
     def test_assertion(self):
-        p = Pose([1, 2, 3], "a")
-        self.assertRaises(NoDAOFoundDuringParsingError, to_dao, p)
+        p = NotMappedParent()
+        with self.assertRaises(NoDAOFoundError):
+            to_dao(p)
 
     def test_PositionsSubclassWithAnotherPosition(self):
         position = Position(1, 2, 3)
