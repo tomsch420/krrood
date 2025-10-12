@@ -153,10 +153,12 @@ class Predicate(ABC):
     symbol_graph: ClassVar[SymbolGraph]
 
     @classmethod
-    def build_symbol_graph(cls):
-        for cls_ in copy(symbols_registry):
-            symbols_registry.update(recursive_subclasses(cls_))
-        cls.symbol_graph = SymbolGraph(ClassDiagram(list(symbols_registry)))
+    def build_symbol_graph(cls, classes: List[Type] = None):
+        if not classes:
+            for cls_ in copy(symbols_registry):
+                symbols_registry.update(recursive_subclasses(cls_))
+            classes = symbols_registry
+        cls.symbol_graph = SymbolGraph(ClassDiagram(list(classes)))
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
