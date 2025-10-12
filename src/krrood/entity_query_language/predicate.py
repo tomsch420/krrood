@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
+from collections import deque
 from dataclasses import dataclass
 from functools import wraps
-from typing import List
+from typing import List, Iterable
 
 from typing_extensions import Callable, Optional, Any, dataclass_transform, Type, Tuple
 
@@ -261,8 +262,7 @@ def index_class_cache(symbolic_cls: Type) -> bool:
     """
     Determine whether the class cache should be indexed.
     """
-    return False
-    # return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
+    return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
 
 
 @symbol
@@ -276,27 +276,67 @@ class Predicate(ABC):
     transitive: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs):
-        """
-        Ensure that when a predicate declares an inverse_of, the referenced predicate
-        also points back to this predicate via its own inverse_of.
-        """
         super().__init_subclass__(**kwargs)
         inverse = getattr(cls, "inverse_of", None)
         if inverse is not None:
-            # Validate type to prevent misuse
             if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
                 raise TypeError("inverse_of must be set to a Predicate subclass")
-            # Set reciprocal link only if not already set or mismatched
             if getattr(inverse, "inverse_of", None) is None:
                 inverse.inverse_of = cls
 
+    # New: subclasses implement these two hooks.
     @abstractmethod
-    def __call__(self) -> Any:
+    def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
         """
-        Evaluate the predicate with the current arguments and return the results.
-        This method should be implemented by subclasses.
+        Return True if the relation holds directly (non-transitively) between
+        the given domain and range values.
         """
         ...
+
+    def _neighbors(self, value: Any) -> Iterable[Any]:
+        """
+        Return direct neighbors of the given value to traverse when transitivity is enabled.
+        Default is no neighbors (non-transitive or leaf).
+        """
+        return ()
+
+    def __call__(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        """
+        Evaluate the predicate for the supplied values. If `transitive` is set,
+        perform a graph traversal using `_neighbors` to determine reachability,
+        otherwise rely on `_holds_direct` only.
+        """
+        # Subclasses may store defaults on self; keep that behavior consistent.
+        if domain_value is None:
+            domain_value = getattr(self, "domain_value", None)
+        if range_value is None:
+            range_value = getattr(self, "range_value", None)
+
+        if self._holds_direct(domain_value, range_value):
+            return True
+        if not self.transitive:
+            return False
+
+        # BFS with cycle protection
+        visited = set()
+        queue = deque()
+
+        start = HashedValue(domain_value)
+        visited.add(start)
+        queue.append(domain_value)
+
+        while queue:
+            current = queue.popleft()
+            for nxt in self._neighbors(current):
+                if self._holds_direct(nxt, range_value):
+                    return True
+                key = HashedValue(nxt)
+                if key not in visited:
+                    visited.add(key)
+                    queue.append(nxt)
+        return False
 
     @property
     def inverse(self) -> Optional[Predicate]:
@@ -309,7 +349,9 @@ class HasType(Predicate):
     types_: Type
     is_expensive: ClassVar[bool] = False
 
-    def __call__(self) -> bool:
+    def _holds_direct(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
         return isinstance(self.variable, self.types_)
 
 

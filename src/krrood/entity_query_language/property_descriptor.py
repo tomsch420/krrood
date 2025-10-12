@@ -124,28 +124,59 @@ class PropertyDescriptor(Generic[T], Predicate):
             return
         setattr(obj, self.attr_name, value)
 
-    def __call__(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    def _holds_direct(
+        self, domain_value: Optional[Any], range_value: Optional[Any]
     ) -> bool:
+        """Return True if `range_value` is contained directly in the property of `domain_value`.
+        Also consider sub-properties declared on the domain type.
+        """
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
-        if hasattr(domain_value, self.attr_name):
-            return self.check_relation_value(domain_value, range_value)
-        else:
-            return self.check_relation_holds_for_subclasses_of_property(
-                domain_value=domain_value, range_value=range_value
-            )
 
-    def check_relation_holds_for_subclasses_of_property(
+        # If the concrete instance has our backing attribute, check it directly.
+        if hasattr(domain_value, self.attr_name):
+            return self._check_relation_value(
+                attr_name=self.attr_name,
+                domain_value=domain_value,
+                range_value=range_value,
+            )
+        # Otherwise, look through sub-properties of this property.
+        return self._check_relation_holds_for_subclasses_of_property(
+            domain_value=domain_value, range_value=range_value
+        )
+
+    def _neighbors(self, value: Any) -> Iterable[Any]:
+        """Return direct neighbors via this property from `value` for transitive traversal."""
+        yield from (
+            v
+            for prop in self.get_sub_properties(value)
+            for v in getattr(value, prop.attr_name)
+        )
+
+    def _check_relation_holds_for_subclasses_of_property(
         self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
     ) -> bool:
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
         for prop_data in self.get_sub_properties(domain_value):
-            if self.check_relation_value(
+            if self._check_relation_value(
                 prop_data.attr_name, domain_value=domain_value, range_value=range_value
             ):
                 return True
+        return False
+
+    def _check_relation_value(
+        self,
+        attr_name: str,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        attr_value = getattr(domain_value, attr_name)
+        if make_set(range_value).issubset(make_set(attr_value)):
+            return True
+        # Do not handle transitivity here; it is now centralized in Predicate.__call__
         return False
 
     def get_sub_properties(
@@ -155,23 +186,6 @@ class PropertyDescriptor(Generic[T], Predicate):
         for f in fields(domain_value):
             if issubclass(type(f.default), self.__class__):
                 yield f.default
-
-    def check_relation_value(
-        self,
-        attr_name: str,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
-    ):
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        attr_value = getattr(domain_value, attr_name)
-        if make_set(range_value).issubset(make_set(attr_value)):
-            return True
-        elif self.transitive:
-            for v in attr_value:
-                if self.__call__(domain_value=v, range_value=range_value):
-                    return True
-        return False
 
 
 class DescriptionMeta(type):
