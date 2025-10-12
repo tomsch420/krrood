@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Set, Optional
 from typing import TextIO
 
 import rustworkx as rx
+
 from sqlalchemy import TypeDecorator
 from typing_extensions import List, Type, Dict
 
+from .custom_types import TypeType
 from .dao import AlternativeMapping
 
 from .sqlalchemy_generator import SQLAlchemyGenerator
+from .utils import InheritanceStrategy, module_and_class_name
 from .wrapped_table import WrappedTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,
@@ -22,11 +24,6 @@ from ..class_diagrams.class_diagram import (
 from ..class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
-
-
-class InheritanceStrategy(Enum):
-    JOINED = "joined"
-    SINGLE = "single"
 
 
 class AlternativelyMaps(Relation):
@@ -91,9 +88,14 @@ class ORMatic:
     """
 
     def __post_init__(self):
+        self.type_annotation_map[module_and_class_name(Type)] = TypeType.__name__
+        self.imported_modules.add(Type.__module__)
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
         self._create_wrapped_tables()
+
+        for wrapped_table in self.wrapped_tables.values():
+            self.imported_modules.add(wrapped_table.wrapped_clazz.clazz.__module__)
 
     def _create_wrapped_tables(self):
         for wrapped_clazz in self.wrapped_classes_in_topological_order:

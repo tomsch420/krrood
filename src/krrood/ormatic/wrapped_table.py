@@ -4,16 +4,18 @@ import logging
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
 
-from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Tuple
+from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set
 
 from .dao import AlternativeMapping
+from .utils import InheritanceStrategy, module_and_class_name
 from ..class_diagrams.class_diagram import (
     WrappedClass,
 )
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
-    from .ormatic import ORMatic, InheritanceStrategy
+    from .ormatic import ORMatic
+
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +109,11 @@ class WrappedTable:
         else:
             column_type = "Integer"
 
-        return f"mapped_column({column_type}, primary_key=True)"
+        return ColumnConstructor(
+            self.primary_key_name,
+            f"Mapped[{module_and_class_name(int)}]",
+            f"mapped_column({column_type}, primary_key=True)",
+        )
 
     @property
     def child_tables(self) -> List[WrappedTable]:
@@ -164,7 +170,7 @@ class WrappedTable:
 
     @cached_property
     def tablename(self):
-        result = self.clazz.__name__
+        result = self.wrapped_clazz.clazz.__name__
         result += "DAO"
         return result
 
@@ -294,11 +300,11 @@ class WrappedTable:
         """
 
         self.ormatic.imported_modules.add(wrapped_field.type_endpoint.__module__)
-        inner_type = (
-            f"{wrapped_field.type_endpoint}.{wrapped_field.type_endpoint.__name__}"
-        )
+        inner_type = module_and_class_name(wrapped_field.type_endpoint)
         type_annotation = (
-            f"Optional[{inner_type}]" if wrapped_field.is_optional else inner_type
+            f"{module_and_class_name(Optional)}[{inner_type}]"
+            if wrapped_field.is_optional
+            else inner_type
         )
 
         self.builtin_columns.append(
@@ -308,76 +314,129 @@ class WrappedTable:
         )
 
     def create_type_type_column(self, wrapped_field: WrappedField):
+        """
+        Create a column for a field of type `Type`.
+        :param wrapped_field: The field to extract type information from.
+        :return:
+        """
         column_name = wrapped_field.field.name
         column_type = (
             f"Mapped[TypeType]"
             if not wrapped_field.is_optional
-            else f"Mapped[Optional[TypeType]]"
+            else f"Mapped[{module_and_class_name(Optional)}[TypeType]]"
         )
         column_constructor = (
             f"mapped_column(TypeType, nullable={wrapped_field.is_optional})"
         )
-        self.custom_columns.append((column_name, column_type, column_constructor))
+        self.custom_columns.append(
+            ColumnConstructor(column_name, column_type, column_constructor)
+        )
 
     def create_one_to_one_relationship(self, wrapped_field: WrappedField):
+        """
+        Create a one-to-one relationship with using the given field.
+        This adds a foreign key and a relationship to this table.
+
+        :param wrapped_field: The field to get the information from.
+        """
         # create foreign key
         fk_name = f"{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
         fk_type = (
-            f"Mapped[Optional[int]]" if wrapped_field.is_optional else "Mapped[int]"
+            f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
+            if wrapped_field.is_optional
+            else "Mapped[int]"
         )
+
+        # get the target table
+        target_wrapped_table = self.ormatic.wrapped_tables[
+            self.ormatic.class_dependency_graph.get_wrapped_class(
+                wrapped_field.type_endpoint
+            )
+        ]
 
         # columns have to be nullable and use_alter=True since the insertion order might be incorrect otherwise
-        fk_column_constructor = f"mapped_column(ForeignKey('{self.ormatic.wrapped_tables[wrapped_field.field.type].full_primary_key_name}', use_alter=True), nullable=True)"
+        fk_column_constructor = f"mapped_column(ForeignKey('{target_wrapped_table.full_primary_key_name}', use_alter=True), nullable=True)"
 
-        self.foreign_keys.append((fk_name, fk_type, fk_column_constructor))
-
-        # create relationship to remote side
-        other_table = self.ormatic.class_dict[field_info.type]
-        rel_name = f"{field_info.name}"
-        rel_type = f"Mapped[{other_table.tablename}]"
-        # relationships have to be post updated since since it won't work in the case of subclasses with another ref otherwise
-        rel_constructor = f"relationship('{other_table.tablename}', uselist=False, foreign_keys=[{fk_name}], post_update=True)"
-        self.relationships.append((rel_name, rel_type, rel_constructor))
-
-    def create_one_to_many_relationship(self, field_info: FieldInfo):
-        # create a foreign key to this on the remote side
-        other_table = self.ormatic.class_dict[field_info.type]
-        fk_name = f"{self.tablename.lower()}_{field_info.name}{self.ormatic.foreign_key_postfix}"
-        fk_type = "Mapped[Optional[int]]"
-        fk_column_constructor = f"mapped_column(ForeignKey('{self.full_primary_key_name}', use_alter=True), nullable=True)"
-        other_table.foreign_keys.append((fk_name, fk_type, fk_column_constructor))
-
-        # create a relationship with a list to collect the other side
-        rel_name = f"{field_info.name}"
-        rel_type = f"Mapped[List[{other_table.tablename}]]"
-        rel_constructor = f"relationship('{other_table.tablename}', foreign_keys='[{other_table.tablename}.{fk_name}]', post_update=True)"
-        self.relationships.append((rel_name, rel_type, rel_constructor))
-
-    def create_container_of_builtins(self, field_info: FieldInfo):
-        column_name = field_info.name
-        container = "Set" if issubclass(field_info.container, set) else "List"
-        column_type = f"Mapped[{container}[{field_info.type.__name__}]]"
-        column_constructor = f"mapped_column(JSON, nullable={field_info.optional})"
-        self.custom_columns.append((column_name, column_type, column_constructor))
-
-    def create_custom_type(self, field_info: FieldInfo):
-        custom_type = self.ormatic.type_mappings[field_info.type]
-        column_name = field_info.name
-        column_type = (
-            f"Mapped[{custom_type.__module__}.{custom_type.__name__}]"
-            if not field_info.optional
-            else f"Mapped[Optional[{custom_type.__module__}.{custom_type.__name__}]]"
+        self.foreign_keys.append(
+            ColumnConstructor(fk_name, fk_type, fk_column_constructor)
         )
 
-        constructor = f"mapped_column({custom_type.__module__}.{custom_type.__name__}, nullable={field_info.optional})"
+        # create relationship to remote side
+        rel_name = f"{wrapped_field.field.name}"
+        rel_type = f"Mapped[{target_wrapped_table.tablename}]"
+        # relationships have to be post updated since since it won't work in the case of subclasses with another ref otherwise
+        rel_constructor = f"relationship('{target_wrapped_table.tablename}', uselist=False, foreign_keys=[{fk_name}], post_update=True)"
+        self.relationships.append(
+            ColumnConstructor(rel_name, rel_type, rel_constructor)
+        )
 
-        self.custom_columns.append((column_name, column_type, constructor))
+    def create_one_to_many_relationship(self, wrapped_field: WrappedField):
+        """
+        Creates a one-to-many relationship mapping for the given wrapped field.
+        The target side of the wrapped field gets a foreign key to this table with a unique name.
+        This table gets a relationship that joins the target table with the foreign key.
 
-    @property
-    def to_dao(self) -> Optional[str]:
-        if issubclass(self.clazz, AlternativeMapping):
-            return f"to_dao = {self.clazz.__module__}.{self.clazz.__name__}.to_dao"
-        return None
+        :param wrapped_field: The field for the one-to-many relationship.
+        """
+
+        # get the target table
+        target_wrapped_table = self.ormatic.wrapped_tables[
+            self.ormatic.class_dependency_graph.get_wrapped_class(
+                wrapped_field.type_endpoint
+            )
+        ]
+
+        # create a foreign key to this on the remote side
+        fk_name = f"{self.tablename.lower()}_{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
+        fk_type = (
+            f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
+        )
+        fk_column_constructor = f"mapped_column(ForeignKey('{self.full_primary_key_name}', use_alter=True), nullable=True)"
+        target_wrapped_table.foreign_keys.append(
+            ColumnConstructor(fk_name, fk_type, fk_column_constructor)
+        )
+
+        # create a relationship with a list to collect the other side
+        rel_name = f"{wrapped_field.field.name}"
+        rel_type = (
+            f"Mapped[{module_and_class_name(List)}[{target_wrapped_table.tablename}]]"
+        )
+        rel_constructor = f"relationship('{target_wrapped_table.tablename}', foreign_keys='[{target_wrapped_table.tablename}.{fk_name}]', post_update=True)"
+        self.relationships.append(
+            ColumnConstructor(rel_name, rel_type, rel_constructor)
+        )
+
+    def create_container_of_builtins(self, wrapped_field: WrappedField):
+        """
+        Create a column for a list-like of built-in values.
+
+        :param wrapped_field: The field to extract the information from.
+        """
+        self.ormatic.imported_modules.add("typing_extensions")
+        column_name = wrapped_field.field.name
+        container = Set if issubclass(wrapped_field.container_type, set) else List
+        column_type = f"Mapped[{module_and_class_name(container)}[{module_and_class_name(wrapped_field.type_endpoint)}]]"
+        column_constructor = (
+            f"mapped_column(JSON, nullable={wrapped_field.is_optional})"
+        )
+        self.custom_columns.append(
+            ColumnConstructor(column_name, column_type, column_constructor)
+        )
+
+    def create_custom_type(self, wrapped_field: WrappedField):
+        custom_type = self.ormatic.type_mappings[wrapped_field.type_endpoint]
+        column_name = wrapped_field.field.name
+        column_type = (
+            f"Mapped[{custom_type.__module__}.{custom_type.__name__}]"
+            if not wrapped_field.is_optional
+            else f"Mapped[{module_and_class_name(Optional)}[{custom_type.__module__}.{custom_type.__name__}]]"
+        )
+
+        constructor = f"mapped_column({custom_type.__module__}.{custom_type.__name__}, nullable={wrapped_field.is_optional})"
+
+        self.custom_columns.append(
+            ColumnConstructor(column_name, column_type, constructor)
+        )
 
     @property
     def base_class_name(self):

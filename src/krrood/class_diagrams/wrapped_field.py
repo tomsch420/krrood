@@ -5,12 +5,11 @@ import importlib
 import inspect
 import logging
 import sys
-import typing
 from dataclasses import dataclass, Field
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from typing_extensions import (
     get_type_hints,
@@ -20,6 +19,8 @@ from typing_extensions import (
     List,
     Type,
     TYPE_CHECKING,
+    Optional,
+    Union,
 )
 
 from .utils import is_builtin_class
@@ -96,9 +97,9 @@ class WrappedField:
     @cached_property
     def is_optional(self):
         origin = get_origin(self.resolved_type)
-        if origin not in [typing.Union, typing.Optional]:
+        if origin not in [Union, Optional]:
             return False
-        if origin == typing.Union:
+        if origin == Union:
             args = get_args(self.resolved_type)
             return len(args) == 2 and NoneType in args
         return True

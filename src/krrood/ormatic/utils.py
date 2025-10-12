@@ -5,11 +5,11 @@ import inspect
 import sys
 from contextlib import suppress
 from enum import Enum
-from typing import Type, List, Iterable
+
 
 import sqlalchemy
 from sqlalchemy import Engine, text, MetaData
-from typing_extensions import TypeVar
+from typing_extensions import TypeVar, _SpecialForm, Type, List, Iterable, Union
 
 
 class classproperty:
@@ -125,3 +125,12 @@ def drop_database(engine: Engine) -> None:
 
         if disable_fk_checks:
             conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
+
+
+class InheritanceStrategy(Enum):
+    JOINED = "joined"
+    SINGLE = "single"
+
+
+def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
+    return f"{t.__module__}.{t.__name__}"
