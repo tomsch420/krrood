@@ -1,2 +1,6 @@
 -r requirements-dev-ci.txt
 rustworkx_utils
+tqdm
+pdbpp
+pytest
+omegaconf

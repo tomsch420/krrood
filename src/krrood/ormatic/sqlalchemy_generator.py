@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import itertools
 import logging
 import os
+from dataclasses import dataclass, field
 from typing import TextIO, TYPE_CHECKING
 
 import jinja2
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class SQLAlchemyGenerator:
     """
     A class for generating SQLAlchemy declarative mappings from ORMatic models.
@@ -20,30 +21,23 @@ class SQLAlchemyGenerator:
     Uses Jinja2 templates for code generation.
     """
 
-    env: jinja2.Environment
-    """
-    The environment to use with jinja2.
-    """
-
     ormatic: ORMatic
     """
     The ORMatic instance that created this SQLAlchemyGenerator.
     """
 
-    def __init__(self, ormatic: ORMatic):
-        """
-        Initialize the SQLAlchemyGenerator with a reference to the ORMatic instance.
+    env: jinja2.Environment = field(init=False, default=None)
+    """
+    The environment to use with jinja2.
+    """
 
-        :param ormatic: The ORMatic instance that created this SQLAlchemyGenerator.
-        """
-        self.ormatic = ormatic
-
-        # Set up Jinja2 environment
-        template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-
-
-        self.env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir), trim_blocks=True,
-            lstrip_blocks=True)
+    def __post_init__(self):
+        template_dir = os.path.join(os.path.dirname(__file__), "templates")
+        self.env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(template_dir),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
 
     def to_sqlalchemy_file(self, file: TextIO):
         """
@@ -52,25 +46,11 @@ class SQLAlchemyGenerator:
         :param file: The file to write to
         """
         # Load the template
-        template = self.env.get_template('sqlalchemy_model.py.jinja')
-
-        # Prepare class imports
-        module_imports = set()
-        for clazz in itertools.chain(self.ormatic.class_dict.keys(), self.ormatic.type_mappings.keys(),
-                                     self.ormatic.type_mappings.values()):
-            module_imports |= {clazz.__module__}
-
-        module_imports |= self.ormatic.imports
-
-        module_imports = sorted(module_imports, key=lambda m: str(m))
+        template = self.env.get_template("sqlalchemy_model.py.jinja")
 
         # Render the template
         output = template.render(
-            wrapped_tables=self.ormatic.wrapped_tables,
-            module_imports=module_imports,
-            extra_imports=self.ormatic.extra_imports,
-            type_annotation_map=self.ormatic.type_annotation_map,
-            inheritance_strategy=self.ormatic.inheritance_strategy.value,
+            ormatic=self.ormatic,
         )
 
         # Write the output to the file

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import enum
 import importlib
 import inspect
 import logging
 import sys
-import typing
 from dataclasses import dataclass, Field
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
-from typing import Optional
+from collections.abc import Sequence
 
 from typing_extensions import (
     get_type_hints,
@@ -19,6 +19,8 @@ from typing_extensions import (
     List,
     Type,
     TYPE_CHECKING,
+    Optional,
+    Union,
 )
 
 from .utils import is_builtin_class
@@ -55,11 +57,7 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
-    container_types: ClassVar[List[Type]] = [
-        list,
-        set,
-        tuple,
-    ]
+    container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
     """
@@ -99,9 +97,9 @@ class WrappedField:
     @cached_property
     def is_optional(self):
         origin = get_origin(self.resolved_type)
-        if origin not in [typing.Union, typing.Optional]:
+        if origin not in [Union, Optional]:
             return False
-        if origin == typing.Union:
+        if origin == Union:
             args = get_args(self.resolved_type)
             return len(args) == 2 and NoneType in args
         return True
@@ -114,6 +112,34 @@ class WrappedField:
             return get_args(self.resolved_type)[0]
         else:
             return get_args(self.resolved_type)[0]
+
+    @cached_property
+    def is_type_type(self) -> bool:
+        return get_origin(self.resolved_type) is type
+
+    @cached_property
+    def is_enum(self) -> bool:
+        if self.is_container:
+            return False
+        if self.is_optional:
+            return issubclass(self.contained_type, enum.Enum)
+
+        return issubclass(self.resolved_type, enum.Enum)
+
+    @cached_property
+    def is_one_to_one_relationship(self) -> bool:
+        return self.is_optional and not self.is_builtin_type and not self.is_container
+
+    @cached_property
+    def is_one_to_many_relationship(self) -> bool:
+        return self.is_container and not self.is_builtin_type and not self.is_optional
+
+    @cached_property
+    def type_endpoint(self) -> Type:
+        if self.is_container or self.is_optional:
+            return self.contained_type
+        else:
+            return self.resolved_type
 
 
 @lru_cache(maxsize=None)

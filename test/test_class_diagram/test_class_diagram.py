@@ -1,7 +1,6 @@
 from dataclasses import is_dataclass
 from pathlib import Path
 
-from matplotlib import pyplot as plt
 
 from dataset.example_classes import Pose, Positions
 from krrood.class_diagrams.class_diagram import ClassDiagram

@@ -78,6 +78,9 @@ class WrappedClass:
     def fields(self) -> List[WrappedField]:
         return [WrappedField(self, f) for f in fields(self.clazz)]
 
+    def __hash__(self):
+        return hash((self.index, self.clazz))
+
 
 @dataclass
 class ClassDiagram:

@@ -26,6 +26,7 @@
 ## Documentation
 - Write docstrings that explain what the function does and not how it does it
 - Do not create type information for docstring
+- Keep docstrings short and concise
 
 ## Misc
 - If you find a package that could be replaced by a more powerful one, let us know
