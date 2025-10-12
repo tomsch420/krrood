@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import inspect
+import typing
 from abc import ABC, abstractmethod
 from collections import deque
+from copy import copy
 from dataclasses import dataclass
 from functools import wraps
-from typing import List, Iterable
+from typing import Iterable, List, Type, dataclass_transform, Optional, Callable
 
-from typing_extensions import Callable, Optional, Any, dataclass_transform, Type, Tuple
+from typing_extensions import Callable, Optional, Any, Type, Tuple
 
 from typing_extensions import ClassVar
 
-from .cache_data import yield_class_values_from_cache, get_cache_keys_for_class_
+from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
+from .symbol_graph import PredicateRelation, SymbolGraph
 from .symbolic import (
     T,
     SymbolicExpression,
@@ -21,12 +24,17 @@ from .symbolic import (
     Variable,
     An,
     Entity,
-    From,
-    properties_to_expression_tree,
     ResultQuantifier,
     AND,
+    properties_to_expression_tree,
+    From,
 )
 from .utils import is_iterable
+from ..class_diagrams import ClassDiagram
+
+
+symbols_registry: typing.Set[Type] = set()
+cls_args = {}
 
 
 def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]]:
@@ -61,9 +69,6 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     return wrapper
 
 
-symbols_registry: List[Type] = []
-
-
 @dataclass_transform()
 def symbol(cls):
     """
@@ -77,7 +82,7 @@ def symbol(cls):
     :return: The same class with a patched ``__new__``.
     """
     original_new = cls.__new__ if "__new__" in cls.__dict__ else object.__new__
-    symbols_registry.append(cls)
+    symbols_registry.add(cls)
 
     def symbolic_new(symbolic_cls, *args, **kwargs):
         predicate_type = (
@@ -124,10 +129,143 @@ def symbol(cls):
             return instance
 
     cls.__new__ = hybrid_new
+
     return cls
 
 
-cls_args = {}
+def recursive_subclasses(cls_):
+    subclasses = cls_.__subclasses__()
+    for subclass in subclasses:
+        yield from recursive_subclasses(subclass)
+        yield subclass
+
+
+@symbol
+@dataclass(eq=False, frozen=True)
+class Predicate(ABC):
+    """
+    The super predicate class that represents a filtration operation.
+    """
+
+    is_expensive: ClassVar[bool] = False
+    transitive: ClassVar[bool] = False
+    inverse_of: ClassVar[Optional[Type[Predicate]]] = None
+    symbol_graph: ClassVar[SymbolGraph]
+
+    @classmethod
+    def build_symbol_graph(cls):
+        for cls_ in copy(symbols_registry):
+            symbols_registry.update(recursive_subclasses(cls_))
+        cls.symbol_graph = SymbolGraph(ClassDiagram(list(symbols_registry)))
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        inverse = getattr(cls, "inverse_of", None)
+        if inverse is not None:
+            if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
+                raise TypeError("inverse_of must be set to a Predicate subclass")
+            if getattr(inverse, "inverse_of", None) is None:
+                inverse.inverse_of = cls
+
+    @property
+    @abstractmethod
+    def domain_value(self): ...
+
+    @property
+    @abstractmethod
+    def range_value(self): ...
+
+    # New: subclasses implement these two hooks.
+    @abstractmethod
+    def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
+        """
+        Return True if the relation holds directly (non-transitively) between
+        the given domain and range values.
+        """
+        ...
+
+    def _neighbors(self, value: Any) -> Iterable[Any]:
+        """
+        Return direct neighbors of the given value to traverse when transitivity is enabled.
+        Default is no neighbors (non-transitive or leaf).
+        """
+        wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
+        yield from self.symbol_graph.get_outgoing_neighbors_with_edge_type(
+            wrapped_instance, self.__class__
+        )
+
+    def __call__(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        """
+        Evaluate the predicate for the supplied values. If `transitive` is set,
+        perform a graph traversal using `_neighbors` to determine reachability,
+        otherwise rely on `_holds_direct` only.
+        """
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+
+        if self._holds_direct(domain_value, range_value):
+            return True
+        if not self.transitive:
+            return False
+
+        # BFS with cycle protection
+        visited = set()
+        queue = deque()
+
+        start = HashedValue(domain_value)
+        visited.add(start)
+        queue.append(domain_value)
+
+        while queue:
+            current = queue.popleft()
+            for nxt in self._neighbors(current):
+                if self._holds_direct(nxt, range_value):
+                    return True
+                key = HashedValue(nxt)
+                if key not in visited:
+                    visited.add(key)
+                    queue.append(nxt)
+        return False
+
+    @property
+    def inverse(self) -> Optional[Predicate]:
+        return None
+
+    def add_relation(self):
+        self.symbol_graph.add_relation(self.relation)
+        if self.inverse:
+            self.inverse.add_relation()
+
+    @property
+    def relation(self) -> PredicateRelation:
+        return PredicateRelation(self.domain_value, self.range_value, self)
+
+
+@dataclass(eq=False, frozen=True)
+class HasType(Predicate):
+    variable: Any
+    types_: Type
+    is_expensive: ClassVar[bool] = False
+
+    def _holds_direct(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        return isinstance(self.variable, self.types_)
+
+    @property
+    def domain_value(self):
+        return self.variable
+
+    @property
+    def range_value(self):
+        return self.types_
+
+
+@dataclass(eq=False, frozen=True)
+class HasTypes(HasType):
+    types_: Tuple[Type, ...]
 
 
 def bind_first_argument_of_predicate_if_in_query_context(
@@ -263,98 +401,3 @@ def index_class_cache(symbolic_cls: Type) -> bool:
     Determine whether the class cache should be indexed.
     """
     return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
-
-
-@symbol
-@dataclass(eq=False, frozen=True)
-class Predicate(ABC):
-    """
-    The super predicate class that represents a filtration operation.
-    """
-
-    is_expensive: ClassVar[bool] = False
-    transitive: ClassVar[bool] = False
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        inverse = getattr(cls, "inverse_of", None)
-        if inverse is not None:
-            if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
-                raise TypeError("inverse_of must be set to a Predicate subclass")
-            if getattr(inverse, "inverse_of", None) is None:
-                inverse.inverse_of = cls
-
-    # New: subclasses implement these two hooks.
-    @abstractmethod
-    def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
-        """
-        Return True if the relation holds directly (non-transitively) between
-        the given domain and range values.
-        """
-        ...
-
-    def _neighbors(self, value: Any) -> Iterable[Any]:
-        """
-        Return direct neighbors of the given value to traverse when transitivity is enabled.
-        Default is no neighbors (non-transitive or leaf).
-        """
-        return ()
-
-    def __call__(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        """
-        Evaluate the predicate for the supplied values. If `transitive` is set,
-        perform a graph traversal using `_neighbors` to determine reachability,
-        otherwise rely on `_holds_direct` only.
-        """
-        # Subclasses may store defaults on self; keep that behavior consistent.
-        if domain_value is None:
-            domain_value = getattr(self, "domain_value", None)
-        if range_value is None:
-            range_value = getattr(self, "range_value", None)
-
-        if self._holds_direct(domain_value, range_value):
-            return True
-        if not self.transitive:
-            return False
-
-        # BFS with cycle protection
-        visited = set()
-        queue = deque()
-
-        start = HashedValue(domain_value)
-        visited.add(start)
-        queue.append(domain_value)
-
-        while queue:
-            current = queue.popleft()
-            for nxt in self._neighbors(current):
-                if self._holds_direct(nxt, range_value):
-                    return True
-                key = HashedValue(nxt)
-                if key not in visited:
-                    visited.add(key)
-                    queue.append(nxt)
-        return False
-
-    @property
-    def inverse(self) -> Optional[Predicate]:
-        return None
-
-
-@dataclass(eq=False, frozen=True)
-class HasType(Predicate):
-    variable: Any
-    types_: Type
-    is_expensive: ClassVar[bool] = False
-
-    def _holds_direct(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        return isinstance(self.variable, self.types_)
-
-
-@dataclass(eq=False, frozen=True)
-class HasTypes(HasType):
-    types_: Tuple[Type, ...]

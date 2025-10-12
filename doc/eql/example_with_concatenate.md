@@ -11,8 +11,7 @@ Below is a minimal, self-contained example that mirrors the behavior tested in t
 from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From, symbol
 
 
 # Minimal dataset for the example

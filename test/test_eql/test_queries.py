@@ -763,6 +763,14 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         def _holds_direct(self, domain_value=None, range_value=None):
             return self.body.name.startswith("Handle")
 
+        @property
+        def domain_value(self):
+            return self.body
+
+        @property
+        def range_value(self):
+            return self.body
+
     with symbolic_mode():
         query = an(entity(body := Body(From(world.bodies)), IsHandle(body=body)))
 

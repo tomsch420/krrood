@@ -201,6 +201,7 @@ class DescriptionMeta(type):
 
 
 @symbol
+@dataclass
 class Thing(metaclass=DescriptionMeta):
     """Base class for things that can be described by property descriptors."""
 

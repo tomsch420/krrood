@@ -76,7 +76,11 @@ class WrappedClass:
 
     @cached_property
     def fields(self) -> List[WrappedField]:
-        return [WrappedField(self, f) for f in fields(self.clazz)]
+        try:
+            return [WrappedField(self, f) for f in fields(self.clazz)]
+        except TypeError as e:
+            logging.error(f"Error parsing class {self.clazz}: {e}")
+            raise ParseError(e) from e
 
     def __hash__(self):
         return hash((self.index, self.clazz))

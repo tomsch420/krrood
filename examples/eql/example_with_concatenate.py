@@ -1,8 +1,17 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language import (
+    symbolic_mode,
+    let,
+    concatenate,
+    not_,
+    in_,
+    entity,
+    an,
+    From,
+    symbol,
+)
 
 
 # Minimal dataset for the example
@@ -14,14 +23,12 @@ class Body:
 
 @symbol
 @dataclass
-class Handle(Body):
-    ...
+class Handle(Body): ...
 
 
 @symbol
 @dataclass
-class Container(Body):
-    ...
+class Container(Body): ...
 
 
 @symbol
@@ -70,7 +77,9 @@ world.views = [cabinet]
 # Example 1: Use concatenate to collect all drawers into a single iterable domain
 with symbolic_mode():
     views = let(type_=View, domain=world.views)
-    all_drawers = concatenate(views.drawers)  # <-- concatenate nested iterables into one iterable domain
+    all_drawers = concatenate(
+        views.drawers
+    )  # <-- concatenate nested iterables into one iterable domain
     # Select the concatenated iterable only (single row expected)
     query1 = an(entity(all_drawers))
 
