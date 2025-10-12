@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class PredicateRelation(Relation):
+    source: WrappedInstance
+    target: WrappedInstance
     predicate: Predicate
 
 
@@ -42,6 +44,8 @@ class SymbolGraph:
     _instance_graph: PyDiGraph = field(default_factory=PyDiGraph)
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
+        if not isinstance(wrapped_instance, WrappedInstance):
+            wrapped_instance = WrappedInstance(wrapped_instance)
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
 
@@ -50,25 +54,28 @@ class SymbolGraph:
             relation.source.index, relation.target.index, relation
         )
 
+    def relations(self) -> Iterable[PredicateRelation]:
+        yield from self._instance_graph.edges()
+
     @property
     def wrapped_instances(self) -> List[WrappedInstance]:
         return self._instance_graph.nodes()
 
-    def get_wrapped_instance(self, instance: Any) -> WrappedInstance:
-        for wrapped_instance in self.wrapped_instances():
+    def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
+        for wrapped_instance in self.wrapped_instances:
             if wrapped_instance.instance is instance:
                 return wrapped_instance
-        raise ValueError(f"Instance {instance} not found in graph.")
+        return None
 
     def get_outgoing_neighbors_with_edge_type(
         self,
         wrapped_instance: WrappedInstance,
         predicate_type: Type[Predicate],
     ) -> Iterable[WrappedInstance]:
-        for child_idx, _, edge in self._instance_graph.out_edges(
+        for _, child_idx, edge in self._instance_graph.out_edges(
             wrapped_instance.index
         ):
-            if isinstance(edge.relation.predicate, predicate_type):
+            if isinstance(edge.predicate, predicate_type):
                 yield self._instance_graph.get_node_data(child_idx)
 
     def get_outgoing_neighbors(
@@ -76,7 +83,7 @@ class SymbolGraph:
     ) -> Iterable[WrappedInstance]:
         yield from (
             self._instance_graph.get_node_data(child_idx)
-            for child_idx, _, _ in self._instance_graph.out_edges(
+            for _, child_idx, _ in self._instance_graph.out_edges(
                 wrapped_instance.index
             )
         )

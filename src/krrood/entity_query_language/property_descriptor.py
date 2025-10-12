@@ -34,8 +34,16 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     domain_types: ClassVar[Set[Type]] = set()
     range_types: ClassVar[Set[Type]] = set()
-    domain_value: Optional[Any] = None
-    range_value: Optional[Any] = None
+    _domain_value: Optional[Any] = None
+    _range_value: Optional[Any] = None
+
+    @property
+    def domain_value(self) -> Optional[Any]:
+        return self._domain_value
+
+    @property
+    def range_value(self) -> Optional[Any]:
+        return self._range_value
 
     @cached_property
     def attr_name(self) -> str:
@@ -123,6 +131,7 @@ class PropertyDescriptor(Generic[T], Predicate):
         if isinstance(value, PropertyDescriptor):
             return
         setattr(obj, self.attr_name, value)
+        self.add_relation(obj, value)
 
     def _holds_direct(
         self, domain_value: Optional[Any], range_value: Optional[Any]
@@ -143,14 +152,6 @@ class PropertyDescriptor(Generic[T], Predicate):
         # Otherwise, look through sub-properties of this property.
         return self._check_relation_holds_for_subclasses_of_property(
             domain_value=domain_value, range_value=range_value
-        )
-
-    def _neighbors(self, value: Any) -> Iterable[Any]:
-        """Return direct neighbors via this property from `value` for transitive traversal."""
-        yield from (
-            v
-            for prop in self.get_sub_properties(value)
-            for v in getattr(value, prop.attr_name)
         )
 
     def _check_relation_holds_for_subclasses_of_property(

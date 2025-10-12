@@ -16,7 +16,7 @@ from typing_extensions import ClassVar
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
-from .symbol_graph import PredicateRelation, SymbolGraph
+from .symbol_graph import PredicateRelation, SymbolGraph, WrappedInstance
 from .symbolic import (
     T,
     SymbolicExpression,
@@ -29,7 +29,7 @@ from .symbolic import (
     properties_to_expression_tree,
     From,
 )
-from .utils import is_iterable
+from .utils import is_iterable, make_list
 from ..class_diagrams import ClassDiagram
 
 
@@ -150,7 +150,7 @@ class Predicate(ABC):
     is_expensive: ClassVar[bool] = False
     transitive: ClassVar[bool] = False
     inverse_of: ClassVar[Optional[Type[Predicate]]] = None
-    symbol_graph: ClassVar[SymbolGraph]
+    symbol_graph: ClassVar[SymbolGraph] = SymbolGraph(ClassDiagram([]))
 
     @classmethod
     def build_symbol_graph(cls, classes: List[Type] = None):
@@ -192,8 +192,13 @@ class Predicate(ABC):
         Default is no neighbors (non-transitive or leaf).
         """
         wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
-        yield from self.symbol_graph.get_outgoing_neighbors_with_edge_type(
-            wrapped_instance, self.__class__
+        if not wrapped_instance:
+            return
+        yield from (
+            n.instance
+            for n in self.symbol_graph.get_outgoing_neighbors_with_edge_type(
+                wrapped_instance, self.__class__
+            )
         )
 
     def __call__(
@@ -208,6 +213,7 @@ class Predicate(ABC):
         range_value = range_value or self.range_value
 
         if self._holds_direct(domain_value, range_value):
+            self.add_relation(domain_value, range_value)
             return True
         if not self.transitive:
             return False
@@ -224,6 +230,7 @@ class Predicate(ABC):
             current = queue.popleft()
             for nxt in self._neighbors(current):
                 if self._holds_direct(nxt, range_value):
+                    self.add_relation(domain_value, range_value)
                     return True
                 key = HashedValue(nxt)
                 if key not in visited:
@@ -235,14 +242,39 @@ class Predicate(ABC):
     def inverse(self) -> Optional[Predicate]:
         return None
 
-    def add_relation(self):
-        self.symbol_graph.add_relation(self.relation)
-        if self.inverse:
-            self.inverse.add_relation()
+    def add_relation(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ):
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        if range_value is None:
+            raise ValueError(
+                f"range_value cannot be None for {self.__class__}, domain={domain_value}"
+            )
+        range_value = make_list(range_value)
+        for rv in range_value:
+            self.symbol_graph.add_edge(self.get_relation(domain_value, rv))
+            if self.inverse:
+                self.inverse.add_relation(rv, domain_value)
 
-    @property
-    def relation(self) -> PredicateRelation:
-        return PredicateRelation(self.domain_value, self.range_value, self)
+    def get_relation(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> PredicateRelation:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        wrapped_domain_instance = self.symbol_graph.get_wrapped_instance(domain_value)
+        if not wrapped_domain_instance:
+            wrapped_domain_instance = WrappedInstance(domain_value)
+            self.symbol_graph.add_node(wrapped_domain_instance)
+        wrapped_range_instance = self.symbol_graph.get_wrapped_instance(range_value)
+        if not wrapped_range_instance:
+            wrapped_range_instance = WrappedInstance(range_value)
+            self.symbol_graph.add_node(wrapped_range_instance)
+        return PredicateRelation(
+            wrapped_domain_instance,
+            wrapped_range_instance,
+            self,
+        )
 
 
 @dataclass(eq=False, frozen=True)
@@ -387,6 +419,7 @@ def instantiate_class_and_update_cache(
     else:
         kwargs = {}
     Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
+    Predicate.symbol_graph.add_node(WrappedInstance(instance))
     return instance
 
 

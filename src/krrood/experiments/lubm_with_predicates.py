@@ -38,7 +38,7 @@ class HasAlumnus(PropertyDescriptor):
     @property
     def inverse(self):
         # Inverse of degreeFrom
-        return DegreeFrom(self.value, self.obj)
+        return DegreeFrom(self.range_value, self.domain_value)
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ class MemberOf(PropertyDescriptor):
     @property
     def inverse(self):
         # Inverse of member
-        return Member(self.value, self.obj)
+        return Member(self.range_value, self.domain_value)
 
 
 @dataclass(frozen=True)
@@ -178,6 +178,9 @@ class UnivBenchOntology(Thing):
     # is researching
     research_interest: Optional[str] = None
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Organization(UnivBenchOntology):
@@ -192,6 +195,9 @@ class Organization(UnivBenchOntology):
     org_publication: List[Publication] = OrgPublication()
     # is part of
     sub_organization_of: List[Organization] = SubOrganizationOf()
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -216,6 +222,9 @@ class Person(UnivBenchOntology):
     # title
     title: Optional[str] = None
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Publication(UnivBenchOntology):
@@ -227,6 +236,9 @@ class Publication(UnivBenchOntology):
     # is about
     publication_research: List[Research] = PublicationResearch()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Schedule(UnivBenchOntology):
@@ -234,11 +246,17 @@ class Schedule(UnivBenchOntology):
     # lists as a course
     listed_course: List[Course] = ListedCourse()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Work(UnivBenchOntology):
     """Work"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -246,11 +264,17 @@ class Article(Publication):
     """article"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Book(Publication):
     """book"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -258,17 +282,26 @@ class College(Organization):
     """school"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Course(Work):
     """teaching course"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Department(Organization):
     """university department"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -277,12 +310,18 @@ class Director(Person):
     # is the head of
     head_of: List[Program] = HeadOfProgram()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Employee(Person):
     """Employee"""
     # Works For
     works_for: List[Organization] = WorksForOrganization()
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -291,11 +330,17 @@ class GraduateStudent(Person):
     # is taking
     takes_course: List[GraduateCourse] = TakesCourseGraduateCourse()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Institute(Organization):
     """institute"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -303,17 +348,26 @@ class Manual(Publication):
     """manual"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Program(Organization):
     """program"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Research(Work):
     """research work"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -322,12 +376,18 @@ class ResearchAssistant(Person):
     # Works For
     works_for: List[ResearchGroup] = WorksForResearchGroup()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
     research_project: List[Research] = ResearchProject()
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -338,11 +398,17 @@ class Software(Publication):
     # is version
     software_version: Optional[str] = None
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Specification(Publication):
     """published specification"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -351,12 +417,18 @@ class Student(Person):
     # is taking
     takes_course: List[Course] = TakesCourseCourse()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class TeachingAssistant(Person):
     """university teaching assistant"""
     # is a teaching assistant for
     teaching_assistant_of: List[Course] = TeachingAssistantOf()
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -365,11 +437,17 @@ class University(Organization):
     # has as an alumnus
     has_alumnus: List[Person] = HasAlumnus()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class UnofficialPublication(Publication):
     """unnoficial publication"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -377,11 +455,17 @@ class AdministrativeStaff(Employee):
     """administrative staff worker"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class ConferencePaper(Article):
     """conference paper"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -390,11 +474,17 @@ class Faculty(Employee):
     # teaches
     teacher_of: List[Course] = TeacherOf()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class GraduateCourse(Course):
     """Graduate Level Courses"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -402,11 +492,17 @@ class JournalArticle(Article):
     """journal article"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class TechnicalReport(Article):
     """technical report"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -414,11 +510,17 @@ class UndergraduateStudent(Student):
     """undergraduate student"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class ClericalStaff(AdministrativeStaff):
     """clerical staff worker"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -426,11 +528,17 @@ class Lecturer(Faculty):
     """lecturer"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class PostDoc(Faculty):
     """post doctorate"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -439,11 +547,17 @@ class Professor(Faculty):
     # is tenured:
     tenured: Optional[bool] = None
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class SystemsStaff(AdministrativeStaff):
     """systems staff worker"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -451,11 +565,17 @@ class AssistantProfessor(Professor):
     """assistant professor"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class AssociateProfessor(Professor):
     """associate professor"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 @dataclass(eq=False)
@@ -464,6 +584,9 @@ class Chair(Professor):
     # is the head of
     head_of: List[Department] = HeadOfDepartment()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class Dean(Professor):
@@ -471,16 +594,25 @@ class Dean(Professor):
     # is the head of
     head_of: List[College] = HeadOfCollege()
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class FullProfessor(Professor):
     """full professor"""
     ...
 
+    def __hash__(self):
+        return hash(id(self))
+
 
 @dataclass(eq=False)
 class VisitingProfessor(Professor):
     """visiting professor"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
 
 

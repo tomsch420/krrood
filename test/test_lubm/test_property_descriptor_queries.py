@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from krrood.entity_query_language import symbolic_mode
+from krrood.entity_query_language import symbolic_mode, Predicate
 from krrood.experiments.lubm_with_predicates import (
     Organization,
     Person,
@@ -17,6 +17,9 @@ from krrood.experiments.lubm_with_predicates import (
 class Company(Organization):
     def __hash__(self) -> int:
         return id(self)
+
+
+Predicate.build_symbol_graph()
 
 
 def test_query_on_descriptor_field_filters():
