@@ -1,3 +1,4 @@
+import os
 from owlready2 import *
 
 from krrood.experiments.helpers import evaluate_sparql
