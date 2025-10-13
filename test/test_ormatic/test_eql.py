@@ -1,10 +1,6 @@
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.exc import MultipleResultsFound
-from sqlalchemy.orm import Session, configure_mappers
-
-from krrood.entity_query_language.entity import let, an, entity, the, contains
-from krrood.entity_query_language import and_, or_, in_, symbolic_mode
 
 from dataset.example_classes import Position, Pose
 from dataset.semantic_world_like_classes import (
@@ -16,7 +12,6 @@ from dataset.semantic_world_like_classes import (
     Container,
 )
 from dataset.sqlalchemy_interface import (
-    Base,
     PositionDAO,
     PoseDAO,
     OrientationDAO,
@@ -24,34 +19,11 @@ from dataset.sqlalchemy_interface import (
     PrismaticConnectionDAO,
     BodyDAO,
 )
+from krrood.entity_query_language import and_, or_, in_, symbolic_mode
+from krrood.entity_query_language.entity import let, an, entity, the, contains
 from krrood.ormatic.dao import to_dao
-
 from krrood.ormatic.eql_interface import eql_to_sql
-from krrood.ormatic.utils import drop_database
 
-
-@pytest.fixture(scope="session")
-def engine():
-    # Ensure SQLAlchemy mappings are configured
-    configure_mappers()
-    engine = create_engine("sqlite:///:memory:")
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture(scope="session")
-def session(engine):
-    session = Session(engine)
-    yield session
-    session.close()
-
-
-@pytest.fixture
-def database(engine):
-    Base.metadata.create_all(engine)
-    yield
-    # Drop all tables to keep DB clean between tests
-    drop_database(engine)
 
 def test_translate_simple_greater(session, database):
     session.add(PositionDAO(x=1, y=2, z=3))
@@ -59,9 +31,7 @@ def test_translate_simple_greater(session, database):
     session.commit()
 
     with symbolic_mode():
-        query = an(
-            entity(position := let(type_=Position, domain=[]), position.z > 3)
-        )
+        query = an(entity(position := let(type_=Position, domain=[]), position.z > 3))
 
     translator = eql_to_sql(query, session)
     query_by_hand = select(PositionDAO).where(PositionDAO.z > 3)
@@ -73,6 +43,7 @@ def test_translate_simple_greater(session, database):
     assert len(results) == 1
     assert isinstance(results[0], PositionDAO)
     assert results[0].z == 4
+
 
 def test_translate_or_condition(session, database):
     session.add(PositionDAO(x=1, y=2, z=3))
@@ -104,6 +75,7 @@ def test_translate_or_condition(session, database):
     assert zs == [4, 10]
     assert xs == [1, 2]
 
+
 def test_translate_join_one_to_one(session, database):
     session.add(
         PoseDAO(
@@ -134,6 +106,7 @@ def test_translate_join_one_to_one(session, database):
     assert result[0].position is not None
     assert result[0].position.z == 4
 
+
 def test_translate_in_operator(session, database):
     session.add(PositionDAO(x=1, y=2, z=3))
     session.add(PositionDAO(x=5, y=2, z=6))
@@ -160,6 +133,7 @@ def test_translate_in_operator(session, database):
     xs = sorted([r.x for r in result])
     assert xs == [1, 7]
 
+
 def test_the_quantifier(session, database):
     session.add(PositionDAO(x=1, y=2, z=3))
     session.add(PositionDAO(x=5, y=2, z=6))
@@ -181,6 +155,7 @@ def test_the_quantifier(session, database):
 
     with pytest.raises(MultipleResultsFound):
         result = translator.evaluate()
+
 
 def test_equal(session, database):
     # Create the world with its bodies and connections
@@ -229,6 +204,7 @@ def test_equal(session, database):
     assert isinstance(result[0], FixedConnectionDAO)
     assert result[0].parent.name == "Container2"
     assert result[0].child.name == "Handle2"
+
 
 @pytest.mark.skip(reason="Not finished yet-")
 def test_complicated_equal(session, database):
@@ -283,6 +259,7 @@ def test_complicated_equal(session, database):
     print(query.evaluate())
 
     # translator = eql_to_sql(query, session)
+
 
 def test_contains(session, database):
     body1 = BodyDAO(name="Body1")
