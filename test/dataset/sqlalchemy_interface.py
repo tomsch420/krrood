@@ -4,12 +4,12 @@ from __future__ import annotations
 from sqlalchemy import Column, ForeignKey, Integer, String, Float, Boolean, DateTime, Enum, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
-import typing_extensions
-import typing
-import datetime
 import dataset.semantic_world_like_classes
-import builtins
+import typing
+import typing_extensions
+import datetime
 import dataset.example_classes
+import builtins
 
 
 from krrood.ormatic.dao import DataAccessObject
