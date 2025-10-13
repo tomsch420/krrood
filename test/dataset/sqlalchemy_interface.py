@@ -14,12 +14,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
+import builtins
 import dataset.example_classes
-import datetime
 import dataset.semantic_world_like_classes
+import datetime
 import typing
 import typing_extensions
-import builtins
 
 
 from krrood.ormatic.dao import DataAccessObject
