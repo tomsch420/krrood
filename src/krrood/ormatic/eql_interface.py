@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Any, Optional
 import operator
 
@@ -27,6 +27,315 @@ class EQLTranslationError(Exception):
     """Raised when an EQL expression cannot be translated into SQLAlchemy."""
 
 
+class UnsupportedQueryTypeError(EQLTranslationError):
+    """Raised when an unsupported query type is encountered."""
+
+
+class UnsupportedOperatorError(EQLTranslationError):
+    """Raised when an unsupported operator is encountered."""
+
+
+class UnsupportedQuantifierError(EQLTranslationError):
+    """Raised when an unsupported quantifier is encountered."""
+
+
+class AttributeResolutionError(EQLTranslationError):
+    """Raised when an attribute cannot be resolved."""
+
+
+class MissingDAOError(EQLTranslationError):
+    """Raised when a DAO class cannot be found for a type."""
+
+
+class DomainExtractionError(EQLTranslationError):
+    """Raised when a value cannot be extracted from a domain."""
+
+
+@dataclass
+class VariableTypeExtractor:
+    """Extracts underlying Variable and its python type from a leaf-like node."""
+
+    def extract(self, node: Any) -> tuple[Optional[Variable], Optional[type]]:
+        """
+        Extract variable and type from a node.
+        
+        :param node: The node to extract from
+        :return: Tuple of (variable, type)
+        """
+        if isinstance(node, Variable):
+            return node, getattr(node, "_type_", None)
+        
+        var = getattr(node, "_var_", None)
+        if isinstance(var, Variable):
+            return var, getattr(var, "_type_", None)
+        
+        node_type = getattr(node, "_type_", None)
+        return None, node_type
+
+
+@dataclass
+class AttributeChainResolver:
+    """Resolves attribute chains for EQL Attribute expressions."""
+
+    def extract_leaf_variable(self, attribute: Attribute) -> Any:
+        """
+        Extract the leaf variable from an attribute chain.
+        
+        :param attribute: The attribute to extract from
+        :return: The leaf variable or node
+        """
+        extractor = VariableTypeExtractor()
+        node = attribute
+        while isinstance(node, Attribute):
+            node = getattr(node, "_child_", None)
+        var, _ = extractor.extract(node)
+        return var or node
+
+    def extract_base_dao(self, attribute: Attribute) -> Optional[type]:
+        """
+        Extract the base DAO class from an attribute chain.
+        
+        :param attribute: The attribute to extract from
+        :return: The DAO class or None
+        """
+        extractor = VariableTypeExtractor()
+        node = attribute
+        while isinstance(node, Attribute):
+            node = getattr(node, "_child_", None)
+        _, node_type = extractor.extract(node)
+        return get_dao_class(node_type) if node_type is not None else None
+
+
+@dataclass
+class RelationshipResolver:
+    """Resolves relationships and foreign keys for DAO classes."""
+
+    def resolve_relationship_and_foreign_key(
+        self, dao_class: type, attribute_name: str
+    ) -> tuple[Any, Any]:
+        """
+        Resolve the relationship and foreign key column for a DAO attribute.
+        
+        :param dao_class: The DAO class
+        :param attribute_name: The attribute name
+        :return: Tuple of (relationship, foreign_key_column)
+        """
+        mapper = sqlalchemy.inspection.inspect(dao_class)
+        relationship = self._find_relationship(mapper, attribute_name)
+        
+        if relationship is None:
+            return None, None
+        
+        local_column = next(iter(relationship.local_columns))
+        foreign_key_column = getattr(dao_class, local_column.key)
+        return relationship, foreign_key_column
+
+    def _find_relationship(self, mapper: Any, attribute_name: str) -> Any:
+        """
+        Find a relationship by name in a mapper.
+        
+        :param mapper: The SQLAlchemy mapper
+        :param attribute_name: The attribute name to find
+        :return: The relationship or None
+        """
+        if hasattr(mapper.relationships, "get"):
+            relationship = mapper.relationships.get(attribute_name)
+            if relationship is not None:
+                return relationship
+        
+        for relationship in mapper.relationships:
+            if relationship.key == attribute_name:
+                return relationship
+        
+        return None
+
+
+@dataclass
+class OperatorMapper:
+    """Maps EQL operators to SQLAlchemy expressions."""
+
+    def map_comparison_operator(
+        self, operation: Any, left: Any, right: Any
+    ) -> Any:
+        """
+        Map a comparison operator to a SQLAlchemy expression.
+        
+        :param operation: The operator
+        :param left: Left operand
+        :param right: Right operand
+        :return: SQLAlchemy expression
+        """
+        operator_name = getattr(operation, "__name__", None)
+        
+        if operation is operator.eq or operator_name == "eq":
+            return left == right
+        if operation is operator.gt or operator_name == "gt":
+            return left > right
+        if operation is operator.lt or operator_name == "lt":
+            return left < right
+        if operation is operator.ge or operator_name == "ge":
+            return left >= right
+        if operation is operator.le or operator_name == "le":
+            return left <= right
+        if operation is operator.ne or operator_name == "ne":
+            return left != right
+        
+        raise UnsupportedOperatorError(f"Unknown operator: {operation}")
+
+    def map_contains_operator(
+        self, operation: Any, left: Any, right: Any
+    ) -> Any:
+        """
+        Map a contains operator to a SQLAlchemy expression.
+        
+        :param operation: The operator
+        :param left: Left operand
+        :param right: Right operand
+        :return: SQLAlchemy expression
+        """
+        operator_name = getattr(operation, "__name__", "")
+        is_negated = operator_name == "not_contains"
+        
+        if isinstance(left, (list, tuple, set)):
+            expression = right.in_(left)
+        elif isinstance(right, (list, tuple, set)):
+            expression = left.in_(right)
+        elif isinstance(left, str) and not isinstance(right, str):
+            expression = func.instr(literal(left), right) > 0
+        elif not isinstance(left, str) and isinstance(right, str):
+            if hasattr(left, "contains"):
+                expression = left.contains(right)
+            else:
+                expression = left.like("%" + right + "%")
+        elif isinstance(left, str) and isinstance(right, str):
+            expression = literal(right in left)
+        else:
+            expression = func.instr(left, right) > 0
+        
+        return sa_not(expression) if is_negated else expression
+
+
+@dataclass
+class DomainValueExtractor:
+    """Extracts values from EQL Variable/Literal domains."""
+
+    session: Session
+
+    def extract_from_literal(self, literal_node: Literal) -> Any:
+        """
+        Extract values from a Literal node.
+        
+        :param literal_node: The Literal node
+        :return: The extracted value(s)
+        """
+        if not hasattr(literal_node, "_domain_"):
+            return getattr(literal_node, "value", literal_node)
+        
+        values = [hashed_value.value for hashed_value in literal_node._domain_]
+        
+        if len(values) > 1:
+            return values
+        if len(values) == 1:
+            single_value = values[0]
+            if isinstance(single_value, (list, tuple, set)):
+                return single_value
+            return single_value
+        
+        return getattr(literal_node, "value", literal_node)
+
+    def extract_from_variable(self, variable: Variable) -> Any:
+        """
+        Extract a value from a Variable domain.
+        
+        :param variable: The Variable
+        :return: The extracted value
+        """
+        if not hasattr(variable, "_domain_"):
+            return getattr(variable, "value", variable)
+        
+        try:
+            sample = next(iter(variable._domain_)).value
+        except (StopIteration, AttributeError):
+            return getattr(variable, "value", variable)
+        
+        if isinstance(variable, Literal):
+            return sample
+        
+        dao_class = get_dao_class(type(sample))
+        if dao_class is None:
+            return sample
+        
+        if isinstance(sample, dao_class):
+            return getattr(sample, "id", sample)
+        
+        return self._resolve_dao_instance(sample, dao_class)
+
+    def _resolve_dao_instance(self, sample: Any, dao_class: type) -> Any:
+        """
+        Resolve a DAO instance from a sample entity.
+        
+        :param sample: The sample entity
+        :param dao_class: The DAO class
+        :return: The DAO id or the sample itself
+        """
+        filters = {}
+        if hasattr(sample, "id_"):
+            filters["id_"] = sample.id_
+        elif hasattr(sample, "name"):
+            filters["name"] = sample.name
+        
+        if filters:
+            dao_instance = self.session.query(dao_class).filter_by(**filters).first()
+            if dao_instance is not None:
+                return getattr(dao_instance, "id", dao_instance)
+        
+        return sample
+
+
+@dataclass
+class JoinManager:
+    """Manages JOIN operations for the EQL translator."""
+
+    joined_by_path: set[tuple[type, str]] = field(default_factory=set)
+    joined_tables: set[type] = field(default_factory=set)
+
+    def add_path_join(self, dao_class: type, attribute_name: str) -> None:
+        """
+        Register a path-based JOIN.
+        
+        :param dao_class: The DAO class
+        :param attribute_name: The attribute name
+        """
+        self.joined_by_path.add((dao_class, attribute_name))
+
+    def is_path_joined(self, dao_class: type, attribute_name: str) -> bool:
+        """
+        Check if a path has already been joined.
+        
+        :param dao_class: The DAO class
+        :param attribute_name: The attribute name
+        :return: True if already joined
+        """
+        return (dao_class, attribute_name) in self.joined_by_path
+
+    def add_table_join(self, dao_class: type) -> None:
+        """
+        Register a table-level JOIN.
+        
+        :param dao_class: The DAO class
+        """
+        self.joined_tables.add(dao_class)
+
+    def is_table_joined(self, dao_class: type) -> bool:
+        """
+        Check if a table has already been joined.
+        
+        :param dao_class: The DAO class
+        :return: True if already joined
+        """
+        return dao_class in self.joined_tables
+
+
 @dataclass
 class EQLTranslator:
     """
@@ -46,102 +355,104 @@ class EQLTranslator:
     session: Session
 
     sql_query: Optional[Select] = None
-    # Tracks joins introduced while traversing attribute chains (by path)
-    _joined_daos: set[Any] = None
-    # Tracks joins of whole DAO classes introduced due to variable equality joins
-    _joined_tables: set[type] = None
+    join_manager: JoinManager = field(default_factory=JoinManager)
 
     @property
-    def quantifier(self):
+    def quantifier(self) -> SymbolicExpression:
+        """Get the quantifier from the query."""
         return self.eql_query
 
     @property
-    def select_like(self):
+    def select_like(self) -> Any:
+        """Get the select-like expression from the query."""
         return self.eql_query._child_
 
     @property
-    def root_condition(self):
+    def root_condition(self) -> SymbolicExpression:
+        """Get the root condition from the query."""
         return self.eql_query._child_._child_
 
-    def translate(self) -> List[Any]:
+    def translate(self) -> None:
+        """Translate the EQL query to SQL."""
         dao_class = get_dao_class(self.select_like.selected_variable._type_)
+        if dao_class is None:
+            raise MissingDAOError(
+                f"No DAO class found for {self.select_like.selected_variable._type_}"
+            )
+        
         self.sql_query = select(dao_class)
-        # initialize join caches
-        self._joined_daos = set()
-        self._joined_tables = set()
         conditions = self.translate_query(self.root_condition)
+        
         if conditions is not None:
             self.sql_query = self.sql_query.where(conditions)
 
-    def evaluate(self):
+    def evaluate(self) -> List[Any]:
+        """
+        Evaluate the translated SQL query.
+        
+        :return: Query results
+        """
         bound_query = self.session.scalars(self.sql_query)
 
-        # apply the quantifier
         if isinstance(self.quantifier, An):
             return bound_query.all()
 
-        elif isinstance(self.quantifier, The):
+        if isinstance(self.quantifier, The):
             return bound_query.one()
 
-        else:
-            raise EQLTranslationError(f"Unknown quantifier: {type(self.quantifier)}")
+        raise UnsupportedQuantifierError(f"Unknown quantifier: {type(self.quantifier)}")
 
     def __iter__(self):
+        """Iterate over evaluation results."""
         yield from self.evaluate()
 
-    # --------------------------
-    # Refactored translator API
-    # --------------------------
-
-    def translate_query(self, query: SymbolicExpression):
+    def translate_query(self, query: SymbolicExpression) -> Optional[Any]:
+        """
+        Translate an EQL query expression to SQL.
+        
+        :param query: The EQL query expression
+        :return: SQLAlchemy expression or None
+        """
         if isinstance(query, AND):
             return self.translate_and(query)
-        elif isinstance(query, OR):
+        if isinstance(query, OR):
             return self.translate_or(query)
-        elif isinstance(query, Comparator):
+        if isinstance(query, Comparator):
             return self.translate_comparator(query)
-        elif isinstance(query, Attribute):
+        if isinstance(query, Attribute):
             return self.translate_attribute(query)
-        else:
-            raise EQLTranslationError(f"Unknown query type: {type(query)}")
+        
+        raise UnsupportedQueryTypeError(f"Unknown query type: {type(query)}")
 
-    def translate_and(self, query: AND):
+    def translate_and(self, query: AND) -> Optional[Any]:
         """
         Translate an eql.AND query into an sql.AND.
-        Supports binary AND nodes (left/right) introduced in newer EQL.
+        
         :param query: EQL query
         :return: SQL expression or None if all parts are handled via JOINs.
         """
-        parts = []
-        # New API: binary tree with left/right
-        if hasattr(query, "left") and hasattr(query, "right"):
-            left_part = self.translate_query(query.left)
-            right_part = self.translate_query(query.right)
-            if left_part is not None:
-                parts.append(left_part)
-            if right_part is not None:
-                parts.append(right_part)
-        else:
-            # Backward compatibility: list of children
-            children = getattr(query, "_children_", None) or []
-            for c in children:
-                p = self.translate_query(c)
-                if p is not None:
-                    parts.append(p)
-        if not parts:
-            return None
-        if len(parts) == 1:
-            return parts[0]
-        return and_(*parts)
+        parts = self._collect_logical_parts(query)
+        return self._combine_logical_parts(parts, and_)
 
-    def translate_or(self, query: OR):
+    def translate_or(self, query: OR) -> Optional[Any]:
         """
         Translate an eql.OR query into an sql.OR.
-        Supports binary OR nodes (left/right) introduced in newer EQL.
+        
         :param query: EQL query
         :return: SQL expression or None if all parts are handled via JOINs.
         """
+        parts = self._collect_logical_parts(query)
+        return self._combine_logical_parts(parts, or_)
+
+    def _collect_logical_parts(self, query: Any) -> List[Any]:
+        """
+        Collect parts from a binary logical expression.
+        
+        :param query: The logical expression (AND/OR)
+        :return: List of translated parts
+        """
         parts = []
+        
         if hasattr(query, "left") and hasattr(query, "right"):
             left_part = self.translate_query(query.left)
             right_part = self.translate_query(query.right)
@@ -151,349 +462,288 @@ class EQLTranslator:
                 parts.append(right_part)
         else:
             children = getattr(query, "_children_", None) or []
-            for c in children:
-                p = self.translate_query(c)
-                if p is not None:
-                    parts.append(p)
+            for child in children:
+                part = self.translate_query(child)
+                if part is not None:
+                    parts.append(part)
+        
+        return parts
+
+    def _combine_logical_parts(
+        self, parts: List[Any], combiner: Any
+    ) -> Optional[Any]:
+        """
+        Combine logical parts using a combiner function.
+        
+        :param parts: List of parts to combine
+        :param combiner: The combining function (and_ or or_)
+        :return: Combined expression or None
+        """
         if not parts:
             return None
         if len(parts) == 1:
             return parts[0]
-        return or_(*parts)
+        return combiner(*parts)
 
-    def translate_comparator(self, query: Comparator):
+    def translate_comparator(self, query: Comparator) -> Optional[Any]:
         """
-        Translate an eql.Comparator query into a SQLAlchemy binary expression, or perform JOINs for
-        equality between attributes of different symbolic variables.
-        Supports ==, !=, <, <=, >, >=, and 'in'.
+        Translate an eql.Comparator query into a SQLAlchemy expression.
+        
+        :param query: The comparator query
+        :return: SQLAlchemy expression or None if handled via JOIN
         """
+        if self._is_attribute_equality_join(query):
+            join_result = self._handle_attribute_equality_join(query)
+            if join_result is not None:
+                return None
+        
+        left = self._translate_comparator_operand(query.left)
+        right = self._translate_comparator_operand(query.right)
+        
+        operation = query.operation
+        operator_name = getattr(operation, "__name__", "")
+        
+        if operation is operator.contains or operator_name in ("contains", "not_contains", "in_"):
+            return self._handle_contains_operator(query, left, right, operator_name)
+        
+        mapper = OperatorMapper()
+        return mapper.map_comparison_operator(operation, left, right)
 
-        # Helper: extract underlying Variable and its python type from a leaf-like node
-        def _extract_var_and_type(node: Any):
-            # direct variable
-            if isinstance(node, Variable):
-                return node, getattr(node, "_type_", None)
-            # An/The/Entity wrappers often expose the variable via _var_
-            var = getattr(node, "_var_", None)
-            if isinstance(var, Variable):
-                return var, getattr(var, "_type_", None)
-            # Fallbacks
-            t = getattr(node, "_type_", None)
-            return None, t
+    def _is_attribute_equality_join(self, query: Comparator) -> bool:
+        """
+        Check if a comparator represents an attribute equality join.
+        
+        :param query: The comparator query
+        :return: True if it's an attribute equality join
+        """
+        operation_name = getattr(query.operation, "__name__", None)
+        is_equality = (
+            query.operation is operator.eq or operation_name == "eq"
+        )
+        both_attributes = (
+            isinstance(query.left, Attribute) and isinstance(query.right, Attribute)
+        )
+        return is_equality and both_attributes
 
-        # Special-case: equality between attributes of two different variables -> JOIN with ON clause
+    def _handle_attribute_equality_join(self, query: Comparator) -> Optional[bool]:
+        """
+        Handle an attribute equality join.
+        
+        :param query: The comparator query
+        :return: True if JOIN was performed, None otherwise
+        """
+        resolver = AttributeChainResolver()
+        
+        left_leaf = resolver.extract_leaf_variable(query.left)
+        right_leaf = resolver.extract_leaf_variable(query.right)
+        left_dao = resolver.extract_base_dao(query.left)
+        right_dao = resolver.extract_base_dao(query.right)
+        
         if (
-            (
-                getattr(query.operation, "__name__", None) == "eq"
-                or query.operation is operator.eq
-            )
-            and isinstance(query.left, Attribute)
+            left_leaf is right_leaf
+            or left_dao is None
+            or right_dao is None
+        ):
+            return None
+        
+        rel_resolver = RelationshipResolver()
+        left_attribute_name = query.left._attr_name_
+        right_attribute_name = query.right._attr_name_
+        
+        left_rel, left_fk = rel_resolver.resolve_relationship_and_foreign_key(
+            left_dao, left_attribute_name
+        )
+        right_rel, right_fk = rel_resolver.resolve_relationship_and_foreign_key(
+            right_dao, right_attribute_name
+        )
+        
+        if left_rel is None or right_rel is None:
+            return None
+        
+        anchor_dao = get_dao_class(self.select_like.selected_variable._type_)
+        if anchor_dao is None:
+            raise MissingDAOError("Selected variable has no DAO class")
+        
+        if left_dao is anchor_dao:
+            target_dao, target_fk, anchor_fk = right_dao, right_fk, left_fk
+        else:
+            target_dao, target_fk, anchor_fk = left_dao, left_fk, right_fk
+        
+        if not self.join_manager.is_table_joined(target_dao):
+            onclause = target_fk == anchor_fk
+            self.sql_query = self.sql_query.join(target_dao, onclause=onclause)
+            self.join_manager.add_table_join(target_dao)
+        
+        return True
+
+    def _translate_comparator_operand(self, operand: Any) -> Any:
+        """
+        Translate a comparator operand to SQL.
+        
+        :param operand: The operand
+        :return: Translated SQL value or expression
+        """
+        if isinstance(operand, Attribute):
+            return self.translate_attribute(operand)
+        
+        if isinstance(operand, Literal):
+            extractor = DomainValueExtractor(self.session)
+            return extractor.extract_from_literal(operand)
+        
+        if isinstance(operand, Variable):
+            extractor = DomainValueExtractor(self.session)
+            return extractor.extract_from_variable(operand)
+        
+        return operand
+
+    def _handle_contains_operator(
+        self, query: Comparator, left: Any, right: Any, operator_name: str
+    ) -> Any:
+        """
+        Handle contains/in operators with special cases.
+        
+        :param query: The comparator query
+        :param left: Left operand (translated)
+        :param right: Right operand (translated)
+        :param operator_name: Name of the operator
+        :return: SQLAlchemy expression
+        """
+        is_negated = operator_name == "not_contains"
+        
+        if (
+            operator_name in ("contains", "in_")
+            and isinstance(query.left, Literal)
             and isinstance(query.right, Attribute)
         ):
-            # Extract leaf variables and base DAOs
-            def leaf_variable(attr: Attribute):
-                node = attr
-                while isinstance(node, Attribute):
-                    node = getattr(node, "_child_", None)
-                var, _ = _extract_var_and_type(node)
-                return var or node
+            extractor = DomainValueExtractor(self.session)
+            values = extractor.extract_from_literal(query.left)
+            
+            if not isinstance(values, list):
+                values = [values]
+            
+            if len(values) == 1 and isinstance(values[0], (list, tuple)):
+                values = values[0]
+            
+            if len(values) != 1 or (values and not isinstance(values[0], str)):
+                column = self.translate_attribute(query.right)
+                expression = column.in_(values)
+                return sa_not(expression) if is_negated else expression
+        
+        mapper = OperatorMapper()
+        return mapper.map_contains_operator(query.operation, left, right)
 
-            def base_dao_of(attr: Attribute):
-                node = attr
-                while isinstance(node, Attribute):
-                    node = getattr(node, "_child_", None)
-                _, t = _extract_var_and_type(node)
-                return get_dao_class(t) if t is not None else None
-
-            left_leaf = leaf_variable(query.left)
-            right_leaf = leaf_variable(query.right)
-            left_dao = base_dao_of(query.left)
-            right_dao = base_dao_of(query.right)
-
-            # Only apply if leaves (variables) differ
-            if (
-                left_leaf is not right_leaf
-                and left_dao is not None
-                and right_dao is not None
-            ):
-                # Determine if last attribute on both sides are relationships and obtain their local FK columns
-                def rel_and_fk(dao_cls, attr_name):
-                    mapper = sqlalchemy.inspection.inspect(dao_cls)
-                    rel = (
-                        mapper.relationships.get(attr_name)
-                        if hasattr(mapper.relationships, "get")
-                        else None
-                    )
-                    if rel is None:
-                        for r in mapper.relationships:
-                            if r.key == attr_name:
-                                rel = r
-                                break
-                    if rel is None:
-                        return None, None
-                    # choose first local column key (assumes single-column FK)
-                    col = next(iter(rel.local_columns))
-                    fk_col = getattr(dao_cls, col.key)
-                    return rel, fk_col
-
-                # Find the immediate attribute names accessed on each variable
-                left_attr_name = query.left._attr_name_
-                right_attr_name = query.right._attr_name_
-
-                left_rel, left_fk = rel_and_fk(left_dao, left_attr_name)
-                right_rel, right_fk = rel_and_fk(right_dao, right_attr_name)
-
-                if left_rel is not None and right_rel is not None:
-                    # Build JOIN to the non-anchor DAO with ON clause being the equality condition
-                    anchor_dao = get_dao_class(
-                        self.select_like.selected_variable._type_
-                    )
-                    if anchor_dao is None:
-                        raise EQLTranslationError("Selected variable has no DAO class")
-
-                    # Decide which side to join (the one that is not the anchor)
-                    if left_dao is anchor_dao:
-                        target_dao, target_fk, anchor_fk = right_dao, right_fk, left_fk
-                    else:
-                        target_dao, target_fk, anchor_fk = left_dao, left_fk, right_fk
-
-                    if self._joined_tables is None:
-                        self._joined_tables = set()
-
-                    if target_dao not in self._joined_tables:
-                        onclause = target_fk == anchor_fk
-                        self.sql_query = self.sql_query.join(
-                            target_dao, onclause=onclause
-                        )
-                        self._joined_tables.add(target_dao)
-                    # handled via JOIN; no WHERE part for this comparator
-                    return None
-
-        # Fallback: evaluate both sides as SQL expressions/values
-        def to_sql_side(side):
-            # Attribute -> resolved SQLA column (with joins if needed)
-            if isinstance(side, Attribute):
-                return self.translate_attribute(side)
-            # EQL Literal with domain containing multiple values (for IN operations)
-            if isinstance(side, Literal):
-                try:
-                    # Try to extract all values from the domain
-                    values = [hv.value for hv in side._domain_]
-                    # If we successfully extracted multiple values or a list, return them
-                    if len(values) > 1:
-                        return values
-                    elif len(values) == 1:
-                        # Single value - check if it's itself a collection
-                        single_val = values[0]
-                        if isinstance(single_val, (list, tuple, set)):
-                            return single_val
-                        return single_val
-                except Exception:
-                    # Fallback to getting value attribute
-                    val = getattr(side, "value", None)
-                    if val is not None:
-                        return val
-                    return self._literal_from_variable_domain(side)
-            # EQL Variable with domain
-            if isinstance(side, Variable):
-                return self._literal_from_variable_domain(side)
-            # Plain Python literal or iterable
-            return side
-
-        left = to_sql_side(query.left)
-        right = to_sql_side(query.right)
-
-        op = query.operation
-        # Map callable operations to SQLAlchemy expressions
-        if op is operator.eq or getattr(op, "__name__", None) == "eq":
-            return left == right
-        if op is operator.gt or getattr(op, "__name__", None) == "gt":
-            return left > right
-        if op is operator.lt or getattr(op, "__name__", None) == "lt":
-            return left < right
-        if op is operator.ge or getattr(op, "__name__", None) == "ge":
-            return left >= right
-        if op is operator.le or getattr(op, "__name__", None) == "le":
-            return left <= right
-        if op is operator.ne or getattr(op, "__name__", None) == "ne":
-            return left != right
-        # contains(a, b): for general iterables means b in a; for strings means substring containment
-        name = getattr(op, "__name__", "")
-        if op is operator.contains or name in ("contains", "not_contains", "in_"):
-            is_not = name == "not_contains"
-
-            # Special-case: in_ semantics produced as contains(Literal(collection), Attribute(column)) by EQL
-            if (
-                name in ("contains", "in_")
-                and isinstance(query.left, Literal)
-                and isinstance(query.right, Attribute)
-            ):
-                try:
-                    values = [hv.value for hv in query.left._domain_]
-                except Exception:
-                    # fallback to single literal value
-                    values = [getattr(query.left, "value", None)]
-                # If domain contains a single element that is itself a list, unwrap it
-                if len(values) == 1 and isinstance(values[0], (list, tuple)):
-                    values = values[0]
-                # If it's clearly a collection (multiple values) or a single non-string, treat as membership
-                if len(values) != 1 or (values and not isinstance(values[0], str)):
-                    col = self.translate_attribute(query.right)
-                    expr = col.in_(values)
-                    return sa_not(expr) if is_not else expr
-                # else fall through to string containment handling below
-
-            # 1) Collection membership cases for plain Python iterables
-            if isinstance(left, (list, tuple, set)):
-                expr = right.in_(left)
-            elif isinstance(right, (list, tuple, set)):
-                expr = left.in_(right)
-            # 2) String containment cases
-            elif isinstance(left, str) and not isinstance(right, str):
-                # haystack is literal string, needle is a column/expression
-                expr = func.instr(literal(left), right) > 0
-            elif not isinstance(left, str) and isinstance(right, str):
-                # haystack is column/expression, needle is literal string
-                try:
-                    expr = left.contains(right)
-                except AttributeError:
-                    expr = left.like("%" + right + "%")
-            elif isinstance(left, str) and isinstance(right, str):
-                # both literals -> constant truth value
-                expr = literal(right in left)
-            else:
-                # both are SQL expressions/columns
-                expr = func.instr(left, right) > 0
-            return sa_not(expr) if is_not else expr
-        raise EQLTranslationError(f"Unknown operator: {query.operation}")
-
-    def _literal_from_variable_domain(self, var_like: Any) -> Any:
+    def translate_attribute(self, query: Attribute) -> Any:
         """
-        Extract a representative Python value from an EQL Variable/Literal domain for use in SQL comparisons.
-        - If it's an EQL Literal, return the literal value directly.
-        - If it's an EQL Variable with a domain of mapped entities, try to resolve to the corresponding DAO id.
-          Otherwise, return the sample value as-is (numbers/strings/etc.).
+        Translate an eql.Attribute query into a SQLAlchemy column.
+        
+        :param query: The attribute query
+        :return: SQLAlchemy column expression
         """
-        try:
-            sample = next(iter(var_like._domain_)).value
-        except Exception:
-            # No domain or unexpected structure; just return as-is
-            return getattr(var_like, "value", var_like)
+        attribute_names = self._collect_attribute_chain(query)
+        base_class = self._extract_base_class(query)
+        
+        if base_class is None:
+            raise AttributeResolutionError("Attribute chain leaf does not have a class.")
+        
+        current_dao = get_dao_class(base_class)
+        if current_dao is None:
+            raise MissingDAOError(f"No DAO class found for {base_class}.")
+        
+        return self._walk_attribute_chain(current_dao, attribute_names)
 
-        # If it's an explicit EQL Literal, return raw python value.
-        if isinstance(var_like, Literal):
-            return sample
-
-        # If the sample corresponds to a mapped entity, try to map to DAO id
-        from .dao import get_dao_class
-
-        dao_class = get_dao_class(type(sample))
-        if dao_class is None:
-            return sample
-
-        # If it's already a DAO instance
-        if isinstance(sample, dao_class):
-            return getattr(sample, "id", sample)
-
-        # Try to resolve DAO instance by a simple unique attribute if available
-        filters = {}
-        if hasattr(sample, "id_"):
-            filters["id_"] = getattr(sample, "id_")
-        elif hasattr(sample, "name"):
-            filters["name"] = getattr(sample, "name")
-
-        if filters:
-            dao_instance = self.session.query(dao_class).filter_by(**filters).first()
-            if dao_instance is not None:
-                return getattr(dao_instance, "id", dao_instance)
-
-        # Fallback
-        return sample
-
-    def _get_entity_filter(self, entity) -> dict:
-        """Get filter criteria to find the DAO instance for an entity."""
-        # This is a simple implementation that works for entities with a 'name' attribute
-        if hasattr(entity, "name"):
-            return {"name": entity.name}
-        # Add more sophisticated matching logic as needed
-        return {}
-
-    def translate_attribute(self, query: Attribute):
+    def _collect_attribute_chain(self, query: Attribute) -> List[str]:
         """
-        Translate an eql.Attribute query into an sql construct, traversing attribute chains
-        and applying necessary JOINs for relationships. Returns the final SQLAlchemy column.
+        Collect attribute names from the chain.
+        
+        :param query: The attribute query
+        :return: List of attribute names (reversed, from base to leaf)
         """
-        # Collect the attribute chain names from outermost to leaf
-        names: list[str] = []
+        names = []
         node = query
         while isinstance(node, Attribute):
             names.append(node._attr_name_)
             node = getattr(node, "_child_", None)
+        return list(reversed(names))
 
-        # Resolve the base python class of the variable at the leaf of the chain
-        base_cls = getattr(node, "_type_", None)
-        if base_cls is None:
+    def _extract_base_class(self, query: Attribute) -> Optional[type]:
+        """
+        Extract the base class from an attribute chain.
+        
+        :param query: The attribute query
+        :return: The base class or None
+        """
+        node = query
+        while isinstance(node, Attribute):
+            node = getattr(node, "_child_", None)
+        
+        base_class = getattr(node, "_type_", None)
+        if base_class is None:
             var = getattr(node, "_var_", None)
             if var is not None:
-                base_cls = getattr(var, "_type_", None)
-        if base_cls is None:
-            raise EQLTranslationError("Attribute chain leaf does not have a class.")
+                base_class = getattr(var, "_type_", None)
+        
+        return base_class
 
-        current_dao = get_dao_class(base_cls)
-        if current_dao is None:
-            raise EQLTranslationError(f"No DAO class found for {base_cls}.")
-
-        # Walk the chain from the base outward
-        names = list(reversed(names))
-        for idx, name in enumerate(names):
+    def _walk_attribute_chain(self, current_dao: type, names: List[str]) -> Any:
+        """
+        Walk the attribute chain and return the final column.
+        
+        :param current_dao: The starting DAO class
+        :param names: List of attribute names to walk
+        :return: SQLAlchemy column expression
+        """
+        rel_resolver = RelationshipResolver()
+        
+        for index, name in enumerate(names):
             mapper = sqlalchemy.inspection.inspect(current_dao)
-            # relationship keys
-            rel = (
-                mapper.relationships.get(name)
-                if hasattr(mapper.relationships, "get")
-                else None
-            )
-            if rel is None:
-                # check by iterating if .get not available
-                for r in mapper.relationships:
-                    if r.key == name:
-                        rel = r
-                        break
-            if rel is not None:
-                # If this is the last element in the chain, return the FK column instead of joining
-                if idx == len(names) - 1:
-                    # Return the foreign key column that backs this relationship
-                    # Get the first local column (assumes single-column FK)
-                    local_col = next(iter(rel.local_columns))
-                    return getattr(current_dao, local_col.key)
-                else:
-                    # join using explicit relationship attribute to disambiguate path
-                    path_key = (current_dao, name)
-                    if self._joined_daos is None:
-                        self._joined_daos = set()
-                    if path_key not in self._joined_daos:
-                        self.sql_query = self.sql_query.join(getattr(current_dao, name))
-                        self._joined_daos.add(path_key)
-                    current_dao = rel.entity.class_
-                    continue
-
-            # Not a relationship -> treat as column; must be terminal element
-            if idx != len(names) - 1:
-                raise EQLTranslationError(
+            relationship = rel_resolver._find_relationship(mapper, name)
+            
+            if relationship is not None:
+                if index == len(names) - 1:
+                    local_column = next(iter(relationship.local_columns))
+                    return getattr(current_dao, local_column.key)
+                
+                self._apply_relationship_join(current_dao, name, relationship)
+                current_dao = relationship.entity.class_
+                continue
+            
+            if index != len(names) - 1:
+                raise AttributeResolutionError(
                     f"Attribute '{name}' on {current_dao.__name__} is not a relationship but chain continues."
                 )
-            try:
-                return getattr(current_dao, name)
-            except AttributeError as e:
-                raise EQLTranslationError(
+            
+            if not hasattr(current_dao, name):
+                raise AttributeResolutionError(
                     f"Column '{name}' not found on {current_dao.__name__}."
-                ) from e
+                )
+            
+            return getattr(current_dao, name)
+        
+        raise AttributeResolutionError("Attribute chain processing error.")
 
-        # If we get here, the loop completed without returning, which shouldn't happen with the new logic
-        raise EQLTranslationError("Attribute chain processing error.")
+    def _apply_relationship_join(
+        self, dao_class: type, attribute_name: str, relationship: Any
+    ) -> None:
+        """
+        Apply a JOIN for a relationship if not already joined.
+        
+        :param dao_class: The DAO class
+        :param attribute_name: The attribute name
+        :param relationship: The relationship object
+        """
+        if not self.join_manager.is_path_joined(dao_class, attribute_name):
+            self.sql_query = self.sql_query.join(getattr(dao_class, attribute_name))
+            self.join_manager.add_path_join(dao_class, attribute_name)
 
 
-def eql_to_sql(query: SymbolicExpression, session: Session):
+def eql_to_sql(query: SymbolicExpression, session: Session) -> EQLTranslator:
+    """
+    Translate an EQL query to SQL.
+    
+    :param query: The EQL query
+    :param session: The SQLAlchemy session
+    :return: The translator instance
+    """
     result = EQLTranslator(query, session)
     result.translate()
     return result
