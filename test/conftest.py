@@ -1,5 +1,6 @@
 import pytest
 
+from krrood.entity_query_language import Predicate
 from krrood.entity_query_language.symbolic import Variable
 from test_eql.conf.world.handles_and_containers import (
     World as HandlesAndContainersWorld,
@@ -26,3 +27,4 @@ def cleanup_after_test():
     for c in Variable._cache_.values():
         c.clear()
     Variable._cache_.clear()
+    Predicate.symbol_graph.clear()

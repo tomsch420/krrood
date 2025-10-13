@@ -230,7 +230,7 @@ class Predicate(ABC):
             current = queue.popleft()
             for nxt in self._neighbors(current):
                 if self._holds_direct(nxt, range_value):
-                    self.add_relation(domain_value, range_value)
+                    self.add_relation(domain_value, range_value, inferred=True)
                     return True
                 key = HashedValue(nxt)
                 if key not in visited:
@@ -243,7 +243,10 @@ class Predicate(ABC):
         return None
 
     def add_relation(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+        self,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+        inferred: bool = False,
     ):
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
@@ -253,12 +256,15 @@ class Predicate(ABC):
             )
         range_value = make_list(range_value)
         for rv in range_value:
-            self.symbol_graph.add_edge(self.get_relation(domain_value, rv))
+            self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
             if self.inverse:
                 self.inverse.add_relation(rv, domain_value)
 
     def get_relation(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+        self,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+        inferred: bool = False,
     ) -> PredicateRelation:
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
@@ -274,6 +280,7 @@ class Predicate(ABC):
             wrapped_domain_instance,
             wrapped_range_instance,
             self,
+            inferred=inferred,
         )
 
 
@@ -419,7 +426,8 @@ def instantiate_class_and_update_cache(
     else:
         kwargs = {}
     Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    Predicate.symbol_graph.add_node(WrappedInstance(instance))
+    if not isinstance(instance, Predicate):
+        Predicate.symbol_graph.add_node(WrappedInstance(instance))
     return instance
 
 

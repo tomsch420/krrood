@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-from .utils import is_builtin_class
-from abc import ABC
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
-from enum import Enum
+from functools import cached_property
 from typing import List, Optional
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
-
-import inspect
-import logging
-import sys
-from dataclasses import dataclass
-from functools import lru_cache, cached_property
-
 from typing_extensions import Type
 
 from krrood.class_diagrams.wrapped_field import WrappedField
@@ -32,6 +26,14 @@ class Relation(ABC):
     target: WrappedClass
     """The target class in the relation."""
 
+    @abstractmethod
+    def __str__(self):
+        pass
+
+    @property
+    def color(self) -> str:
+        return "black"
+
 
 @dataclass
 class Inheritance(Relation):
@@ -41,6 +43,9 @@ class Inheritance(Relation):
     This is an "is-a" relationship where the source class inherits from the target class.
     In UML notation, this is represented by a solid line with a hollow triangle pointing to the parent class.
     """
+
+    def __str__(self):
+        return f"isSuperClassOf"
 
 
 @dataclass
@@ -54,6 +59,9 @@ class Association(Relation):
 
     field: WrappedField
     """The field in the source class that creates this association with the target class."""
+
+    def __str__(self):
+        return f"has-{self.field.field.name}"
 
 
 class ParseError(TypeError):
@@ -77,10 +85,18 @@ class WrappedClass:
     @cached_property
     def fields(self) -> List[WrappedField]:
         try:
-            return [WrappedField(self, f) for f in fields(self.clazz)]
+            return [
+                WrappedField(self, f)
+                for f in fields(self.clazz)
+                if not f.name.startswith("_")
+            ]
         except TypeError as e:
             logging.error(f"Error parsing class {self.clazz}: {e}")
             raise ParseError(e) from e
+
+    @property
+    def name(self):
+        return self.clazz.__name__ + str(self.index)
 
     def __hash__(self):
         return hash((self.index, self.clazz))
@@ -98,6 +114,84 @@ class ClassDiagram:
         for clazz in classes:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
+
+    def to_subdiagram_without_inherited_associations(
+        self,
+        include_field_name: bool = False,
+    ) -> ClassDiagram:
+        """
+        Return a new class diagram where association edges that are present on any
+        ancestor of the source class are removed from descendants.
+
+        Inheritance edges are preserved.
+        """
+        # Rebuild a fresh diagram from the same classes to avoid mutating this instance
+        result = ClassDiagram(classes=[wc.clazz for wc in self.wrapped_classes])
+
+        # Convenience locals
+        g = result._dependency_graph
+
+        # 1) Build parent map from inheritance edges: child_idx -> set(parent_idx)
+        parent_map: dict[int, set[int]] = {}
+        for u, v in g.edge_list():
+            rel = g.get_edge_data(u, v)
+            if isinstance(rel, Inheritance):
+                parent_map.setdefault(v, set()).add(u)
+
+        # 2) DFS to compute all ancestors for each node index
+        def all_ancestors(node_idx: int) -> set[int]:
+            parents = parent_map.get(node_idx, set())
+            if not parents:
+                return set()
+            stack = list(parents)
+            seen: set[int] = set(parents)
+            while stack:
+                cur = stack.pop()
+                for p in parent_map.get(cur, set()):
+                    if p not in seen:
+                        seen.add(p)
+                        stack.append(p)
+            return seen
+
+        # 3) Precompute association keys per source node
+        #    Key = (relation class, target class[, field name])
+        def assoc_key(rel: Association) -> tuple:
+            if include_field_name:
+                return (rel.__class__, rel.target.clazz, rel.field.field.name)
+            return (rel.__class__, rel.target.clazz)
+
+        assoc_keys_by_source: dict[int, set[tuple]] = {}
+        for u, v in g.edge_list():
+            rel = g.get_edge_data(u, v)
+            if isinstance(rel, Association):
+                assoc_keys_by_source.setdefault(u, set()).add(assoc_key(rel))
+
+        # 4) Mark redundant descendant association edges for removal
+        edges_to_remove: list[tuple[int, int]] = []
+        for u, v in g.edge_list():
+            rel = g.get_edge_data(u, v)
+            if not isinstance(rel, Association):
+                continue
+
+            key = assoc_key(rel)
+            # Collect all keys defined by any ancestor of u
+            inherited_keys: set[tuple] = set()
+            for anc in all_ancestors(u):
+                inherited_keys |= assoc_keys_by_source.get(anc, set())
+
+            if key in inherited_keys:
+                edges_to_remove.append((u, v))
+
+        # 5) Remove redundant edges
+        for u, v in edges_to_remove:
+            # Safe even if duplicates appear in list; graph ignores missing
+            try:
+                g.remove_edge(u, v)
+            except Exception:
+                # Be conservative: if already removed due to earlier operation, skip
+                pass
+
+        return result
 
     @property
     def wrapped_classes(self):
@@ -150,7 +244,6 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-
                 target_type = (
                     wrapped_field.contained_type
                     if wrapped_field.is_container or wrapped_field.is_optional
@@ -252,3 +345,6 @@ class ClassDiagram:
             edge_style=edge_style,
             **kwargs,
         )
+
+    def clear(self):
+        self._dependency_graph.clear()

@@ -65,8 +65,16 @@ def test_query_on_descriptor_transitivity():
     org2.sub_organization_of = [org1]
     org3.sub_organization_of = [org2]
 
+    Predicate.symbol_graph.to_dot(
+        "instance_graph.pdf", format="pdf", graph_type="instance"
+    )
+
     with symbolic_mode():
         with Organization() as my_org:
             SubOrganizationOf(org1)
+
     results = list(my_org.evaluate())
+    Predicate.symbol_graph.to_dot(
+        "instance_graph_inferred.pdf", format="pdf", graph_type="instance"
+    )
     assert {p.name for p in results} == {"ACME_sub", "ACME_sub_sub"}

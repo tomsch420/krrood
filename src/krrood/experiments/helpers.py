@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Any, Tuple
 
 from krrood.entity_query_language.symbolic import ResultQuantifier
 from owlrl import DeductiveClosure, OWLRL_Semantics
@@ -59,10 +59,14 @@ def evaluate_sparql(rdf_graph: Graph, sparql_queries: List[str]):
     return counts
 
 
-def evaluate_eql(eql_queries: List[ResultQuantifier]) -> List[int]:
+def evaluate_eql(
+    eql_queries: List[ResultQuantifier],
+) -> Tuple[List[int], List[List[Any]]]:
     """Load instances and evaluate 14 EQL queries, returning counts per query."""
     counts: List[int] = []
+    results: List[List[Any]] = []
     for q in eql_queries:
         result = list(q.evaluate())
         counts.append(len(result))
-    return counts
+        results.append(result)
+    return counts, results

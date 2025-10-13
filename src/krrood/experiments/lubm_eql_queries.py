@@ -1,4 +1,5 @@
 import os
+import time
 from typing import List
 
 from krrood.entity_query_language import symbolic_mode, a
@@ -139,6 +140,10 @@ if __name__ == "__main__":
         instances_path,
         model_module=lubm_with_predicates,
     )
-    counts = evaluate_eql(get_eql_queries())
+    start_time = time.time()
+    counts, results = evaluate_eql(get_eql_queries())
+    end_time = time.time()
     for i, n in enumerate(counts, 1):
         print(f"{i}:{n}")
+        print({type(r) for r in results[i - 1]})
+    print(f"Time elapsed: {end_time - start_time} seconds")
