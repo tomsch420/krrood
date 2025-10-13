@@ -262,10 +262,10 @@ def test_complicated_equal(session, database):
 
 
 def test_contains(session, database):
-    body1 = BodyDAO(name="Body1")
+    body1 = BodyDAO(name="Body1", size=1)
     session.add(body1)
-    session.add(BodyDAO(name="Body2"))
-    session.add(BodyDAO(name="Body3"))
+    session.add(BodyDAO(name="Body2", size=1))
+    session.add(BodyDAO(name="Body3", size=1))
     session.commit()
 
     with symbolic_mode():

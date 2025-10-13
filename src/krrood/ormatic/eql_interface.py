@@ -274,8 +274,28 @@ class EQLTranslator:
             # Attribute -> resolved SQLA column (with joins if needed)
             if isinstance(side, Attribute):
                 return self.translate_attribute(side)
-            # EQL Variable/literal with domain
-            if isinstance(side, (Variable, Literal)):
+            # EQL Literal with domain containing multiple values (for IN operations)
+            if isinstance(side, Literal):
+                try:
+                    # Try to extract all values from the domain
+                    values = [hv.value for hv in side._domain_]
+                    # If we successfully extracted multiple values or a list, return them
+                    if len(values) > 1:
+                        return values
+                    elif len(values) == 1:
+                        # Single value - check if it's itself a collection
+                        single_val = values[0]
+                        if isinstance(single_val, (list, tuple, set)):
+                            return single_val
+                        return single_val
+                except Exception:
+                    # Fallback to getting value attribute
+                    val = getattr(side, "value", None)
+                    if val is not None:
+                        return val
+                    return self._literal_from_variable_domain(side)
+            # EQL Variable with domain
+            if isinstance(side, Variable):
                 return self._literal_from_variable_domain(side)
             # Plain Python literal or iterable
             return side
@@ -313,6 +333,9 @@ class EQLTranslator:
                 except Exception:
                     # fallback to single literal value
                     values = [getattr(query.left, "value", None)]
+                # If domain contains a single element that is itself a list, unwrap it
+                if len(values) == 1 and isinstance(values[0], (list, tuple)):
+                    values = values[0]
                 # If it's clearly a collection (multiple values) or a single non-string, treat as membership
                 if len(values) != 1 or (values and not isinstance(values[0], str)):
                     col = self.translate_attribute(query.right)
