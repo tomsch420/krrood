@@ -51,7 +51,7 @@ exclude = ["test*"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
-pythonpath = ["src"]
+pythonpath = ["src", "test"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
