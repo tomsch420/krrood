@@ -46,12 +46,14 @@ def make_rdf_graph(instances_path: str):
     return g
 
 
-def evaluate_sparql(graph, sparql_queries: List[str]):
-
+def evaluate_sparql(rdf_graph: Graph, sparql_queries: List[str]):
+    DeductiveClosure(OWLRL_Semantics, rdfs_closure=True, axiomatic_triples=True).expand(
+        rdf_graph
+    )
     counts: List[int] = []
     for q in sparql_queries:
-        res = graph.world.sparql(q)
-        counts.append(len(list(res)))
+        res = rdf_graph.query(q)
+        counts.append(len(res))
     return counts
 
 
