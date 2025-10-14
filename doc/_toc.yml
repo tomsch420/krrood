@@ -26,6 +26,10 @@ parts:
 - caption: ORMatic
   chapters:
     - file: ormatic/intro
+    - file: ormatic/example
+    - file: ormatic/alternative_mapping
+    - file: ormatic/eql_for_ormatic
+    - file: ormatic/troubleshooting
 
 - caption: References
   chapters:
