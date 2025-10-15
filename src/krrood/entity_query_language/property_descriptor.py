@@ -1,16 +1,26 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field, MISSING
+from dataclasses import dataclass, field, MISSING, fields
 from functools import cached_property
-from typing import Generic, TypeVar, ClassVar, Set, Optional, Callable, Type, Iterable
+from typing import (
+    Generic,
+    TypeVar,
+    ClassVar,
+    Set,
+    Optional,
+    Callable,
+    Type,
+    Iterable,
+    Any,
+    Dict,
+)
 
 from . import Predicate, symbol
 from .typing_utils import get_range_types
 from .utils import make_set
 
 T = TypeVar("T")
-NOTSET = object()
 
 
 @dataclass(frozen=True)
@@ -24,15 +34,16 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     domain_types: ClassVar[Set[Type]] = set()
     range_types: ClassVar[Set[Type]] = set()
-    _registry: ClassVar[dict] = {}
+    _domain_value: Optional[Any] = None
+    _range_value: Optional[Any] = None
 
-    obj: Optional[object] = field(default=None)
-    value: Optional[T] = field(default=None)
-    default: Optional[T] = field(default=NOTSET)
-    default_factory: Optional[Callable[[], T]] = field(default=NOTSET)
+    @property
+    def domain_value(self) -> Optional[Any]:
+        return self._domain_value
 
-    def __post_init__(self):
-        self._registry[self.name] = self
+    @property
+    def range_value(self) -> Optional[Any]:
+        return self._range_value
 
     @cached_property
     def attr_name(self) -> str:
@@ -49,40 +60,36 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     def create_managed_attribute_for_class(self, cls: Type, attr_name: str) -> None:
         """Create hidden dataclass field to store instance values and update type sets."""
-        default = self.default
-        if default is NOTSET:
-            default = MISSING
-        default_factory = self.default_factory
-        if default_factory is NOTSET:
-            default_factory = MISSING
         setattr(
             cls,
             self.attr_name,
-            field(default_factory=default_factory, default=default, init=False, repr=False, hash=False),
+            field(
+                default_factory=list,
+                init=False,
+                repr=False,
+                hash=False,
+            ),
         )
         # Preserve the declared annotation for the hidden field
         cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
 
         self.update_domain_types(cls)
         self.update_range_types(cls, attr_name)
-        if not hasattr(cls, "_properties_"):
-            cls._properties_ = defaultdict(dict)
-        cls._properties_[self.__class__][self.attr_name] = self
 
     def update_domain_types(self, cls: Type) -> None:
+        """
+        Add a class to the domain types if it is not already a subclass of any existing domain type.
+
+        This method is used to keep track of the classes that are valid as values for the property descriptor.
+        It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
+        :param cls: The class to add to the domain types.
+        :return: None
+        """
         if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
             return
         self.domain_types.add(cls)
 
     def update_range_types(self, cls: Type, attr_name: str) -> None:
-        # Support postponed annotations (from __future__ import annotations) which store strings
-        # type_hint = cls.__annotations__[attr_name]
-        # if isinstance(type_hint, str):
-        #     type_hint = eval(type_hint, vars(__import__(cls.__module__, fromlist=['*'])))
-        # for new_type in get_range_types(type_hint):
-        #     if any(issubclass(new_type, range_cls) for range_cls in self.range_types):
-        #         continue
-        #     self.range_types.add(new_type)
         type_hint = cls.__annotations__[attr_name]
         if isinstance(type_hint, str):
             try:
@@ -124,18 +131,62 @@ class PropertyDescriptor(Generic[T], Predicate):
         if isinstance(value, PropertyDescriptor):
             return
         setattr(obj, self.attr_name, value)
+        self.add_relation(obj, value)
 
-    def __call__(self) -> bool:
-        if hasattr(self.obj, self.attr_name):
-            return make_set(self.value).issubset(make_set(getattr(self.obj, self.attr_name)))
-        else:
-            for prop_type, prop_data in self.obj._properties_.items():
-                if issubclass(prop_type, self.__class__):
-                    for prop_name, prop_val in prop_data.items():
-                        if hasattr(self.obj, prop_name):
-                            if make_set(self.value).issubset(make_set(getattr(self.obj, prop_name))):
-                                return True
-            return False
+    def _holds_direct(
+        self, domain_value: Optional[Any], range_value: Optional[Any]
+    ) -> bool:
+        """Return True if `range_value` is contained directly in the property of `domain_value`.
+        Also consider sub-properties declared on the domain type.
+        """
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+
+        # If the concrete instance has our backing attribute, check it directly.
+        if hasattr(domain_value, self.attr_name):
+            return self._check_relation_value(
+                attr_name=self.attr_name,
+                domain_value=domain_value,
+                range_value=range_value,
+            )
+        # Otherwise, look through sub-properties of this property.
+        return self._check_relation_holds_for_subclasses_of_property(
+            domain_value=domain_value, range_value=range_value
+        )
+
+    def _check_relation_holds_for_subclasses_of_property(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        for prop_data in self.get_sub_properties(domain_value):
+            if self._check_relation_value(
+                prop_data.attr_name, domain_value=domain_value, range_value=range_value
+            ):
+                return True
+        return False
+
+    def _check_relation_value(
+        self,
+        attr_name: str,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        attr_value = getattr(domain_value, attr_name)
+        if make_set(range_value).issubset(make_set(attr_value)):
+            return True
+        # Do not handle transitivity here; it is now centralized in Predicate.__call__
+        return False
+
+    def get_sub_properties(
+        self, domain_value: Optional[Any] = None
+    ) -> Iterable[PropertyDescriptor]:
+        domain_value = domain_value or self.domain_value
+        for f in fields(domain_value):
+            if issubclass(type(f.default), self.__class__):
+                yield f.default
 
 
 class DescriptionMeta(type):
@@ -149,7 +200,10 @@ class DescriptionMeta(type):
             attr_value.create_managed_attribute_for_class(new_class, attr_name)
         return new_class
 
+
 @symbol
+@dataclass
 class Thing(metaclass=DescriptionMeta):
     """Base class for things that can be described by property descriptors."""
+
     ...

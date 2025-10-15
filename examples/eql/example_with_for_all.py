@@ -1,8 +1,16 @@
 from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language import symbolic_mode, let, entity, an, From, the, for_all
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language import (
+    symbolic_mode,
+    let,
+    entity,
+    an,
+    From,
+    the,
+    for_all,
+    symbol,
+)
 
 
 # Minimal dataset for the example
@@ -14,8 +22,7 @@ class Body:
 
 @symbol
 @dataclass
-class Container(Body):
-    ...
+class Container(Body): ...
 
 
 @symbol
@@ -54,10 +61,12 @@ with symbolic_mode():
 # Example 1: Universal constraint holds — all cabinets have that container
 with symbolic_mode():
     cabinets = Cabinet(From(world.views))
-    query1 = an(entity(
-        the_cabinet_container,
-        for_all(cabinets.container, the_cabinet_container == cabinets.container)
-    ))
+    query1 = an(
+        entity(
+            the_cabinet_container,
+            for_all(cabinets.container, the_cabinet_container == cabinets.container),
+        )
+    )
 
 rows1 = list(query1.evaluate())
 assert len(rows1) == 1
@@ -66,10 +75,12 @@ assert rows1[0].name == "Container2"
 # Example 2: Universal constraint fails — require all cabinets to have a different container
 with symbolic_mode():
     cabinets = Cabinet(From(world.views))
-    query2 = an(entity(
-        the_cabinet_container,
-        for_all(cabinets.container, the_cabinet_container != cabinets.container)
-    ))
+    query2 = an(
+        entity(
+            the_cabinet_container,
+            for_all(cabinets.container, the_cabinet_container != cabinets.container),
+        )
+    )
 
 rows2 = list(query2.evaluate())
 assert len(rows2) == 0

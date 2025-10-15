@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Any, Tuple
 
 from krrood.entity_query_language.symbolic import ResultQuantifier
 from owlrl import DeductiveClosure, OWLRL_Semantics
@@ -33,7 +33,9 @@ def generate_lubm_with_predicates():
         },
     }
     converter = OwlToPythonConverter(predefined_data_types=_default_overrides)
-    resources_path = os.path.join(os.path.dirname(__file__), "..", "..", "resources")
+    resources_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "..", "resources"
+    )
     converter.load_ontology(os.path.join(resources_path, "lubm.owl"))
     # Save into the package module so tests import the updated code
     output_path = os.path.join(os.path.dirname(__file__), "lubm_with_predicates.py")
@@ -57,10 +59,14 @@ def evaluate_sparql(rdf_graph: Graph, sparql_queries: List[str]):
     return counts
 
 
-def evaluate_eql(eql_queries: List[ResultQuantifier]) -> List[int]:
+def evaluate_eql(
+    eql_queries: List[ResultQuantifier],
+) -> Tuple[List[int], List[List[Any]]]:
     """Load instances and evaluate 14 EQL queries, returning counts per query."""
     counts: List[int] = []
+    results: List[List[Any]] = []
     for q in eql_queries:
         result = list(q.evaluate())
         counts.append(len(result))
-    return counts
+        results.append(result)
+    return counts, results

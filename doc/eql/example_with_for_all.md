@@ -8,8 +8,7 @@ Below is a minimal, self-contained example that mirrors the behavior used in tes
 from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language import symbolic_mode, let, entity, an, From, the, for_all
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language import symbolic_mode, let, entity, an, From, the, for_all, symbol
 
 
 # Minimal dataset for the example

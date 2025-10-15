@@ -124,7 +124,13 @@ class WrappedField:
         if self.is_optional:
             return get_args(self.resolved_type)[0]
         else:
-            return get_args(self.resolved_type)[0]
+            try:
+                return get_args(self.resolved_type)[0]
+            except IndexError:
+                if self.resolved_type is Type:
+                    return self.resolved_type
+                else:
+                    raise
 
     @cached_property
     def is_type_type(self) -> bool:

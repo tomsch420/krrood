@@ -19,7 +19,7 @@ def test_eql_counts_match_sparql():
     expected = evaluate_sparql(rdf_graph, sparql_queries)
 
     _ = load_instances(instances_path, lubm_with_predicates)
-    actual = evaluate_eql(get_eql_queries())
+    actual, _ = evaluate_eql(get_eql_queries())
 
     # test only the first query for now as the queries of sparql are not correct yet.
     assert actual[0] == expected[0]

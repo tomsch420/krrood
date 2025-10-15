@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Union, Any
 
-from entity_query_language.property_descriptor import Thing, PropertyDescriptor
+from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
 
 # Property descriptor classes (object properties)
@@ -27,8 +27,10 @@ class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     {% endif %}
     {# Only emit a typed inverse if the target descriptor is already defined earlier #}
     {% if prop.inverse_of and prop.inverse_target_is_prior %}
-    # Inverse of {{ prop.inverse_of }}
-    inverse_of = {{ properties[prop.inverse_of].descriptor_name }}
+    @property
+    def inverse(self):
+        # Inverse of {{ prop.inverse_of }}
+        return {{ properties[prop.inverse_of].descriptor_name }}(self.range_value, self.domain_value)
     {% endif %}
 
 
@@ -51,12 +53,15 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
     {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
     {% endif %}
     {% if prop.type == 'ObjectProperty' %}
-    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = {{ prop.descriptor_name }}(default_factory=list)
+    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = {{ prop.descriptor_name }}()
     {% else %}
     {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = None
     {% endif %}
     {% endfor %}
     {% endif %}
+
+    def __hash__(self):
+        return hash(id(self))
 
 
 {% endfor %}

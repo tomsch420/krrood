@@ -336,11 +336,15 @@ class SymbolicExpression(Generic[T], ABC):
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
+        to_return = self
         if in_rule_mode or in_symbolic_mode(EQLMode.Rule):
             if (node is self._root_) or (node._parent_ is self._root_):
                 node = node._conditions_root_
+        if isinstance(node, Variable) and node._parent_ is None:
+            node = An(Entity(selected_variables=[node]))
+            to_return = node
         SymbolicExpression._symbolic_expression_stack_.append(node)
-        return self
+        return to_return
 
     def __exit__(self, *args):
         SymbolicExpression._symbolic_expression_stack_.pop()

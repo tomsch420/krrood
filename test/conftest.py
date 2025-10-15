@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 from sqlalchemy.types import TypeDecorator
 
+from krrood.entity_query_language import Predicate
 from krrood.entity_query_language.symbolic import Variable
 from krrood.ormatic.utils import drop_database
 from .dataset.semantic_world_like_classes import *
@@ -111,6 +112,7 @@ def cleanup_after_test():
     for c in Variable._cache_.values():
         c.clear()
     Variable._cache_.clear()
+    Predicate.symbol_graph.clear()
 
 
 @pytest.fixture(scope="session")

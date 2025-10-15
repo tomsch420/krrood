@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from krrood.entity_query_language import symbolic_mode, in_, a
-from krrood.entity_query_language import From
-
+from krrood.class_diagrams.utils import classes_of_module
+from krrood.entity_query_language import symbolic_mode, Predicate
 from krrood.experiments.lubm_with_predicates import (
     Organization,
     Person,
     Employee,
     MemberOf,
+    SubOrganizationOf,
+    WorksFor,
 )
+import krrood.experiments.lubm_with_predicates as lubm_with_predicates
 
 
 @dataclass
@@ -19,22 +21,24 @@ class Company(Organization):
         return id(self)
 
 
+Predicate.build_symbol_graph(classes=classes_of_module(lubm_with_predicates))
+
+
 def test_query_on_descriptor_field_filters():
     org1 = Organization("ACME")
     org2 = Company("ABC")
 
     people = [
-        Person("John"),
-        Person("Jane"),
+        Employee("John"),
+        Employee("Jane"),
     ]
     people[0].works_for = [org1]
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(
-            person := Person(From(people)), in_(Organization("ACME"), person.works_for)
-        )
-    results = list(query.evaluate())
+        with Employee() as employee:
+            WorksFor(Organization("ACME"))
+    results = list(employee.evaluate())
     assert [p.name for p in results] == ["John"]
 
 
@@ -50,8 +54,29 @@ def test_query_on_descriptor_inheritance():
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(
-            person := Person(From(people)), MemberOf(person, Organization("ACME"))
-        )
-    results = list(query.evaluate())
+        with Person() as person:
+            MemberOf(Organization("ACME"))
+    results = list(person.evaluate())
     assert [p.name for p in results] == ["John"]
+
+
+def test_query_on_descriptor_transitivity():
+    org1 = Organization("ACME")
+    org2 = Company("ACME_sub")
+    org3 = Organization("ACME_sub_sub")
+    org2.sub_organization_of = [org1]
+    org3.sub_organization_of = [org2]
+
+    Predicate.symbol_graph.to_dot(
+        "instance_graph.pdf", format="pdf", graph_type="instance"
+    )
+
+    with symbolic_mode():
+        with Organization() as my_org:
+            SubOrganizationOf(org1)
+
+    results = list(my_org.evaluate())
+    Predicate.symbol_graph.to_dot(
+        "instance_graph_inferred.pdf", format="pdf", graph_type="instance"
+    )
+    assert {p.name for p in results} == {"ACME_sub", "ACME_sub_sub"}

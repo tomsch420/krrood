@@ -444,6 +444,10 @@ class OwlToPythonConverter:
                 base = properties_copy.get(prop_name)
                 if not base or base.get("type") != "ObjectProperty":
                     continue
+                if rng_names.issubset(
+                    set(self.properties[prop_name].get("ranges", []))
+                ):
+                    continue
                 # Remove this class from the base property's declared domains (we will attach a specialized one)
                 base_dd = list(base.get("declared_domains", []))
                 if cls_name in base_dd:
@@ -672,14 +676,6 @@ class OwlToPythonConverter:
                             break
                 if not skip:
                     declared.append(prop_name)
-            # Compatibility: ensure 'headOf' attribute exists on Employee to keep MemberOf queries safe
-            if cls_name == "Employee":
-                if any(
-                    pinfo.get("name") == "headOf" for pinfo in properties_copy.values()
-                ):
-                    if "headOf" not in declared:
-                        declared.append("headOf")
-                        declared = sorted(declared)
             cls_info["declared_properties"] = declared
 
         # Start with base-class-only topological order

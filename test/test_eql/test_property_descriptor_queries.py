@@ -9,13 +9,11 @@ from krrood.entity_query_language import From
 
 
 @dataclass(frozen=True)
-class MemberOf(PropertyDescriptor):
-    ...
+class MemberOf(PropertyDescriptor): ...
 
 
 @dataclass(frozen=True)
-class WorksFor(MemberOf):
-    ...
+class WorksFor(MemberOf): ...
 
 
 @dataclass(unsafe_hash=True)
@@ -24,17 +22,17 @@ class Organization(Thing):
 
 
 @dataclass(unsafe_hash=True)
-class Company(Organization):
-    ...
+class Company(Organization): ...
 
 
 @dataclass(eq=False)
 class Person(Thing):
     name: str
 
+
 @dataclass(eq=False)
 class Employee(Person):
-    works_for: List[Organization] = WorksFor(default_factory=list)
+    works_for: List[Organization] = WorksFor()
 
 
 def test_query_on_descriptor_field_filters():
@@ -49,7 +47,9 @@ def test_query_on_descriptor_field_filters():
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(person := Person(From(people)), in_(Organization("ACME"), person.works_for))
+        query = a(
+            person := Person(From(people)), in_(Organization("ACME"), person.works_for)
+        )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]
 
@@ -66,6 +66,8 @@ def test_query_on_descriptor_inheritance():
     people[1].works_for = [org2]
 
     with symbolic_mode():
-        query = a(person := Person(From(people)), MemberOf(person, Organization("ACME")))
+        query = a(
+            person := Person(From(people)), MemberOf(person, Organization("ACME"))
+        )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]

@@ -1,3 +1,8 @@
+import os
+import time
+
+from krrood.experiments.helpers import make_rdf_graph, evaluate_sparql
+
 query_1_sparql = """
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
@@ -149,3 +154,14 @@ sparql_queries = [
     query_13_sparql,
     query_14_sparql,
 ]
+
+if __name__ == "__main__":
+
+    instances_path = os.path.join("..", "..", "..", "resources", "lubm_instances.owl")
+    graph = make_rdf_graph(instances_path)
+    start_time = time.time()
+    counts = evaluate_sparql(graph, sparql_queries)
+    end_time = time.time()
+    for i, n in enumerate(counts, 1):
+        print(f"{i}:{n}")
+    print(f"Time: {end_time - start_time:.2f} sec")
