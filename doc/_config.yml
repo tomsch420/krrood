@@ -3,7 +3,7 @@
 
 title: KRROOD
 author: AICOR Institute for Artificial Intelligence
-# logo: logo.png
+logo: _static/images/krrood_logo.svg
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
