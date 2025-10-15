@@ -22,8 +22,11 @@
 - Create meaningful custom exceptions
 - Eliminate YAGNI smells
 - Make interfaces hard to misuse
+- Reduce Nesting
+- Reduce Complexity
 
 ## Documentation
+- Write docstrings in ReStructuredText format 
 - Write docstrings that explain what the function does and not how it does it
 - Do not create type information for docstring
 - Keep docstrings short and concise

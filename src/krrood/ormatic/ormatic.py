@@ -9,6 +9,7 @@ import rustworkx as rx
 
 from sqlalchemy import TypeDecorator
 from typing_extensions import List, Type, Dict
+from sortedcontainers import SortedSet
 
 from .custom_types import TypeType
 from .dao import AlternativeMapping
@@ -65,7 +66,7 @@ class ORMatic:
     The postfix that will be added to foreign key columns (not the relationships).
     """
 
-    imported_modules: Set[str] = field(default_factory=set, init=False)
+    imported_modules: SortedSet[str] = field(default_factory=SortedSet, init=False)
     """
     A set of modules that need to be imported.
     """

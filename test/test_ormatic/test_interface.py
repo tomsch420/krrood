@@ -1,39 +1,13 @@
 import pytest
-
-from sqlalchemy import create_engine, Engine, select
-from sqlalchemy.orm import Session, configure_mappers
+from sqlalchemy import select
 
 from dataset.example_classes import *
 from dataset.sqlalchemy_interface import *
 from krrood.ormatic.dao import (
     to_dao,
-    NoDAOFoundDuringParsingError,
     is_data_column,
     NoDAOFoundError,
 )
-from krrood.ormatic.utils import drop_database
-
-
-@pytest.fixture(scope="session")
-def engine():
-    configure_mappers()
-    engine = create_engine("sqlite:///:memory:")
-    yield engine
-    engine.dispose()
-
-
-@pytest.fixture(scope="session")
-def session(engine):
-    session = Session(engine)
-    yield session
-    session.close()
-
-
-@pytest.fixture
-def database(engine, session):
-    Base.metadata.create_all(engine)
-    yield
-    drop_database(engine)
 
 
 def test_position(session, database):

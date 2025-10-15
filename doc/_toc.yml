@@ -23,6 +23,15 @@ parts:
         - file: eql/example_with_concatenate
         - file: eql/example_with_for_all
         - file: eql/eql_for_sql_experts
+- caption: ORMatic
+  chapters:
+    - file: ormatic/intro
+    - file: ormatic/orm_generation
+    - file: ormatic/alternative_mapping
+    - file: ormatic/interface_usage
+    - file: ormatic/eql_for_ormatic
+    - file: ormatic/tips_and_tricks
+
 - caption: References
   chapters:
     - file: autoapi/index

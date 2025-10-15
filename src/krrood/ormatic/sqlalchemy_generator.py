@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import TextIO, TYPE_CHECKING
 
@@ -55,3 +57,7 @@ class SQLAlchemyGenerator:
 
         # Write the output to the file
         file.write(output)
+
+        # format the output with black
+        command = [sys.executable, "-m", "black", str(file.name)]
+        subprocess.run(command, capture_output=True, text=True, check=True)

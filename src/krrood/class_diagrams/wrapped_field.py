@@ -64,12 +64,12 @@ class WrappedField:
     """
 
     def __hash__(self):
-        return hash((self.clazz.clazz, self.field.name))
+        return hash((self.clazz.clazz, self.field))
 
     def __eq__(self, other):
-        return (self.clazz.clazz, self.field.name) == (
+        return (self.clazz.clazz, self.field) == (
             other.clazz.clazz,
-            other.field.name,
+            other.field,
         )
 
     def __repr__(self):
