@@ -1,40 +1,47 @@
-import builtins
 import os
+from dataclasses import is_dataclass
 from enum import Enum
 
-from krrood.ormatic.dao import AlternativeMapping
+from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.entity_query_language import Predicate, HasType
+from krrood.entity_query_language.predicate import HasTypes
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module, recursive_subclasses
-
-import krrood.experiments.generator
-
-
-# create of classes that should be mapped
-classes = set(recursive_subclasses(AlternativeMapping))
-classes |= set(classes_of_module(krrood.experiments.lubm))
-classes |= {krrood.experiments.generator.Dataset}
-
-# remove classes that should not be mapped
-# classes -= {
-# }
-classes -= set(recursive_subclasses(Enum))
-classes -= set(recursive_subclasses(Exception))
+from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
+import krrood.entity_query_language.orm.model
 
 
-def generate_orm():
-    """
-    Generate the ORM classes for the pycram package.
-    """
-    # Create an ORMatic object with the classes to be mapped
-    ormatic = ORMatic(list(classes))
+# get all classes in the dataset modules
+Predicate.build_symbol_graph()
+symbol_graph = Predicate.symbol_graph
+Predicate.symbol_graph.to_dot("symbol_graph.svg", format="svg", graph_type="type")
+all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+all_classes -= {HasType, HasTypes}
+# remove classes that are not dataclasses
+all_classes = {c for c in all_classes if is_dataclass(c)}
 
-    # Generate the ORM classes
-    ormatic.make_all_tables()
+print(all_classes)
+# sort the classes to ensure consistent ordering in the generated file
+class_diagram = ClassDiagram(
+    list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
+)
 
-    path = os.path.abspath(os.path.join(os.getcwd(), "..", "src", "krrood", "orm"))
-    with builtins.open(os.path.join(path, "ormatic_interface.py"), "w") as f:
-        ormatic.to_sqlalchemy_file(f)
+instance = ORMatic(
+    class_dependency_graph=class_diagram,
+    alternative_mappings=recursive_subclasses(AlternativeMapping),
+)
 
+instance.make_all_tables()
 
-if __name__ == "__main__":
-    generate_orm()
+file_path = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "src",
+    "krrood",
+    "entity_query_language",
+    "orm",
+    "ormatic_interface.py",
+)
+
+with open(file_path, "w") as f:
+    instance.to_sqlalchemy_file(f)

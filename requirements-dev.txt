@@ -4,3 +4,4 @@ tqdm
 pdbpp
 pytest
 omegaconf
+pydot

@@ -4,9 +4,9 @@ import os
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 from operator import index
-from typing import TYPE_CHECKING, Any, Iterable, Optional, List, Type
+from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
 
-import pydot
+
 from rustworkx import PyDiGraph
 
 from .. import logger
@@ -72,7 +72,9 @@ class SymbolGraph:
     """
 
     _type_graph: ClassDiagram
-    _instance_graph: PyDiGraph = field(default_factory=PyDiGraph)
+    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
+        default_factory=PyDiGraph
+    )
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
@@ -145,6 +147,8 @@ class SymbolGraph:
         graph_type="instance",
         without_inherited_associations: bool = True,
     ) -> None:
+        import pydot
+
         if graph_type == "type":
             if without_inherited_associations:
                 graph = (

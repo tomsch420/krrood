@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
 from functools import cached_property
@@ -26,9 +26,8 @@ class Relation(ABC):
     target: WrappedClass
     """The target class in the relation."""
 
-    @abstractmethod
     def __str__(self):
-        pass
+        return f"{self.__class__.__name__}"
 
     @property
     def color(self) -> str:
@@ -107,7 +106,9 @@ class ClassDiagram:
 
     classes: InitVar[List[Type]]
 
-    _dependency_graph: rx.PyDiGraph = field(default_factory=rx.PyDiGraph, init=False)
+    _dependency_graph: rx.PyDiGraph[WrappedClass, Relation] = field(
+        default_factory=rx.PyDiGraph, init=False
+    )
 
     def __post_init__(self, classes: List[Type]):
         self._dependency_graph = rx.PyDiGraph()

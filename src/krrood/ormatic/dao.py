@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import abc
 import inspect
 import logging
 import threading
@@ -10,14 +11,14 @@ import sqlalchemy.inspection
 import sqlalchemy.orm
 from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, ONETOMANY, RelationshipProperty
-from typing_extensions import Type, get_args, Dict, Any, TypeVar, Generic
+from typing_extensions import Type, get_args, Dict, Any, TypeVar, Generic, Self
 
 from .utils import recursive_subclasses
 
 logger = logging.getLogger(__name__)
 _repr_thread_local = threading.local()
 
-T = TypeVar('T')
+T = TypeVar("T")
 _DAO = TypeVar("_DAO", bound="DataAccessObject")
 
 
@@ -32,8 +33,10 @@ class NoGenericError(TypeError):
     """
 
     def __init__(self, cls):
-        super().__init__(f"Cannot determine original class for {cls.__name__!r}. "
-                         "Did you forget to parameterise the DataAccessObject subclass?")
+        super().__init__(
+            f"Cannot determine original class for {cls.__name__!r}. "
+            "Did you forget to parameterise the DataAccessObject subclass?"
+        )
 
 
 class NoDAOFoundError(TypeError):
@@ -66,14 +69,21 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
         self.obj = obj
         self.dao = dao
         self.relationship = relationship
-        TypeError.__init__(self, f"Class {type(obj)} does not have a DAO. This happened when trying"
-                                 f"to create a dao for {dao}) on the relationship {relationship} with the "
-                                 f"relationship value {obj}."
-                                 f"Expected a relationship value of type {relationship.target}.")
+        TypeError.__init__(
+            self,
+            f"Class {type(obj)} does not have a DAO. This happened when trying"
+            f"to create a dao for {dao}) on the relationship {relationship} with the "
+            f"relationship value {obj}."
+            f"Expected a relationship value of type {relationship.target}.",
+        )
 
 
 def is_data_column(column: Column):
-    return not column.primary_key and len(column.foreign_keys) == 0 and column.name != "polymorphic_type"
+    return (
+        not column.primary_key
+        and len(column.foreign_keys) == 0
+        and column.name != "polymorphic_type"
+    )
 
 
 class HasGeneric(Generic[T]):
@@ -91,7 +101,10 @@ class HasGeneric(Generic[T]):
                 if base_cls is DataAccessObject:
                     # Found DataAccessObject, now find the generic parameter
                     for base in cls.__orig_bases__:
-                        if hasattr(base, "__origin__") and base.__origin__ is DataAccessObject:
+                        if (
+                            hasattr(base, "__origin__")
+                            and base.__origin__ is DataAccessObject
+                        ):
                             type_args = get_args(base)
                             if type_args:
                                 return type_args[0]
@@ -118,7 +131,13 @@ class DataAccessObject(HasGeneric[T]):
     """
 
     @classmethod
-    def to_dao(cls, obj: T, memo: Dict[int, Any] = None, keep_alive: Dict[int, Any] = None, register=True) -> _DAO:
+    def to_dao(
+        cls,
+        obj: T,
+        memo: Dict[int, Any] = None,
+        keep_alive: Dict[int, Any] = None,
+        register=True,
+    ) -> _DAO:
         """
         Converts an object to its Data Access Object (DAO) equivalent using a class method. This method ensures that
         objects are not processed multiple times by using a memoization technique. It also handles alternative
@@ -163,13 +182,17 @@ class DataAccessObject(HasGeneric[T]):
 
         # register the result as in process
         if register:
-            #memo[id(obj)] = result
+            # memo[id(obj)] = result
             memo[original_obj_id] = result
             keep_alive[original_obj_id] = obj
 
         # if the superclass of this dao is a DAO for an alternative mapping
-        if issubclass(base, DataAccessObject) and issubclass(base.original_class(), AlternativeMapping):
-            result.to_dao_if_subclass_of_alternative_mapping(obj=dao_obj, memo=memo, keep_alive=keep_alive, base=base)
+        if issubclass(base, DataAccessObject) and issubclass(
+            base.original_class(), AlternativeMapping
+        ):
+            result.to_dao_if_subclass_of_alternative_mapping(
+                obj=dao_obj, memo=memo, keep_alive=keep_alive, base=base
+            )
         else:
             result.to_dao_default(obj=dao_obj, memo=memo, keep_alive=keep_alive)
 
@@ -191,10 +214,20 @@ class DataAccessObject(HasGeneric[T]):
 
         # Create a new instance of the DAO class
         self.get_columns_from(obj=obj, columns=mapper.columns)
-        self.get_relationships_from(obj=obj, relationships=mapper.relationships, memo=memo, keep_alive=keep_alive)
+        self.get_relationships_from(
+            obj=obj,
+            relationships=mapper.relationships,
+            memo=memo,
+            keep_alive=keep_alive,
+        )
 
-    def to_dao_if_subclass_of_alternative_mapping(self, obj: T, memo: Dict[int, Any], keep_alive: Dict[int, Any],
-                                                  base: Type[DataAccessObject]):
+    def to_dao_if_subclass_of_alternative_mapping(
+        self,
+        obj: T,
+        memo: Dict[int, Any],
+        keep_alive: Dict[int, Any],
+        base: Type[DataAccessObject],
+    ):
         """
         Transforms the given object into a corresponding Data Access Object (DAO) if it is a
         subclass of an alternatively mapped entity. This involves processing both the inherited
@@ -230,7 +263,9 @@ class DataAccessObject(HasGeneric[T]):
         # split up the columns in columns defined by the parent and columns defined by this dao
         all_columns = mapper.columns
         columns_of_parent = parent_mapper.columns
-        columns_of_this_table = [c for c in all_columns if c.name not in columns_of_parent]
+        columns_of_this_table = [
+            c for c in all_columns if c.name not in columns_of_parent
+        ]
 
         # copy values from superclass dao
         self.get_columns_from(parent_dao, columns_of_parent)
@@ -241,7 +276,9 @@ class DataAccessObject(HasGeneric[T]):
         # split relationships in relationships by parent and relationships by child
         all_relationships = mapper.relationships
         relationships_of_parent = parent_mapper.relationships
-        relationships_of_this_table = [r for r in all_relationships if r not in relationships_of_parent]
+        relationships_of_this_table = [
+            r for r in all_relationships if r not in relationships_of_parent
+        ]
 
         for relationship in relationships_of_parent:
             setattr(self, relationship.key, getattr(parent_dao, relationship.key))
@@ -267,8 +304,13 @@ class DataAccessObject(HasGeneric[T]):
             if is_data_column(column):
                 setattr(self, column.name, getattr(obj, column.name))
 
-    def get_relationships_from(self, obj: T, relationships: List[RelationshipProperty], memo: Dict[int, Any],
-                               keep_alive: Dict[int, Any]):
+    def get_relationships_from(
+        self,
+        obj: T,
+        relationships: List[RelationshipProperty],
+        memo: Dict[int, Any],
+        keep_alive: Dict[int, Any],
+    ):
         """
         Retrieve and update relationships from an object based on the given relationship
         properties. This function processes various types of relationships (e.g., one-to-one,
@@ -287,8 +329,9 @@ class DataAccessObject(HasGeneric[T]):
         for relationship in relationships:
 
             # update one to one like relationships
-            if (relationship.direction == MANYTOONE or (
-                    relationship.direction == ONETOMANY and not relationship.uselist)):
+            if relationship.direction == MANYTOONE or (
+                relationship.direction == ONETOMANY and not relationship.uselist
+            ):
 
                 value_in_obj = getattr(obj, relationship.key)
                 if value_in_obj is None:
@@ -296,8 +339,12 @@ class DataAccessObject(HasGeneric[T]):
                 else:
                     dao_class = get_dao_class(type(value_in_obj))
                     if dao_class is None:
-                        raise NoDAOFoundDuringParsingError(value_in_obj, type(self), relationship)
-                    dao_of_value = dao_class.to_dao(value_in_obj, memo=memo, keep_alive=keep_alive)
+                        raise NoDAOFoundDuringParsingError(
+                            value_in_obj, type(self), relationship
+                        )
+                    dao_of_value = dao_class.to_dao(
+                        value_in_obj, memo=memo, keep_alive=keep_alive
+                    )
 
                 setattr(self, relationship.key, dao_of_value)
 
@@ -306,11 +353,17 @@ class DataAccessObject(HasGeneric[T]):
                 result = []
                 value_in_obj = getattr(obj, relationship.key)
                 for v in value_in_obj:
-                    result.append(get_dao_class(type(v)).to_dao(v, memo=memo, keep_alive=keep_alive))
+                    result.append(
+                        get_dao_class(type(v)).to_dao(
+                            v, memo=memo, keep_alive=keep_alive
+                        )
+                    )
 
                 setattr(self, relationship.key, result)
 
-    def from_dao(self, memo: Dict[int, Any] = None, in_progress: Dict[int, bool] = None) -> T:
+    def from_dao(
+        self, memo: Dict[int, Any] = None, in_progress: Dict[int, bool] = None
+    ) -> T:
         """
         Converts the current Data Access Object (DAO) into its corresponding domain model
         representation. This method ensures that all scalar attributes and relationships
@@ -342,7 +395,10 @@ class DataAccessObject(HasGeneric[T]):
         # get argument names of the original class
         kwargs = {}
         init_of_original_class = self.original_class().__init__
-        argument_names = [p.name for p in inspect.signature(init_of_original_class).parameters.values()][1:]
+        argument_names = [
+            p.name
+            for p in inspect.signature(init_of_original_class).parameters.values()
+        ][1:]
 
         # get data columns
         for column in mapper.columns:
@@ -361,8 +417,9 @@ class DataAccessObject(HasGeneric[T]):
             value = getattr(self, relationship.key)
 
             # handle one-to-one relationships
-            if (relationship.direction == MANYTOONE or (
-                    relationship.direction == ONETOMANY and not relationship.uselist)):
+            if relationship.direction == MANYTOONE or (
+                relationship.direction == ONETOMANY and not relationship.uselist
+            ):
                 if value is None:
                     parsed = None
                 else:
@@ -389,7 +446,9 @@ class DataAccessObject(HasGeneric[T]):
         # if i am the child of an alternatively mapped parent
         base = self.__class__.__bases__[0]
         base_kwargs = {}
-        if issubclass(base, DataAccessObject) and issubclass(base.original_class(), AlternativeMapping):
+        if issubclass(base, DataAccessObject) and issubclass(
+            base.original_class(), AlternativeMapping
+        ):
 
             # construct the super class from the super dao
             parent_dao = base()  # empty parent DAO
@@ -420,7 +479,9 @@ class DataAccessObject(HasGeneric[T]):
             init_args = {**base_kwargs, **kwargs}
             result.__init__(**init_args)
         except TypeError as e:
-            logging.getLogger(__name__).debug(f"from_dao __init__ call failed with {e}; falling back to manual assignment")
+            logging.getLogger(__name__).debug(
+                f"from_dao __init__ call failed with {e}; falling back to manual assignment"
+            )
             for key, val in init_args.items():
                 setattr(result, key, val)
 
@@ -448,7 +509,7 @@ class DataAccessObject(HasGeneric[T]):
         return result
 
     def __repr__(self):
-        if not hasattr(_repr_thread_local, 'seen'):
+        if not hasattr(_repr_thread_local, "seen"):
             _repr_thread_local.seen = set()
 
         if id(self) in _repr_thread_local.seen:
@@ -467,7 +528,9 @@ class DataAccessObject(HasGeneric[T]):
                 value = getattr(self, relationship.key)
                 if value is not None:
                     if isinstance(value, list):
-                        kwargs.append(f"{relationship.key}=[{', '.join(repr(v) for v in value)}]")
+                        kwargs.append(
+                            f"{relationship.key}=[{', '.join(repr(v) for v in value)}]"
+                        )
                     else:
                         kwargs.append(f"{relationship.key}={repr(value)}")
                 else:
@@ -478,10 +541,12 @@ class DataAccessObject(HasGeneric[T]):
             _repr_thread_local.seen.remove(id(self))
 
 
-class AlternativeMapping(HasGeneric[T]):
+class AlternativeMapping(HasGeneric[T], abc.ABC):
 
     @classmethod
-    def to_dao(cls, obj: T, memo: Dict[int, Any] = None, keep_alive: Dict[int, Any] = None) -> _DAO:
+    def to_dao(
+        cls, obj: T, memo: Dict[int, Any] = None, keep_alive: Dict[int, Any] = None
+    ) -> _DAO:
         """
         Create a DAO from the obj if it doesn't exist.
 
@@ -503,7 +568,8 @@ class AlternativeMapping(HasGeneric[T]):
             return result
 
     @classmethod
-    def create_instance(cls, obj: T):
+    @abc.abstractmethod
+    def create_instance(cls, obj: T) -> Self:
         """
         Create a DAO from the obj.
         The method needs to be overloaded by the user.
@@ -513,6 +579,7 @@ class AlternativeMapping(HasGeneric[T]):
         """
         raise NotImplementedError
 
+    @abc.abstractmethod
     def create_from_dao(self) -> T:
         """
         Creates an object from a Data Access Object (DAO) by utilizing the predefined
@@ -543,7 +610,9 @@ def get_alternative_mapping(cls: Type) -> Optional[Type[DataAccessObject]]:
     return None
 
 
-def to_dao(obj: Any, memo: Dict[int, Any] = None, keep_alive: Dict[int, Any] = None) -> DataAccessObject:
+def to_dao(
+    obj: Any, memo: Dict[int, Any] = None, keep_alive: Dict[int, Any] = None
+) -> DataAccessObject:
     """
     Convert any object to a dao class.
 
