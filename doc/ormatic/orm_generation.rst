@@ -1,18 +1,22 @@
+.. ormatic_generation
+
 Generating an ORMatic Interface
 ===============================
 
-A typical workflow for generating an ORMatic interface consists of three steps:
+A typical workflow for generating an ORMatic interface consists of these two steps
 
-1. Identify candidate classes
+Identify candidate classes
+--------------------------
 
 - Choose the dataclasses that represent your persistent domain.
-- Optionally include explicit mapping classes (see Alternative Mapping below).
-- Optionally provide custom type mappings (see Custom and Complex Field Types below).
+- Optionally include explicit mapping classes
+- Optionally provide custom type mappings
 
-2. Create the interface
+Create a script generating the interface
+----------------------------------------
 
 After identifying the persistent part of your domain, I recommend creating a script that generates the interface.
-The script for generating the test ORM for KRROOD looks like this:
+The script for generating the test ORM interface for KRROOD looks like this:
 
 .. code-block:: python
 
@@ -69,32 +73,3 @@ The script for generating the test ORM for KRROOD looks like this:
    with open(file_path, "w") as f:
        instance.to_sqlalchemy_file(f)
 
-3. Use the generated interface
-
-You can now use the interface to assert and retrieve facts from the database.
-
-.. code-block:: python
-
-   from sqlalchemy import select, create_engine
-   from sqlalchemy.orm import Session
-
-   from dataset.example_classes import *
-   from dataset.sqlalchemy_interface import *
-   from krrood.ormatic.dao import (
-       to_dao
-   )
-
-   engine = create_engine("sqlite:///:memory:")
-   Base.metadata.create_all(engine)
-   session = Session(engine)
-
-   k1 = KinematicChain("a")
-   k2 = KinematicChain("b")
-   torso = Torso("t", [k1, k2])
-   torso_dao = TorsoDAO.to_dao(torso)
-
-   session.add(torso_dao)
-   session.commit()
-
-   queried_torso = session.scalars(select(TorsoDAO)).one()
-   assert queried_torso == torso_dao

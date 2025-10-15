@@ -28,6 +28,7 @@ parts:
     - file: ormatic/intro
     - file: ormatic/example
     - file: ormatic/alternative_mapping
+    - file: ormatic/interface_usage
     - file: ormatic/eql_for_ormatic
     - file: ormatic/troubleshooting
 
