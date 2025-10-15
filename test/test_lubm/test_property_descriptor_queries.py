@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from krrood.class_diagrams.utils import classes_of_module
 from krrood.entity_query_language import symbolic_mode, Predicate
 from krrood.experiments.lubm_with_predicates import (
     Organization,
@@ -11,6 +12,7 @@ from krrood.experiments.lubm_with_predicates import (
     SubOrganizationOf,
     WorksFor,
 )
+import krrood.experiments.lubm_with_predicates as lubm_with_predicates
 
 
 @dataclass
@@ -19,7 +21,7 @@ class Company(Organization):
         return id(self)
 
 
-Predicate.build_symbol_graph()
+Predicate.build_symbol_graph(classes=classes_of_module(lubm_with_predicates))
 
 
 def test_query_on_descriptor_field_filters():
