@@ -1,10 +1,10 @@
-Using Entity Query Language (EQL) With ORMatic
+Using EQL With ORMatic
 ==============================================
 
-ORMatic can translate high-level EQL expressions into SQLAlchemy ``select(...)`` statements.
+ORMatic can translate high-level EQL expressions into SQLAlchemy `select(...) <https://docs.sqlalchemy.org/en/20/orm/queryguide/select.html#writing-select-statements-for-orm-mapped-classes>`_ statements.
 
 - Build expressions over variables that carry the underlying Python type.
-- Use ``eql_to_sql(expr, session)`` to get a translator you can evaluate against your session.
+- Use :py:func:`krrood.ormatic.eql_interface.eql_to_sql` to get a translator you can evaluate against your session.
 
 Example:
 
@@ -34,7 +34,7 @@ Example:
    session.commit()
 
    # Build an EQL expression
-   position = let(type_=Position, domain=[Position(0, 0, 0)])  # domain is irrelevant for translation
+   position = let(type_=Position)  # domain is irrelevant for translation
    expr = position.z > 3
 
    # Translate and execute
@@ -53,7 +53,7 @@ Example:
 
 Notes on the EQL translator:
 
-- Variable resolution uses ``ormatic.dao.get_dao_class`` to map EQL variables to DAO classes.
+- Variable resolution uses :py:func:`krrood.ormatic.dao.get_dao_class` to map EQL variables to DAO classes.
 - Attribute comparisons on a single table are supported, including ``==``, ``!=``, ``>``, ``>=``, ``<``, ``<=``, ``in``, logical ``and``/``or``, and ``not``.
 - If a variable’s DAO class cannot be found, a specific EQL translation error is raised to help diagnose missing mappings.
 - EQL translation is not complete; feel free to extend it.
