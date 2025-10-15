@@ -1,4 +1,5 @@
 import os
+from dataclasses import is_dataclass
 from enum import Enum
 
 import pytest
@@ -32,14 +33,11 @@ def generate_sqlalchemy_interface():
     from krrood.class_diagrams.class_diagram import ClassDiagram
     from krrood.ormatic.ormatic import ORMatic
     from krrood.ormatic.utils import classes_of_module, recursive_subclasses
-    from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
+    from krrood.ormatic.dao import AlternativeMapping
 
     all_classes = set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
-    all_classes -= set(recursive_subclasses(DataAccessObject))
-    all_classes -= set(recursive_subclasses(Enum))
-    all_classes -= set(recursive_subclasses(TypeDecorator))
-    all_classes -= set(recursive_subclasses(AlternativeMapping))
+    all_classes = {c for c in all_classes if is_dataclass(c)}
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}
 
