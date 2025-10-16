@@ -14,8 +14,8 @@ from krrood.ormatic.dao import to_dao
 def test_symbol_graph_persistence(session, database):
     p1 = Position(1, 2, 3)
 
-    # symbol_graph = Predicate.symbol_graph
-    # symbol_graph_dao = to_dao(symbol_graph)
+    symbol_graph = Predicate.symbol_graph
+    symbol_graph_dao = to_dao(symbol_graph)
     #
     # session.add(p1dao)
     # session.commit()

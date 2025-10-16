@@ -55,7 +55,7 @@ def generate_sqlalchemy_interface():
     all_classes = {c for c in all_classes if is_dataclass(c)}
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}
-    print(all_classes)
+
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
@@ -87,22 +87,17 @@ def pytest_configure(config):
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
     """
-    file_path = os.path.join(
-        os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
-    )
 
-    # Only generate if file doesn't exist
-    if not os.path.exists(file_path):
-        try:
-            generate_sqlalchemy_interface()
-        except Exception as e:
-            import warnings
+    try:
+        generate_sqlalchemy_interface()
+    except Exception as e:
+        import warnings
 
-            warnings.warn(
-                f"Failed to generate sqlalchemy_interface.py: {e}. "
-                "Tests may fail if the file doesn't exist.",
-                RuntimeWarning,
-            )
+        warnings.warn(
+            f"Failed to generate sqlalchemy_interface.py: {e}. "
+            "Tests may fail if the file doesn't exist.",
+            RuntimeWarning,
+        )
 
 
 from dataset.sqlalchemy_interface import *
