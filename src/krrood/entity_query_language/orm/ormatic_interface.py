@@ -27,9 +27,14 @@ class PredicateDAO(Base, DataAccessObject[krrood.entity_query_language.predicate
 
 
 
+    polymorphic_type: Mapped[str] = mapped_column(String(255), nullable=False, use_existing_column=True)
 
 
 
+    __mapper_args__ = {
+        'polymorphic_on': 'polymorphic_type',
+        'polymorphic_identity': 'PredicateDAO',
+    }
 
 class PredicateRelationDAO(Base, DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateRelation]):
 
@@ -51,6 +56,22 @@ class PredicateRelationDAO(Base, DataAccessObject[krrood.entity_query_language.s
     predicate: Mapped[PredicateDAO] = relationship('PredicateDAO', uselist=False, foreign_keys=[predicate_id], post_update=True)
 
 
+class PropertyDescriptorDAO(PredicateDAO, DataAccessObject[krrood.entity_query_language.predicate.PropertyDescriptor]):
+
+    __tablename__ = 'PropertyDescriptorDAO'
+
+    database_id: Mapped[builtins.int] = mapped_column(ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True)
+
+
+
+
+
+
+    __mapper_args__ = {
+        'polymorphic_identity': 'PropertyDescriptorDAO',
+        'inherit_condition': database_id == PredicateDAO.database_id,
+    }
+
 class SymbolGraphMappingDAO(Base, DataAccessObject[krrood.entity_query_language.orm.model.SymbolGraphMapping]):
 
     __tablename__ = 'SymbolGraphMappingDAO'
@@ -63,6 +84,18 @@ class SymbolGraphMappingDAO(Base, DataAccessObject[krrood.entity_query_language.
 
     instances: Mapped[typing.List[WrappedInstanceDAO]] = relationship('WrappedInstanceDAO', foreign_keys='[WrappedInstanceDAO.symbolgraphmappingdao_instances_id]', post_update=True)
     predicate_relations: Mapped[typing.List[PredicateRelationDAO]] = relationship('PredicateRelationDAO', foreign_keys='[PredicateRelationDAO.symbolgraphmappingdao_predicate_relations_id]', post_update=True)
+
+
+class ThingDAO(Base, DataAccessObject[krrood.entity_query_language.predicate.Thing]):
+
+    __tablename__ = 'ThingDAO'
+
+    database_id: Mapped[builtins.int] = mapped_column(Integer, primary_key=True, use_existing_column=True)
+
+
+
+
+
 
 
 class WrappedInstanceDAO(Base, DataAccessObject[krrood.entity_query_language.symbol_graph.WrappedInstance]):

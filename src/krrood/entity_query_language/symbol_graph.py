@@ -13,7 +13,7 @@ from ..class_diagrams import ClassDiagram, Relation
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
-    from .predicate import Predicate
+    from .predicate import Predicate, Symbol
 
 
 @dataclass
@@ -33,7 +33,7 @@ class PredicateRelation(Relation):
 
 @dataclass
 class WrappedInstance:
-    instance: Any
+    instance: Symbol
     index: Optional[int] = field(init=False, default=None)
     _symbol_graph_: Optional[SymbolGraph] = field(
         init=False, hash=False, default=None, repr=False
