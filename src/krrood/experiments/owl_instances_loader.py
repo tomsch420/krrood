@@ -7,6 +7,9 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
+# Import PropertyDescriptor to correctly detect descriptor class attributes
+from krrood.entity_query_language.predicate import PropertyDescriptor
+
 
 class OwlInstancesRegistry:
     """Registry of instances created from an OWL/RDF instances file.
@@ -71,53 +74,49 @@ def to_pascal(name: str) -> str:
 def _collect_model_metadata(model_module) -> Tuple[
     Dict[str, Type],  # class name -> class type
     Dict[str, Type],  # descriptor base name -> descriptor class
-    Dict[Type, Dict[str, str]],  # class -> predicate(local) -> field name
-    Dict[Type, Dict[Type, str]],  # class -> descriptor class -> field name
+    Dict[Type, Dict[str, str]],  # class -> predicate(local snake) -> attribute name
+    Dict[Type, Dict[Type, str]],  # class -> descriptor class -> attribute name
 ]:
     class_by_name: Dict[str, Type] = {}
     descriptor_by_name: Dict[str, Type] = {}
     field_by_predicate_local: Dict[Type, Dict[str, str]] = {}
     field_by_descriptor: Dict[Type, Dict[Type, str]] = {}
 
+    # Collect model classes (dataclasses used to represent OWL classes)
     for attr_name in dir(model_module):
         obj = getattr(model_module, attr_name)
+        if isinstance(obj, type) and is_dataclass(obj):
+            class_by_name[attr_name] = obj
+        # Collect descriptor classes available in the module for quick lookup by name
         if isinstance(obj, type):
-            # dataclasses that represent OWL classes have eq=False in this project; but safest is is_dataclass
-            if is_dataclass(obj):
-                class_by_name[attr_name] = obj
-            # property descriptor classes inherit from PropertyDescriptor but we avoid importing it here
-            # They are dataclasses too (frozen=True), but they should not have __annotations__ we care about
-            # Use heuristic: they are dataclasses but do not have fields() (no fields) -> consider them descriptors
             try:
-                flds = fields(obj)
+                if issubclass(obj, PropertyDescriptor) and obj is not PropertyDescriptor:
+                    descriptor_by_name[obj.__name__] = obj
             except TypeError:
-                flds = ()
-            if not flds and attr_name and attr_name[0].isupper():
-                descriptor_by_name[attr_name] = obj
+                # obj is not a class we can check issubclass on
+                pass
 
-    # For each model class, map predicate local names to field names and descriptors to fields
-    for cls_name, cls in list(class_by_name.items()):
-        try:
-            flds = fields(cls)
-        except TypeError:
-            continue
+    # For each model class, map predicate local names to attribute names and descriptors to attributes
+    for _, cls in list(class_by_name.items()):
         pred_map: Dict[str, str] = {}
         desc_map: Dict[Type, str] = {}
-        for f in flds:
-            # Skip synthetic fields (no default) but handle both relation and datatype properties
-            pred_local = f.name  # snake_case field name
-            pred_map.setdefault(pred_local, f.name)
-            # For relation fields, default value is an instance of a PropertyDescriptor subclass
-            default_val = f.default
-            if (
-                default_val is not None
-                and type(default_val).__name__ != "_MISSING_TYPE"
-            ):
-                # Some dataclasses may use default_factory embedded in descriptor; in our generated code
-                # default is the descriptor instance
-                desc_cls = type(default_val)
-                if desc_cls is not None and desc_cls.__name__[0].isupper():
-                    desc_map[desc_cls] = f.name
+
+        # Descriptors are class attributes, not dataclass fields. Iterate attributes and
+        # pick those that are instances of PropertyDescriptor (including subclasses).
+        for attr in dir(cls):
+            if attr.startswith("_"):
+                continue
+            try:
+                val = getattr(cls, attr)
+            except Exception:
+                # Accessor may raise; skip conservatively
+                continue
+            if isinstance(val, PropertyDescriptor):
+                # Map snake local predicate name to the class attribute name
+                pred_map.setdefault(attr, attr)
+                # Map descriptor class to attribute name for inverse lookups
+                desc_map[type(val)] = attr
+
         field_by_predicate_local[cls] = pred_map
         field_by_descriptor[cls] = desc_map
 
