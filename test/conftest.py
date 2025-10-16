@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 
-from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
 from krrood.entity_query_language.symbolic import Variable
 from krrood.ormatic.utils import drop_database
 from .dataset.semantic_world_like_classes import *
@@ -13,6 +13,19 @@ from .test_eql.conf.world.doors_and_drawers import World as DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
     World as HandlesAndContainersWorld,
 )
+from dataset import example_classes, semantic_world_like_classes
+from dataset.example_classes import (
+    PhysicalObject,
+    NotMappedParent,
+    ChildNotMapped,
+    ConceptType,
+)
+from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module, recursive_subclasses
+from krrood.ormatic.dao import AlternativeMapping
+import krrood.entity_query_language.symbol_graph
+import krrood.entity_query_language.orm.model
 
 
 def generate_sqlalchemy_interface():
@@ -22,25 +35,27 @@ def generate_sqlalchemy_interface():
     This ensures the file exists before any imports attempt to use it,
     solving test isolation issues when running all tests.
     """
-    from dataset import example_classes, semantic_world_like_classes
-    from dataset.example_classes import (
-        PhysicalObject,
-        NotMappedParent,
-        ChildNotMapped,
-        ConceptType,
-    )
-    from krrood.class_diagrams.class_diagram import ClassDiagram
-    from krrood.ormatic.ormatic import ORMatic
-    from krrood.ormatic.utils import classes_of_module, recursive_subclasses
-    from krrood.ormatic.dao import AlternativeMapping
 
+    Predicate.build_symbol_graph()
     all_classes = set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
     all_classes |= set(recursive_subclasses(Symbol))
+    # get all classes in the dataset modules
+
+    symbol_graph = Predicate.symbol_graph
+    all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+    all_classes |= {
+        am.original_class() for am in recursive_subclasses(AlternativeMapping)
+    }
+    all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
+
+    # remove classes that don't need persistence
+    all_classes -= {HasType, HasTypes}
+    # remove classes that are not dataclasses
     all_classes = {c for c in all_classes if is_dataclass(c)}
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}
-
+    print(all_classes)
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
