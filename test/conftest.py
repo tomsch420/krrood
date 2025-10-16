@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 
-from krrood.entity_query_language import Predicate
+from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.symbolic import Variable
 from krrood.ormatic.utils import drop_database
 from .dataset.semantic_world_like_classes import *

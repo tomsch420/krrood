@@ -3,23 +3,28 @@ from dataclasses import dataclass
 import pytest
 
 
-from krrood.entity_query_language import (
+from krrood.entity_query_language.entity import (
     and_,
     not_,
     contains,
     in_,
     symbolic_mode,
     From,
-    predicate,
     Predicate,
+    an,
+    entity,
+    set_of,
+    let,
+    the,
+    or_,
+    a,
 )
 from krrood.entity_query_language.cache_data import (
     cache_search_count,
     cache_match_count,
 )
-from krrood.entity_query_language import an, entity, set_of, let, the, or_, a
 from krrood.entity_query_language.failures import MultipleSolutionFound
-from krrood.entity_query_language import HasType
+from krrood.entity_query_language.predicate import HasType, predicate
 from dataset.semantic_world_like_classes import (
     Handle,
     Body,

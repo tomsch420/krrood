@@ -19,8 +19,17 @@ from dataset.sqlalchemy_interface import (
     PrismaticConnectionDAO,
     BodyDAO,
 )
-from krrood.entity_query_language import and_, or_, in_, symbolic_mode
-from krrood.entity_query_language.entity import let, an, entity, the, contains
+from krrood.entity_query_language.entity import (
+    let,
+    an,
+    entity,
+    the,
+    contains,
+    and_,
+    or_,
+    in_,
+    symbolic_mode,
+)
 from krrood.ormatic.dao import to_dao
 from krrood.ormatic.eql_interface import eql_to_sql
 

@@ -13,7 +13,7 @@ from ..class_diagrams import ClassDiagram, Relation
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
-    from .predicate import Predicate
+    from .predicate import Predicate, Symbol
 
 
 @dataclass
@@ -33,7 +33,7 @@ class PredicateRelation(Relation):
 
 @dataclass
 class WrappedInstance:
-    instance: Any
+    instance: Symbol
     index: Optional[int] = field(init=False, default=None)
     _symbol_graph_: Optional[SymbolGraph] = field(
         init=False, hash=False, default=None, repr=False
@@ -80,6 +80,23 @@ class SymbolGraph:
             wrapped_instance = WrappedInstance(wrapped_instance)
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
+
+    # Adapters to align with ORM alternative mapping expectations
+    def add_instance(self, wrapped_instance: WrappedInstance) -> None:
+        """Add a wrapped instance to the graph.
+
+        This is an adapter that delegates to add_node to keep API compatibility with
+        SymbolGraphMapping.create_from_dao.
+        """
+        self.add_node(wrapped_instance)
+
+    def add_relation(self, relation: PredicateRelation) -> None:
+        """Add a relation edge to the instance graph.
+
+        This is an adapter that delegates to add_edge to keep API compatibility with
+        SymbolGraphMapping.create_from_dao.
+        """
+        self.add_edge(relation)
 
     def add_edge(self, relation: PredicateRelation) -> None:
         source_out_edges = self._instance_graph.out_edges(relation.source.index)

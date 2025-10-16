@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing_extensions import List
 
-from .. import Predicate
+from ..predicate import Predicate
 from ..symbol_graph import SymbolGraph, WrappedInstance, PredicateRelation
 from ...ormatic.dao import AlternativeMapping, T
 
