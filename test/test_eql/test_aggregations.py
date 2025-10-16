@@ -1,5 +1,14 @@
-from krrood.entity_query_language import symbolic_mode, From
-from krrood.entity_query_language import flatten, entity, an, not_, in_, concatenate, the, for_all
+from krrood.entity_query_language.symbolic import symbolic_mode, From
+from krrood.entity_query_language.entity import (
+    flatten,
+    entity,
+    an,
+    not_,
+    in_,
+    concatenate,
+    the,
+    for_all,
+)
 from dataset.semantic_world_like_classes import View, Drawer, Container, Cabinet
 
 
@@ -30,7 +39,9 @@ def test_flatten_iterable_attribute_and_use_not_equal(handles_and_containers_wor
 
     with symbolic_mode():
         cabinets = Cabinet(From(world.views))
-        drawer_1 = an(entity(d:= Drawer(From(world.views)), d.handle.name == "Handle1"))
+        drawer_1 = an(
+            entity(d := Drawer(From(world.views)), d.handle.name == "Handle1")
+        )
         drawers = flatten(cabinets.drawers)
         query = an(entity(drawers, drawer_1 != drawers))
 
@@ -46,7 +57,9 @@ def test_concatenate(handles_and_containers_world):
 
     with symbolic_mode():
         cabinets = Cabinet(From(world.views))
-        my_drawers = an(entity(d := Drawer(From(world.views)), d.handle.name == "Handle1"))
+        my_drawers = an(
+            entity(d := Drawer(From(world.views)), d.handle.name == "Handle1")
+        )
         drawers = concatenate(cabinets.drawers)
         query = an(entity(my_drawers, not_(in_(my_drawers, drawers))))
 
@@ -57,7 +70,9 @@ def test_concatenate(handles_and_containers_world):
 
     with symbolic_mode():
         cabinets = Cabinet(From(world.views))
-        my_drawers = an(entity(d := Drawer(From(world.views)), d.handle.name == "Handle1"))
+        my_drawers = an(
+            entity(d := Drawer(From(world.views)), d.handle.name == "Handle1")
+        )
         drawers = concatenate(cabinets.drawers)
         query = an(entity(my_drawers, in_(my_drawers, drawers)))
 
@@ -73,9 +88,17 @@ def test_for_all(handles_and_containers_world):
 
     with symbolic_mode():
         cabinets = Cabinet(From(world.views))
-        the_cabinet_container = the(entity(c := Container(From(world.bodies)), c.name == "Container2"))
-        query = an(entity(the_cabinet_container, for_all(cabinets.container,
-                                                         the_cabinet_container == cabinets.container)))
+        the_cabinet_container = the(
+            entity(c := Container(From(world.bodies)), c.name == "Container2")
+        )
+        query = an(
+            entity(
+                the_cabinet_container,
+                for_all(
+                    cabinets.container, the_cabinet_container == cabinets.container
+                ),
+            )
+        )
 
     results = list(query.evaluate())
 
@@ -85,9 +108,17 @@ def test_for_all(handles_and_containers_world):
 
     with symbolic_mode():
         cabinets = Cabinet(From(world.views))
-        the_cabinet_container = the(entity(c := Container(From(world.bodies)), c.name == "Container2"))
-        query = an(entity(the_cabinet_container, for_all(cabinets.container,
-                                                         the_cabinet_container != cabinets.container)))
+        the_cabinet_container = the(
+            entity(c := Container(From(world.bodies)), c.name == "Container2")
+        )
+        query = an(
+            entity(
+                the_cabinet_container,
+                for_all(
+                    cabinets.container, the_cabinet_container != cabinets.container
+                ),
+            )
+        )
 
     results = list(query.evaluate())
 

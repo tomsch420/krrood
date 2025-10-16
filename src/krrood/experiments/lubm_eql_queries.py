@@ -2,7 +2,7 @@ import os
 import time
 from typing import List
 
-from krrood.entity_query_language import symbolic_mode, a
+from krrood.entity_query_language.entity import symbolic_mode, a
 from krrood.entity_query_language.symbolic import ResultQuantifier
 
 from krrood.experiments import lubm_with_predicates

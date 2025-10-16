@@ -1,6 +1,6 @@
 from krrood.experiments import lubm_with_predicates
 from krrood.class_diagrams.utils import classes_of_module
-from krrood.entity_query_language import Predicate
+from krrood.entity_query_language.predicate import Predicate
 
 
 def test_visualize_symbol_graph():

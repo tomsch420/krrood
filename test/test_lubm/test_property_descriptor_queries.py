@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from krrood.class_diagrams.utils import classes_of_module
-from krrood.entity_query_language import symbolic_mode, Predicate
+from krrood.entity_query_language.symbolic import symbolic_mode
+from krrood.entity_query_language.predicate import Predicate
 from krrood.experiments.lubm_with_predicates import (
     Organization,
     Person,

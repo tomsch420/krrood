@@ -3,7 +3,7 @@ from typing import Any, ClassVar, Type
 
 import pytest
 
-from krrood.entity_query_language import Predicate
+from krrood.entity_query_language.predicate import Predicate
 
 
 def test_inverse_of_sets_back_reference():
