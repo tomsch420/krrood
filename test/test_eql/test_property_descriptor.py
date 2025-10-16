@@ -65,6 +65,7 @@ def test_descriptor_stores_per_instance_values_and_metadata():
 
 def test_nullable_and_name_attributes():
     # The range types contain no None by default
-    wf = Person.worksForOrg
+    works_for_org_field = get_field_by_name(Person, "worksForOrg")
+    wf = works_for_org_field.default_factory()
     assert wf.nullable is False
     assert wf.name == "worksFor"
