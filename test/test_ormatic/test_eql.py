@@ -103,7 +103,7 @@ def test_translate_join_one_to_one(session, database):
     with symbolic_mode():
         query = an(entity(pose := let(type_=Pose, domain=[]), pose.position.z > 3))
     translator = eql_to_sql(query, session)
-    query_by_hand = select(PoseDAO).join(PositionDAO).where(PositionDAO.z > 3)
+    query_by_hand = select(PoseDAO).join(PoseDAO.position).where(PositionDAO.z > 3)
 
     assert str(translator.sql_query) == str(query_by_hand)
 

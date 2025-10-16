@@ -133,19 +133,28 @@ class RelationshipResolver:
 
     def _find_relationship(self, mapper: Any, attribute_name: str) -> Any:
         """
-        Find a relationship by name in a mapper.
+        Find a relationship by name in a mapper or aliased mapper.
 
-        :param mapper: The SQLAlchemy mapper
+        :param mapper: The SQLAlchemy mapper or alias inspection
         :param attribute_name: The attribute name to find
         :return: The relationship or None
         """
-        relationship = mapper.relationships.get(attribute_name)
+        # Support both Mapper and AliasedInsp from sqlalchemy.inspection.inspect()
+        relationships = None
+        if hasattr(mapper, "relationships"):
+            relationships = mapper.relationships
+        elif hasattr(mapper, "mapper") and hasattr(mapper.mapper, "relationships"):
+            relationships = mapper.mapper.relationships
+        else:
+            return None
+
+        relationship = relationships.get(attribute_name)
         if relationship is not None:
             return relationship
 
-        for relationship in mapper.relationships:
-            if relationship.key == attribute_name:
-                return relationship
+        for rel in relationships:
+            if rel.key == attribute_name:
+                return rel
 
         return None
 
@@ -293,19 +302,25 @@ class DomainValueExtractor:
 
 @dataclass
 class JoinManager:
-    """Manages JOIN operations for the EQL translator."""
+    """Manages JOIN operations for the EQL translator.
 
-    joined_by_path: set[tuple[type, str]] = field(default_factory=set)
+    Tracks both which relationship paths have been joined and the SQLAlchemy
+    alias used for each path so that downstream column references can bind to
+    the correct FROM element without triggering implicit joins.
+    """
+
+    aliases_by_path: dict[tuple[type, str], Any] = field(default_factory=dict)
     joined_tables: set[type] = field(default_factory=set)
 
-    def add_path_join(self, dao_class: type, attribute_name: str) -> None:
+    def add_path_join(self, dao_class: type, attribute_name: str, alias: Any) -> None:
         """
-        Register a path-based JOIN.
+        Register a path-based JOIN and its alias.
 
         :param dao_class: The DAO class
         :param attribute_name: The attribute name
+        :param alias: The SQLAlchemy aliased entity used for the join
         """
-        self.joined_by_path.add((dao_class, attribute_name))
+        self.aliases_by_path[(dao_class, attribute_name)] = alias
 
     def is_path_joined(self, dao_class: type, attribute_name: str) -> bool:
         """
@@ -315,7 +330,13 @@ class JoinManager:
         :param attribute_name: The attribute name
         :return: True if already joined
         """
-        return (dao_class, attribute_name) in self.joined_by_path
+        return (dao_class, attribute_name) in self.aliases_by_path
+
+    def get_alias_for_path(self, dao_class: type, attribute_name: str) -> Any:
+        """
+        Get the alias associated with a previously joined path.
+        """
+        return self.aliases_by_path.get((dao_class, attribute_name))
 
     def add_table_join(self, dao_class: type) -> None:
         """
@@ -701,8 +722,8 @@ class EQLTranslator:
                     local_column = next(iter(relationship.local_columns))
                     return getattr(current_dao, local_column.key)
 
-                self._apply_relationship_join(current_dao, name, relationship)
-                current_dao = relationship.entity.class_
+                alias = self._apply_relationship_join(current_dao, name, relationship)
+                current_dao = alias or relationship.entity.class_
                 continue
 
             if index != len(names) - 1:
@@ -721,17 +742,44 @@ class EQLTranslator:
 
     def _apply_relationship_join(
         self, dao_class: type, attribute_name: str, relationship: Any
-    ) -> None:
+    ) -> Any:
         """
         Apply a JOIN for a relationship if not already joined.
 
-        :param dao_class: The DAO class
-        :param attribute_name: The attribute name
-        :param relationship: The relationship object
+        This uses an explicit SQLAlchemy alias for the relationship target and
+        joins using the relationship attribute itself, allowing SQLAlchemy to
+        derive the ON clause while still binding subsequent column references
+        to the correct FROM element. This mirrors the default Core/ORM behavior
+        for join(<entity>) that the tests compare against, but avoids implicit
+        joins by returning the alias for downstream attribute resolution.
+
+        :param dao_class: The DAO class where the relationship is defined
+        :param attribute_name: The relationship attribute name on dao_class
+        :param relationship: The SQLAlchemy relationship object
         """
-        if not self.join_manager.is_path_joined(dao_class, attribute_name):
-            self.sql_query = self.sql_query.join(getattr(dao_class, attribute_name))
-            self.join_manager.add_path_join(dao_class, attribute_name)
+        if self.join_manager.is_path_joined(dao_class, attribute_name):
+            # Return the existing alias so downstream uses the same FROM element
+            return self.join_manager.get_alias_for_path(dao_class, attribute_name)
+
+        # Resolve target DAO class and create a dedicated alias for this path
+        target_dao = relationship.entity.class_
+        from sqlalchemy.orm import aliased
+
+        aliased_target = aliased(target_dao, flat=True)
+
+        # Relationship attribute on the source class, e.g., PoseDAO.position
+        relationship_attr = getattr(dao_class, attribute_name)
+
+        # Perform the join using the relationship attribute so SQLAlchemy
+        # determines the ON clause, while we control aliasing of the right side
+        self.sql_query = self.sql_query.join(aliased_target, relationship_attr)
+
+        # Record both the logical path and the table as joined to avoid duplicates
+        self.join_manager.add_path_join(dao_class, attribute_name, aliased_target)
+        # Track underlying table class as joined; alias class type differs but table is the same
+        self.join_manager.add_table_join(target_dao)
+
+        return aliased_target
 
 
 def eql_to_sql(query: SymbolicExpression, session: Session) -> EQLTranslator:
