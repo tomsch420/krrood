@@ -111,8 +111,10 @@ class Symbol:
             instance = instantiate_class_and_update_cache(
                 cls, super().__new__, *args, **kwargs
             )
-            symbols_registry.add(cls)
             return instance
+
+    def __init_subclass__(cls, **kwargs):
+        symbols_registry.add(cls)
 
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
@@ -342,7 +344,8 @@ def bind_first_argument_of_predicate_if_in_query_context(
             result_quantifier = node._parent_._parent_
         else:
             result_quantifier = node
-        args = [result_quantifier._child_.selected_variables[0]] + list(args)
+        args = list(args)
+        args.insert(1, result_quantifier._child_.selected_variables[0])
     return args
 
 
@@ -378,8 +381,8 @@ def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
                     f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
                     f" a domain using `From()`."
                 )
-        elif 0 < i < (len(args) - 1):
-            arg_name = init_args[i + 1]  # to skip `self`
+        elif i > 0:
+            arg_name = init_args[i]  # to skip `self`
             kwargs[arg_name] = arg
     return domain, kwargs
 
