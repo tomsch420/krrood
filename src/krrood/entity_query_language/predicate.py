@@ -378,7 +378,7 @@ def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
                     f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
                     f" a domain using `From()`."
                 )
-        elif i < (len(args) - 1):
+        elif 0 < i < (len(args) - 1):
             arg_name = init_args[i + 1]  # to skip `self`
             kwargs[arg_name] = arg
     return domain, kwargs
