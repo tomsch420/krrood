@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import MultipleResultsFound
 
-from dataset.example_classes import Position, Pose
-from dataset.semantic_world_like_classes import (
+from ..dataset.example_classes import Position, Pose
+from ..dataset.semantic_world_like_classes import (
     World,
     Body,
     FixedConnection,
@@ -11,7 +11,7 @@ from dataset.semantic_world_like_classes import (
     Handle,
     Container,
 )
-from dataset.sqlalchemy_interface import (
+from ..dataset.sqlalchemy_interface import (
     PositionDAO,
     PoseDAO,
     OrientationDAO,

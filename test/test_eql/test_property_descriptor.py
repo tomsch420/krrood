@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import List
 
 from krrood.entity_query_language.predicate import PropertyDescriptor, Thing
-from test_class_diagram.test_wrapped_field import get_field_by_name
 
 
 # Concrete descriptor used in tests
@@ -56,9 +55,7 @@ def test_descriptor_stores_per_instance_values_and_metadata():
     assert Person in Person.worksForOrg.domain_types
     assert Organization in Person.worksForOrg.range_types
     # WorksFor on Person and Employee share class variables
-    assert (
-        Person.worksForCompany.domain_types == WorksFor.domain_types
-    )
+    assert Person.worksForCompany.domain_types == WorksFor.domain_types
 
 
 def test_nullable_and_name_attributes():

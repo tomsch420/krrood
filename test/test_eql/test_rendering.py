@@ -7,7 +7,7 @@ try:
 except ImportError:
     GraphVisualizer = None
 
-from dataset.semantic_world_like_classes import (
+from ..dataset.semantic_world_like_classes import (
     Drawer,
     Handle,
     FixedConnection,
@@ -48,6 +48,7 @@ def test_render_rx_graph_as_igraph_simple(handles_and_containers_world):
         os.remove("pdf_graph.pdf")
     rule.visualize()
     assert os.path.exists("pdf_graph.pdf")
+    os.remove("pdf_graph.pdf")
 
 
 @pytest.mark.skipif(GraphVisualizer is None, reason="requires rustworkx_utils")
@@ -81,3 +82,4 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
         os.remove("pdf_graph.pdf")
     rule.visualize()
     assert os.path.exists("pdf_graph.pdf")
+    os.remove("pdf_graph.pdf")

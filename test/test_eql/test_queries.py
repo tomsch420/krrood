@@ -25,7 +25,7 @@ from krrood.entity_query_language.cache_data import (
 )
 from krrood.entity_query_language.failures import MultipleSolutionFound
 from krrood.entity_query_language.predicate import HasType, predicate
-from dataset.semantic_world_like_classes import (
+from ..dataset.semantic_world_like_classes import (
     Handle,
     Body,
     Container,
