@@ -13,7 +13,7 @@ def test_eql_counts_match_sparql():
     instances_path = os.path.join(
         os.path.dirname(__file__), "..", "..", "resources", "lubm_instances.owl"
     )
-    instances_path = os.path.abspath(instances_path)
+    # instances_path = os.path.abspath(instances_path)
 
     rdf_graph = make_rdf_graph(instances_path)
     expected = evaluate_sparql(rdf_graph, sparql_queries)

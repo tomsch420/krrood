@@ -21,7 +21,14 @@ class OwlToPythonConverter:
 
     def load_ontology(self, owl_file_path: str):
         """Load OWL file using RDFLib"""
-        self.graph.parse(owl_file_path)
+        path = owl_file_path
+        # If a relative path was provided and does not exist relative to CWD, try repository resources
+        if not os.path.isabs(path) and not os.path.exists(path):
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+            candidate = os.path.join(repo_root, "resources", os.path.basename(path))
+            if os.path.exists(candidate):
+                path = candidate
+        self.graph.parse(path)
         self._extract_ontology_info()
 
     def _extract_ontology_info(self):
