@@ -1,6 +1,6 @@
 from ..conf.world.base_config import WorldConf, HandleConf, ContainerConf, FixedConnectionConf, \
     PrismaticConnectionConf, RevoluteConnectionConf, DrawerConf, CabinetConf
-from dataset.semantic_world_like_classes import World, Handle, Container, FixedConnection, PrismaticConnection, RevoluteConnection, \
+from ...dataset.semantic_world_like_classes import World, Handle, Container, FixedConnection, PrismaticConnection, RevoluteConnection, \
     Body, Drawer, Cabinet
 
 last_world_id = -1

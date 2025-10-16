@@ -2,8 +2,8 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import MultipleResultsFound
 
-from dataset.example_classes import Position, Pose
-from dataset.semantic_world_like_classes import (
+from ..dataset.example_classes import Position, Pose
+from ..dataset.semantic_world_like_classes import (
     World,
     Body,
     FixedConnection,
@@ -11,7 +11,7 @@ from dataset.semantic_world_like_classes import (
     Handle,
     Container,
 )
-from dataset.sqlalchemy_interface import (
+from ..dataset.sqlalchemy_interface import (
     PositionDAO,
     PoseDAO,
     OrientationDAO,
@@ -19,8 +19,17 @@ from dataset.sqlalchemy_interface import (
     PrismaticConnectionDAO,
     BodyDAO,
 )
-from krrood.entity_query_language import and_, or_, in_, symbolic_mode
-from krrood.entity_query_language.entity import let, an, entity, the, contains
+from krrood.entity_query_language.entity import (
+    let,
+    an,
+    entity,
+    the,
+    contains,
+    and_,
+    or_,
+    in_,
+    symbolic_mode,
+)
 from krrood.ormatic.dao import to_dao
 from krrood.ormatic.eql_interface import eql_to_sql
 
@@ -94,7 +103,7 @@ def test_translate_join_one_to_one(session, database):
     with symbolic_mode():
         query = an(entity(pose := let(type_=Pose, domain=[]), pose.position.z > 3))
     translator = eql_to_sql(query, session)
-    query_by_hand = select(PoseDAO).join(PositionDAO).where(PositionDAO.z > 3)
+    query_by_hand = select(PoseDAO).join(PoseDAO.position).where(PositionDAO.z > 3)
 
     assert str(translator.sql_query) == str(query_by_hand)
 

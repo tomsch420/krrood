@@ -4,61 +4,48 @@ from dataclasses import dataclass, field
 
 from typing_extensions import List, Optional
 
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language.predicate import Symbol
 
 
 @dataclass(unsafe_hash=True)
-class WorldEntity:
+class WorldEntity(Symbol):
     world: Optional[World] = field(default=None, kw_only=True, repr=False, hash=False)
 
 
-@symbol
 @dataclass(unsafe_hash=True)
 class Body(WorldEntity):
     name: str
     size: int = field(default=1)
 
 
-@symbol
 @dataclass(unsafe_hash=True)
-class Handle(Body):
-    ...
+class Handle(Body): ...
 
 
-@symbol
 @dataclass(unsafe_hash=True)
-class Container(Body):
-    ...
+class Container(Body): ...
 
 
-@symbol
 @dataclass(unsafe_hash=True)
 class Connection(WorldEntity):
     parent: Body
     child: Body
 
 
-@symbol
 @dataclass(unsafe_hash=True)
-class FixedConnection(Connection):
-    ...
+class FixedConnection(Connection): ...
 
 
-@symbol
 @dataclass(unsafe_hash=True)
-class PrismaticConnection(Connection):
-    ...
+class PrismaticConnection(Connection): ...
 
 
-@symbol
 @dataclass(unsafe_hash=True)
-class RevoluteConnection(Connection):
-    ...
+class RevoluteConnection(Connection): ...
 
 
-@symbol
 @dataclass
-class World:
+class World(Symbol):
     id: int = field(default=0)
     bodies: List[Body] = field(default_factory=list)
     connections: List[Connection] = field(default_factory=list)
@@ -72,13 +59,11 @@ class World:
             return False
         return self.id == other.id
 
-@symbol
+
 @dataclass(unsafe_hash=True)
-class View(WorldEntity):
-    ...
+class View(WorldEntity): ...
 
 
-@symbol
 @dataclass
 class Drawer(View):
     handle: Handle
@@ -91,10 +76,13 @@ class Drawer(View):
     def __eq__(self, other):
         if not isinstance(other, Drawer):
             return False
-        return self.handle == other.handle and self.container == other.container and self.world == other.world
+        return (
+            self.handle == other.handle
+            and self.container == other.container
+            and self.world == other.world
+        )
 
 
-@symbol
 @dataclass
 class Cabinet(View):
     container: Container
@@ -106,17 +94,19 @@ class Cabinet(View):
     def __eq__(self, other):
         if not isinstance(other, Cabinet):
             return False
-        return self.container == other.container and self.drawers == other.drawers and self.world == other.world
+        return (
+            self.container == other.container
+            and self.drawers == other.drawers
+            and self.world == other.world
+        )
 
 
-@symbol
 @dataclass(unsafe_hash=True)
 class Door(View):
     handle: Handle
     body: Body
 
 
-@symbol
 @dataclass(unsafe_hash=True)
 class Wardrobe(View):
     handle: Handle

@@ -4,7 +4,7 @@ from typing import List, TypeVar, Generic
 
 from typing_extensions import Type
 
-from dataset.example_classes import (
+from ..dataset.example_classes import (
     Position,
     Orientation,
     Pose,

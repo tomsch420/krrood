@@ -3,11 +3,11 @@ from typing import Any, ClassVar, Type
 
 import pytest
 
-from krrood.entity_query_language import Predicate
+from krrood.entity_query_language.predicate import Predicate
 
 
 def test_inverse_of_sets_back_reference():
-    @dataclass(frozen=True)
+    @dataclass()
     class ParentOf(Predicate):
         def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
             return True
@@ -20,7 +20,7 @@ def test_inverse_of_sets_back_reference():
         def range_value(self):
             return None
 
-    @dataclass(frozen=True)
+    @dataclass()
     class ChildOf(Predicate):
         inverse_of: ClassVar[Type[Predicate]] = ParentOf
 
@@ -43,7 +43,7 @@ def test_inverse_of_type_validation():
     # inverse_of must be a Predicate subclass
     with pytest.raises(TypeError):
 
-        @dataclass(frozen=True)
+        @dataclass()
         class InvalidInverse(Predicate):
             inverse_of = object  # not a Predicate subclass
 

@@ -3,10 +3,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field, fields
 from functools import cached_property
-from operator import index
-from typing import TYPE_CHECKING, Any, Iterable, Optional, List, Type
+from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
 
-import pydot
+
 from rustworkx import PyDiGraph
 
 from .. import logger
@@ -14,7 +13,7 @@ from ..class_diagrams import ClassDiagram, Relation
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
-    from .predicate import Predicate
+    from .predicate import Predicate, Symbol
 
 
 @dataclass
@@ -34,7 +33,7 @@ class PredicateRelation(Relation):
 
 @dataclass
 class WrappedInstance:
-    instance: Any
+    instance: Symbol
     index: Optional[int] = field(init=False, default=None)
     _symbol_graph_: Optional[SymbolGraph] = field(
         init=False, hash=False, default=None, repr=False
@@ -72,13 +71,32 @@ class SymbolGraph:
     """
 
     _type_graph: ClassDiagram
-    _instance_graph: PyDiGraph = field(default_factory=PyDiGraph)
+    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
+        default_factory=PyDiGraph
+    )
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
             wrapped_instance = WrappedInstance(wrapped_instance)
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
+
+    # Adapters to align with ORM alternative mapping expectations
+    def add_instance(self, wrapped_instance: WrappedInstance) -> None:
+        """Add a wrapped instance to the graph.
+
+        This is an adapter that delegates to add_node to keep API compatibility with
+        SymbolGraphMapping.create_from_dao.
+        """
+        self.add_node(wrapped_instance)
+
+    def add_relation(self, relation: PredicateRelation) -> None:
+        """Add a relation edge to the instance graph.
+
+        This is an adapter that delegates to add_edge to keep API compatibility with
+        SymbolGraphMapping.create_from_dao.
+        """
+        self.add_edge(relation)
 
     def add_edge(self, relation: PredicateRelation) -> None:
         source_out_edges = self._instance_graph.out_edges(relation.source.index)
@@ -145,6 +163,8 @@ class SymbolGraph:
         graph_type="instance",
         without_inherited_associations: bool = True,
     ) -> None:
+        import pydot
+
         if graph_type == "type":
             if without_inherited_associations:
                 graph = (

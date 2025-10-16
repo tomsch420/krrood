@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy import select
 
-from dataset.example_classes import *
-from dataset.sqlalchemy_interface import *
+from ..dataset.example_classes import *
+from ..dataset.sqlalchemy_interface import *
 from krrood.ormatic.dao import (
     to_dao,
     is_data_column,

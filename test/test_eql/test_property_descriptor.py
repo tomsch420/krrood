@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor, Thing
+from krrood.entity_query_language.predicate import PropertyDescriptor, Thing
 
 
 # Concrete descriptor used in tests
-@dataclass(frozen=True)
+@dataclass
 class WorksFor(PropertyDescriptor): ...
 
 
@@ -23,13 +23,13 @@ class Company(Organization): ...
 @dataclass
 class Person(Thing):
     name: str
-    worksForOrg: List[Organization] = WorksFor()
-    worksForCompany: List[Company] = WorksFor()
+    worksForOrg: List[Organization] = field(default_factory=WorksFor)
+    worksForCompany: List[Company] = field(default_factory=WorksFor)
 
 
 @dataclass
 class Employee(Person):
-    worksForOrg: List[Organization] = WorksFor()
+    worksForOrg: List[Organization] = field(default_factory=WorksFor)
 
 
 def test_descriptor_stores_per_instance_values_and_metadata():
@@ -53,9 +53,9 @@ def test_descriptor_stores_per_instance_values_and_metadata():
 
     # Domain types and range types
     assert Person in Person.worksForOrg.domain_types
-    assert Organization in person.__class__.worksForOrg.range_types
+    assert Organization in Person.worksForOrg.range_types
     # WorksFor on Person and Employee share class variables
-    assert person2.__class__.worksForCompany.domain_types == WorksFor.domain_types
+    assert Person.worksForCompany.domain_types == WorksFor.domain_types
 
 
 def test_nullable_and_name_attributes():

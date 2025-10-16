@@ -3,24 +3,29 @@ from dataclasses import dataclass
 import pytest
 
 
-from krrood.entity_query_language import (
+from krrood.entity_query_language.entity import (
     and_,
     not_,
     contains,
     in_,
     symbolic_mode,
     From,
-    predicate,
     Predicate,
+    an,
+    entity,
+    set_of,
+    let,
+    the,
+    or_,
+    a,
 )
 from krrood.entity_query_language.cache_data import (
     cache_search_count,
     cache_match_count,
 )
-from krrood.entity_query_language import an, entity, set_of, let, the, or_, a
 from krrood.entity_query_language.failures import MultipleSolutionFound
-from krrood.entity_query_language import HasType
-from dataset.semantic_world_like_classes import (
+from krrood.entity_query_language.predicate import HasType, predicate
+from ..dataset.semantic_world_like_classes import (
     Handle,
     Body,
     Container,
@@ -37,7 +42,8 @@ from dataset.semantic_world_like_classes import (
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
     world = handles_and_containers_world
     world2 = doors_and_drawers_world
-    query = an(entity(body := let(type_=Body, domain=world.bodies)))
+    with symbolic_mode():
+        query = an(entity(body := let(type_=Body, domain=world.bodies)))
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
 
 
@@ -756,7 +762,7 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
     """
     world = handles_and_containers_world
 
-    @dataclass(frozen=True)
+    @dataclass()
     class IsHandle(Predicate):
         body: Body
 

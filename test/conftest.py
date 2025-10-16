@@ -1,15 +1,26 @@
 import os
 from dataclasses import is_dataclass
-from enum import Enum
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
-from sqlalchemy.types import TypeDecorator
 
-from krrood.entity_query_language import Predicate
+import krrood.entity_query_language.orm.model
+import krrood.entity_query_language.symbol_graph
+from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
 from krrood.entity_query_language.symbolic import Variable
+from krrood.ormatic.dao import AlternativeMapping
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module, recursive_subclasses
 from krrood.ormatic.utils import drop_database
+from .dataset import example_classes, semantic_world_like_classes
+from .dataset.example_classes import (
+    PhysicalObject,
+    NotMappedParent,
+    ChildNotMapped,
+    ConceptType,
+)
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import World as DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
@@ -24,24 +35,25 @@ def generate_sqlalchemy_interface():
     This ensures the file exists before any imports attempt to use it,
     solving test isolation issues when running all tests.
     """
-    from dataset import example_classes, semantic_world_like_classes
-    from dataset.example_classes import (
-        PhysicalObject,
-        NotMappedParent,
-        ChildNotMapped,
-        ConceptType,
-    )
-    from krrood.class_diagrams.class_diagram import ClassDiagram
-    from krrood.ormatic.ormatic import ORMatic
-    from krrood.ormatic.utils import classes_of_module, recursive_subclasses
-    from krrood.ormatic.dao import AlternativeMapping
 
-    all_classes = set(classes_of_module(example_classes))
-    all_classes |= set(classes_of_module(semantic_world_like_classes))
+    # build the symbol graph
+    Predicate.build_symbol_graph()
+    symbol_graph = Predicate.symbol_graph
+
+    # collect all classes
+    all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+    all_classes |= {
+        am.original_class() for am in recursive_subclasses(AlternativeMapping)
+    }
+    all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
+    all_classes |= {Symbol}
+
+    # remove classes that don't need persistence
+    all_classes -= {HasType, HasTypes}
+    # remove classes that are not dataclasses
     all_classes = {c for c in all_classes if is_dataclass(c)}
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}
-
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
@@ -73,25 +85,20 @@ def pytest_configure(config):
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
     """
-    file_path = os.path.join(
-        os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
-    )
 
-    # Only generate if file doesn't exist
-    if not os.path.exists(file_path):
-        try:
-            generate_sqlalchemy_interface()
-        except Exception as e:
-            import warnings
+    try:
+        generate_sqlalchemy_interface()
+    except Exception as e:
+        import warnings
 
-            warnings.warn(
-                f"Failed to generate sqlalchemy_interface.py: {e}. "
-                "Tests may fail if the file doesn't exist.",
-                RuntimeWarning,
-            )
+        warnings.warn(
+            f"Failed to generate sqlalchemy_interface.py: {e}. "
+            "Tests may fail if the file doesn't exist.",
+            RuntimeWarning,
+        )
 
 
-from dataset.sqlalchemy_interface import *
+from .dataset.sqlalchemy_interface import *
 
 
 @pytest.fixture
