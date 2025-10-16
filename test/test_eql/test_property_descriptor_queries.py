@@ -4,20 +4,20 @@ from dataclasses import dataclass, field
 from typing import List
 
 from krrood.entity_query_language import symbolic_mode, in_, a
-from krrood.entity_query_language.predicate import PropertyDescriptor, Symbol
+from krrood.entity_query_language.predicate import PropertyDescriptor, Thing
 from krrood.entity_query_language import From
 
 
-@dataclass()
+@dataclass
 class MemberOf(PropertyDescriptor): ...
 
 
-@dataclass()
+@dataclass
 class WorksFor(MemberOf): ...
 
 
 @dataclass(unsafe_hash=True)
-class Organization(Symbol):
+class Organization(Thing):
     name: str
 
 
@@ -26,13 +26,13 @@ class Company(Organization): ...
 
 
 @dataclass(eq=False)
-class Person(Symbol):
+class Person(Thing):
     name: str
 
 
 @dataclass(eq=False)
 class Employee(Person):
-    works_for: List[Organization] = field(default_factory=lambda: WorksFor())
+    works_for: List[Organization] = field(default_factory=WorksFor)
 
 
 def test_query_on_descriptor_field_filters():

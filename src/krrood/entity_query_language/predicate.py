@@ -89,17 +89,6 @@ def recursive_subclasses(cls_):
         yield subclass
 
 
-class DescriptionMeta(type):
-    """Metaclass that recognizes PropertyDescriptor class attributes and wires backing storage."""
-
-    def __new__(cls, name, bases, attrs):
-        new_class = super().__new__(cls, name, bases, attrs)
-        for attr_name, attr_value in attrs.items():
-            if attr_value.__class__.__name__ != "PropertyDescriptor":
-                continue
-            attr_value.create_managed_attribute_for_class(new_class, attr_name)
-
-
 @dataclass
 class Symbol:
     """Base class for things that can be described by property descriptors."""
@@ -152,16 +141,22 @@ class Symbol:
 class ThingMeta(type):
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
-        for attr_name, attr_value in attrs.items():
+        for attr_name, attr_value in copy(attrs).items():
             if attr_name.startswith("__"):
                 continue
             if isinstance(attr_value, Field):
                 if isinstance(attr_value.default_factory, type) and issubclass(
                     attr_value.default_factory, PropertyDescriptor
                 ):
-                    instance = attr_value.default_factory()
+                    instance = attr_value.default_factory(_cls_=cls)
                     instance.create_managed_attribute_for_class(cls, attr_name)
-                    attr_value.default_factory = lambda: instance
+
+                    # Important: remove original annotation so dataclass does not shadow the descriptor
+                    if attr_name in cls.__annotations__:
+                        del cls.__annotations__[attr_name]
+
+                    # Bind the descriptor at the class attribute name so __get__/__set__ are used
+                    setattr(cls, attr_name, instance)
 
 
 @dataclass
@@ -491,6 +486,7 @@ class PropertyDescriptor(Generic[T], Predicate):
 
     _domain_value: Optional[Any] = None
     _range_value: Optional[Any] = None
+    _cls_: Optional[Type] = None
 
     def __set_name__(self, owner, name):
         # Only wire once per owner
@@ -644,6 +640,9 @@ class PropertyDescriptor(Generic[T], Predicate):
         self, domain_value: Optional[Any] = None
     ) -> Iterable[PropertyDescriptor]:
         domain_value = domain_value or self.domain_value
-        for f in fields(domain_value):
-            if issubclass(type(f.default), self.__class__):
-                yield f.default
+        for attr_name in dir(domain_value.__class__):
+            if attr_name.startswith("_"):
+                continue
+            attr_value = getattr(domain_value.__class__, attr_name)
+            if issubclass(type(attr_value), self.__class__):
+                yield attr_value

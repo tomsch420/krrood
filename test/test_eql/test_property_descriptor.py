@@ -50,22 +50,19 @@ def test_descriptor_stores_per_instance_values_and_metadata():
     assert person2.worksForCompany == [Company("SetAttr")]
 
     # Class access returns the descriptor
-    assert isinstance(person2.worksForOrg, WorksFor)
+    assert isinstance(person2.__class__.worksForOrg, WorksFor)
 
-    works_for_org_field = get_field_by_name(Person, "worksForOrg")
     # Domain types and range types
-    assert Person in works_for_org_field.default_factory().domain_types
-    assert Organization in works_for_org_field.default_factory().range_types
+    assert Person in Person.worksForOrg.domain_types
+    assert Organization in Person.worksForOrg.range_types
     # WorksFor on Person and Employee share class variables
-    works_for_company_field = get_field_by_name(Person, "worksForCompany")
     assert (
-        works_for_company_field.default_factory().domain_types == WorksFor.domain_types
+        Person.worksForCompany.domain_types == WorksFor.domain_types
     )
 
 
 def test_nullable_and_name_attributes():
     # The range types contain no None by default
-    works_for_org_field = get_field_by_name(Person, "worksForOrg")
-    wf = works_for_org_field.default_factory()
+    wf = Person.worksForOrg
     assert wf.nullable is False
     assert wf.name == "worksFor"
