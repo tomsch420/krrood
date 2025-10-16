@@ -24,6 +24,6 @@ from .entity import (
 )
 from .rule import refinement, alternative
 from .symbolic import symbolic_mode, From, rule_mode
-from .predicate import predicate, Predicate, HasType, symbol
+from .predicate import predicate, Predicate, HasType, Symbol, Thing
 from .conclusion import Add, Set
 from .failures import MultipleSolutionFound, NoSolutionFound

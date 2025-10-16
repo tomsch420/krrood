@@ -5,9 +5,21 @@ import typing
 from abc import ABC, abstractmethod
 from collections import deque
 from copy import copy
-from dataclasses import dataclass
-from functools import wraps
-from typing import Iterable, List, Type, dataclass_transform, Optional, Callable
+from dataclasses import dataclass, field, Field, fields
+from functools import wraps, cached_property
+from typing import (
+    Iterable,
+    List,
+    Type,
+    dataclass_transform,
+    Optional,
+    Callable,
+    TypeVar,
+    Generic,
+    ClassVar,
+    Set,
+    Any,
+)
 
 from typing_extensions import Callable, Optional, Any, Type, Tuple
 
@@ -29,7 +41,8 @@ from .symbolic import (
     properties_to_expression_tree,
     From,
 )
-from .utils import is_iterable, make_list
+from .typing_utils import get_range_types
+from .utils import is_iterable, make_list, make_set
 from ..class_diagrams import ClassDiagram
 
 
@@ -69,44 +82,58 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     return wrapper
 
 
-@dataclass_transform()
-def symbol(cls):
-    """
-    Class decorator that makes a class construct symbolic Variables when inside
-    a symbolic_rule context.
+def recursive_subclasses(cls_):
+    subclasses = cls_.__subclasses__()
+    for subclass in subclasses:
+        yield from recursive_subclasses(subclass)
+        yield subclass
 
-    When symbolic mode is active, calling the class returns a Variable bound to
-    either a provided domain or to deferred keyword domain sources.
 
-    :param cls: The class to decorate.
-    :return: The same class with a patched ``__new__``.
-    """
-    original_new = cls.__new__ if "__new__" in cls.__dict__ else object.__new__
-    symbols_registry.add(cls)
+class DescriptionMeta(type):
+    """Metaclass that recognizes PropertyDescriptor class attributes and wires backing storage."""
 
-    def symbolic_new(symbolic_cls, *args, **kwargs):
+    def __new__(cls, name, bases, attrs):
+        new_class = super().__new__(cls, name, bases, attrs)
+        for attr_name, attr_value in attrs.items():
+            if attr_value.__class__.__name__ != "PropertyDescriptor":
+                continue
+            attr_value.create_managed_attribute_for_class(new_class, attr_name)
+
+
+@dataclass
+class Symbol:
+    """Base class for things that can be described by property descriptors."""
+
+    def __new__(cls, *args, **kwargs):
+        if in_symbolic_mode():
+            return cls._symbolic_new_(cls, *args, **kwargs)
+        else:
+            instance = instantiate_class_and_update_cache(
+                cls, super().__new__, *args, **kwargs
+            )
+            symbols_registry.add(cls)
+            return instance
+
+    @classmethod
+    def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
-            PredicateType.SubClassOfPredicate
-            if issubclass(symbolic_cls, Predicate)
-            else None
+            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
         )
         node = SymbolicExpression._current_parent_()
         args = bind_first_argument_of_predicate_if_in_query_context(
             node, predicate_type, *args
         )
-        domain, kwargs = update_domain_and_kwargs_from_args(
-            symbolic_cls, *args, **kwargs
-        )
+        domain, kwargs = update_domain_and_kwargs_from_args(cls, *args, **kwargs)
         # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
-        # because they also need to be inferred. So basically this mode is when there is no domain availabe and
+        # because they also need to be inferred. So basically this mode is when there is no domain available and
         # we need to infer new values.
         if not domain and (in_symbolic_mode(EQLMode.Rule) or predicate_type):
             var = Variable(
-                symbolic_cls.__name__,
-                symbolic_cls,
+                cls.__name__,
+                cls,
                 _kwargs_=kwargs,
                 _predicate_type_=predicate_type,
-                _is_indexed_=index_class_cache(symbolic_cls),
+                _is_indexed_=index_class_cache(cls),
             )
             update_query_child_expression_if_in_query_context(node, predicate_type, var)
             return var
@@ -115,34 +142,32 @@ def symbol(cls):
             # the domain is not provided. Then we filter this domain by the provided constraints on the variable
             # attributes given as keyword arguments.
             var, expression = extract_selected_variable_and_expression(
-                symbolic_cls, domain, predicate_type, **kwargs
+                cls, domain, predicate_type, **kwargs
             )
             return An(Entity(expression, [var])) if expression else var
 
-    def hybrid_new(symbolic_cls, *args, **kwargs):
-        if in_symbolic_mode():
-            return symbolic_new(symbolic_cls, *args, **kwargs)
-        else:
-            instance = instantiate_class_and_update_cache(
-                symbolic_cls, original_new, *args, **kwargs
-            )
-            return instance
 
-    cls.__new__ = hybrid_new
-
-    return cls
-
-
-def recursive_subclasses(cls_):
-    subclasses = cls_.__subclasses__()
-    for subclass in subclasses:
-        yield from recursive_subclasses(subclass)
-        yield subclass
+class ThingMeta(type):
+    def __init__(cls, name, bases, attrs):
+        super().__init__(name, bases, attrs)
+        for attr_name, attr_value in attrs.items():
+            if attr_name.startswith("__"):
+                continue
+            if isinstance(attr_value, Field):
+                if isinstance(attr_value.default_factory, type) and issubclass(
+                    attr_value.default_factory, PropertyDescriptor
+                ):
+                    instance = attr_value.default_factory()
+                    instance.create_managed_attribute_for_class(cls, attr_name)
+                    attr_value.default_factory = lambda: instance
 
 
-@symbol
-@dataclass(eq=False, frozen=True)
-class Predicate(ABC):
+@dataclass
+class Thing(Symbol, metaclass=ThingMeta): ...
+
+
+@dataclass(eq=False)
+class Predicate(Symbol, ABC):
     """
     The super predicate class that represents a filtration operation.
     """
@@ -284,7 +309,7 @@ class Predicate(ABC):
         )
 
 
-@dataclass(eq=False, frozen=True)
+@dataclass(eq=False)
 class HasType(Predicate):
     variable: Any
     types_: Type
@@ -304,7 +329,7 @@ class HasType(Predicate):
         return self.types_
 
 
-@dataclass(eq=False, frozen=True)
+@dataclass(eq=False)
 class HasTypes(HasType):
     types_: Tuple[Type, ...]
 
@@ -348,12 +373,12 @@ def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
     for i, arg in enumerate(args):
         if isinstance(arg, From):
             domain = arg
-            if i > 0:
+            if i != 1:
                 raise ValueError(
                     f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
                     f" a domain using `From()`."
                 )
-        else:
+        elif i < (len(args) - 1):
             arg_name = init_args[i + 1]  # to skip `self`
             kwargs[arg_name] = arg
     return domain, kwargs
@@ -444,3 +469,178 @@ def index_class_cache(symbolic_cls: Type) -> bool:
     Determine whether the class cache should be indexed.
     """
     return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
+
+
+T = TypeVar("T")
+
+
+@dataclass
+class PropertyDescriptor(Generic[T], Predicate):
+    """Descriptor storing values on instances while keeping type metadata on the descriptor.
+
+    When used on dataclass fields and combined with Thing, the descriptor
+    injects a hidden dataclass-managed attribute (backing storage) into the owner class
+    and collects domain and range types for introspection.
+    """
+
+    domain_types: ClassVar[Set[Type]] = set()
+    range_types: ClassVar[Set[Type]] = set()
+
+    _domain_value: Optional[Any] = None
+    _range_value: Optional[Any] = None
+
+    def __set_name__(self, owner, name):
+        # Only wire once per owner
+        if not hasattr(owner, self.attr_name):
+            self.create_managed_attribute_for_class(owner, name)
+
+    @property
+    def domain_value(self) -> Optional[Any]:
+        return self._domain_value
+
+    @property
+    def range_value(self) -> Optional[Any]:
+        return self._range_value
+
+    @cached_property
+    def attr_name(self) -> str:
+        return f"_{self.name}_{id(self)}"
+
+    @cached_property
+    def name(self) -> str:
+        name = self.__class__.__name__
+        return name[0].lower() + name[1:]
+
+    @cached_property
+    def nullable(self) -> bool:
+        return type(None) in self.range_types
+
+    def create_managed_attribute_for_class(self, cls: Type, attr_name: str) -> None:
+        """Create hidden dataclass field to store instance values and update type sets."""
+        setattr(
+            cls,
+            self.attr_name,
+            field(
+                default_factory=list,
+                init=False,
+                repr=False,
+                hash=False,
+            ),
+        )
+        # Preserve the declared annotation for the hidden field
+        cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
+
+        self.update_domain_types(cls)
+        self.update_range_types(cls, attr_name)
+
+    def update_domain_types(self, cls: Type) -> None:
+        """
+        Add a class to the domain types if it is not already a subclass of any existing domain type.
+
+        This method is used to keep track of the classes that are valid as values for the property descriptor.
+        It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
+        :param cls: The class to add to the domain types.
+        :return: None
+        """
+        if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
+            return
+        self.domain_types.add(cls)
+
+    def update_range_types(self, cls: Type, attr_name: str) -> None:
+        type_hint = cls.__annotations__[attr_name]
+        if isinstance(type_hint, str):
+            try:
+                type_hint = eval(
+                    type_hint, vars(__import__(cls.__module__, fromlist=["*"]))
+                )
+            except NameError:
+                # Try again with the class under construction injected; if still failing, skip for now.
+                try:
+                    module_globals = vars(
+                        __import__(cls.__module__, fromlist=["*"])
+                    ).copy()
+                    module_globals[cls.__name__] = cls
+                    type_hint = eval(type_hint, module_globals)
+                except NameError:
+                    return
+        for new_type in get_range_types(type_hint):
+            try:
+                is_sub = any(
+                    issubclass(new_type, range_cls) for range_cls in self.range_types
+                )
+            except TypeError:
+                # new_type is not a class (e.g., typing constructs); skip subclass check
+                is_sub = False
+            if is_sub:
+                continue
+            try:
+                self.range_types.add(new_type)
+            except TypeError:
+                # Unhashable or invalid type; ignore
+                continue
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        return getattr(obj, self.attr_name)
+
+    def __set__(self, obj, value):
+        if isinstance(value, PropertyDescriptor):
+            return
+        setattr(obj, self.attr_name, value)
+        self.add_relation(obj, value)
+
+    def _holds_direct(
+        self, domain_value: Optional[Any], range_value: Optional[Any]
+    ) -> bool:
+        """Return True if `range_value` is contained directly in the property of `domain_value`.
+        Also consider sub-properties declared on the domain type.
+        """
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+
+        # If the concrete instance has our backing attribute, check it directly.
+        if hasattr(domain_value, self.attr_name):
+            return self._check_relation_value(
+                attr_name=self.attr_name,
+                domain_value=domain_value,
+                range_value=range_value,
+            )
+        # Otherwise, look through sub-properties of this property.
+        return self._check_relation_holds_for_subclasses_of_property(
+            domain_value=domain_value, range_value=range_value
+        )
+
+    def _check_relation_holds_for_subclasses_of_property(
+        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        for prop_data in self.get_sub_properties(domain_value):
+            if self._check_relation_value(
+                prop_data.attr_name, domain_value=domain_value, range_value=range_value
+            ):
+                return True
+        return False
+
+    def _check_relation_value(
+        self,
+        attr_name: str,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+    ) -> bool:
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        attr_value = getattr(domain_value, attr_name)
+        if make_set(range_value).issubset(make_set(attr_value)):
+            return True
+        # Do not handle transitivity here; it is now centralized in Predicate.__call__
+        return False
+
+    def get_sub_properties(
+        self, domain_value: Optional[Any] = None
+    ) -> Iterable[PropertyDescriptor]:
+        domain_value = domain_value or self.domain_value
+        for f in fields(domain_value):
+            if issubclass(type(f.default), self.__class__):
+                yield f.default

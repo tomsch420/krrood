@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
 from krrood.entity_query_language import symbolic_mode, in_, a
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor, Thing
+from krrood.entity_query_language.predicate import PropertyDescriptor, Symbol
 from krrood.entity_query_language import From
 
 
-@dataclass(frozen=True)
+@dataclass()
 class MemberOf(PropertyDescriptor): ...
 
 
-@dataclass(frozen=True)
+@dataclass()
 class WorksFor(MemberOf): ...
 
 
 @dataclass(unsafe_hash=True)
-class Organization(Thing):
+class Organization(Symbol):
     name: str
 
 
@@ -26,13 +26,13 @@ class Company(Organization): ...
 
 
 @dataclass(eq=False)
-class Person(Thing):
+class Person(Symbol):
     name: str
 
 
 @dataclass(eq=False)
 class Employee(Person):
-    works_for: List[Organization] = WorksFor()
+    works_for: List[Organization] = field(default_factory=lambda: WorksFor())
 
 
 def test_query_on_descriptor_field_filters():
@@ -40,15 +40,16 @@ def test_query_on_descriptor_field_filters():
     org2 = Company("ABC")
 
     people = [
-        Person("John"),
-        Person("Jane"),
+        Employee("John"),
+        Employee("Jane"),
     ]
     people[0].works_for = [org1]
     people[1].works_for = [org2]
 
     with symbolic_mode():
         query = a(
-            person := Person(From(people)), in_(Organization("ACME"), person.works_for)
+            person := Employee(From(people)),
+            in_(Organization("ACME"), person.works_for),
         )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]
@@ -67,7 +68,7 @@ def test_query_on_descriptor_inheritance():
 
     with symbolic_mode():
         query = a(
-            person := Person(From(people)), MemberOf(person, Organization("ACME"))
+            person := Employee(From(people)), MemberOf(person, Organization("ACME"))
         )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]

@@ -37,7 +37,8 @@ from dataset.semantic_world_like_classes import (
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
     world = handles_and_containers_world
     world2 = doors_and_drawers_world
-    query = an(entity(body := let(type_=Body, domain=world.bodies)))
+    with symbolic_mode():
+        query = an(entity(body := let(type_=Body, domain=world.bodies)))
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
 
 
@@ -756,7 +757,7 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
     """
     world = handles_and_containers_world
 
-    @dataclass(frozen=True)
+    @dataclass()
     class IsHandle(Predicate):
         body: Body
 

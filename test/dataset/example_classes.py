@@ -9,7 +9,7 @@ from typing import Dict, Any, Sequence
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import List, Optional, Type
 
-from krrood.entity_query_language import symbol
+from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.dao import DataAccessObject, AlternativeMapping, T
 
 
@@ -20,25 +20,28 @@ class Element(Enum):
 
 
 # Check that Types attributes work
-@symbol
+
+
 @dataclass
-class PositionTypeWrapper:
+class PositionTypeWrapper(Symbol):
     position_type: Type[Position]
 
 
 # check that flat classes work
-@symbol
+
+
 @dataclass
-class Position:
+class Position(Symbol):
     x: float
     y: float
     z: float
 
 
 # check that classes with optional values work
-@symbol
+
+
 @dataclass
-class Orientation:
+class Orientation(Symbol):
     x: float
     y: float
     z: float
@@ -46,64 +49,70 @@ class Orientation:
 
 
 # check that one to one relationship work
-@symbol
+
+
 @dataclass
-class Pose:
+class Pose(Symbol):
     position: Position
     orientation: Orientation
 
 
 # check that one to many relationship to built in types and non built in types work
-@symbol
+
+
 @dataclass
-class Positions:
+class Positions(Symbol):
     positions: List[Position]
     some_strings: List[str]
 
 
-@symbol
 @dataclass
 class PositionsSubclassWithAnotherPosition(Positions):
     positions2: Position
 
 
 # check that one to many relationships work where the many side is of the same type
-@symbol
+
+
 @dataclass
-class DoublePositionAggregator:
+class DoublePositionAggregator(Symbol):
     positions1: List[Position]
     positions2: List[Position]
 
 
 # check that inheritance works
-@symbol
+
+
 @dataclass
 class Position4D(Position):
     w: float
 
 
 # check that inheriting from an inherited class works
-@symbol
+
+
 @dataclass
 class Position5D(Position4D):
     v: float
 
 
 # check with tree like classes
-@symbol
+
+
 @dataclass
-class Node:
+class Node(Symbol):
     parent: Optional[Node] = None
 
 
-@symbol
+@dataclass
 class NotMappedParent: ...
 
 
 # check that enum references work
-@symbol
+
+
 @dataclass
-class Atom(NotMappedParent):
+class Atom(NotMappedParent, Symbol):
     element: Element
     type: int
     charge: float
@@ -128,16 +137,14 @@ class Bowl(PhysicalObject):
 #    pass
 
 
-@symbol
 @dataclass
-class OriginalSimulatedObject:
+class OriginalSimulatedObject(Symbol):
     concept: PhysicalObject
     placeholder: float = field(default=0)
 
 
-@symbol
 @dataclass
-class ObjectAnnotation:
+class ObjectAnnotation(Symbol):
     """
     Class for checking how classes that are explicitly mapped interact with original types.
     """
@@ -145,13 +152,11 @@ class ObjectAnnotation:
     object_reference: OriginalSimulatedObject
 
 
-@symbol
 @dataclass
-class KinematicChain:
+class KinematicChain(Symbol):
     name: str
 
 
-@symbol
 @dataclass
 class Torso(KinematicChain):
     """
@@ -164,42 +169,38 @@ class Torso(KinematicChain):
     """
 
 
-@symbol
 @dataclass
-class Parent:
+class Parent(Symbol):
     name: str
 
 
-@symbol
 @dataclass
 class ChildMapped(Parent):
     attribute1: int
 
 
-@symbol
 @dataclass
 class ChildNotMapped(Parent):
     attribute2: int
     unparseable: Dict[int, int]
 
 
-@symbol
 @dataclass
-class Entity:
+class Entity(Symbol):
     name: str
     attribute_that_shouldnt_appear_at_all: float = 0
 
 
 # Define a derived class
-@symbol
+
+
 @dataclass
 class DerivedEntity(Entity):
     description: str = "Default description"
 
 
-@symbol
 @dataclass
-class EntityAssociation:
+class EntityAssociation(Symbol):
     """
     Class for checking how classes that are explicitly mapped interact with original types.
     """
@@ -209,7 +210,8 @@ class EntityAssociation:
 
 
 # Define an explicit mapping DAO that maps to the base entity class
-@symbol
+
+
 @dataclass
 class CustomEntity(AlternativeMapping[Entity]):
     overwritten_name: str
@@ -243,21 +245,18 @@ class ConceptType(TypeDecorator):
         return getattr(module, class_name)()
 
 
-@symbol
 @dataclass
-class Reference:
+class Reference(Symbol):
     value: int = 0
     backreference: Optional[Backreference] = None
 
 
-@symbol
 @dataclass
-class Backreference:
+class Backreference(Symbol):
     unmappable: Dict[Any, int]
     reference: Reference = None
 
 
-@symbol
 @dataclass
 class BackreferenceMapping(AlternativeMapping[Backreference]):
     values: List[int]
@@ -271,23 +270,20 @@ class BackreferenceMapping(AlternativeMapping[Backreference]):
         return Backreference({v: v for v in self.values}, self.reference)
 
 
-@symbol
 @dataclass
-class AlternativeMappingAggregator:
+class AlternativeMappingAggregator(Symbol):
     entities1: List[Entity]
     entities2: List[Entity]
 
 
-@symbol
 @dataclass
-class ItemWithBackreference:
+class ItemWithBackreference(Symbol):
     value: int = 0
     container: ContainerGeneration = None
 
 
-@symbol
 @dataclass
-class ContainerGeneration:
+class ContainerGeneration(Symbol):
     items: List[ItemWithBackreference]
 
     def __post_init__(self):
@@ -295,13 +291,11 @@ class ContainerGeneration:
             item.container = self
 
 
-@symbol
 @dataclass
-class Vector:
+class Vector(Symbol):
     x: float
 
 
-@symbol
 @dataclass
 class VectorMapped(AlternativeMapping[Vector]):
     x: float
@@ -314,30 +308,30 @@ class VectorMapped(AlternativeMapping[Vector]):
         return Vector(self.x)
 
 
-@symbol
 @dataclass
-class Rotation:
+class Rotation(Symbol):
     angle: float
 
 
-@symbol
 @dataclass
 class RotationMapped(AlternativeMapping[Rotation]):
+
     angle: float
 
     @classmethod
     def create_instance(cls, obj: T):
         return RotationMapped(obj.angle)
 
+    def create_from_dao(self) -> T:
+        pass
 
-@symbol
+
 @dataclass
-class Transformation:
+class Transformation(Symbol):
     vector: Vector
     rotation: Rotation
 
 
-@symbol
 @dataclass
 class TransformationMapped(AlternativeMapping[Transformation]):
     vector: Vector
@@ -351,28 +345,24 @@ class TransformationMapped(AlternativeMapping[Transformation]):
         return Transformation(self.vector, self.rotation)
 
 
-@symbol
 @dataclass
-class Shape:
+class Shape(Symbol):
     name: str
     origin: Transformation
 
 
-@symbol
 @dataclass
-class Shapes:
+class Shapes(Symbol):
     shapes: List[Shape]
 
 
-@symbol
 @dataclass
-class MoreShapes:
+class MoreShapes(Symbol):
     shapes: List[Shapes]
 
 
-@symbol
 @dataclass
-class VectorsWithProperty:
+class VectorsWithProperty(Symbol):
     _vectors: List[Vector]
 
     @property
@@ -380,7 +370,6 @@ class VectorsWithProperty:
         return self._vectors
 
 
-@symbol
 @dataclass
 class VectorsWithPropertyMapped(AlternativeMapping[VectorsWithProperty]):
     vectors: List[Vector]
@@ -393,20 +382,17 @@ class VectorsWithPropertyMapped(AlternativeMapping[VectorsWithProperty]):
         return VectorsWithProperty(self.vectors)
 
 
-@symbol
 @dataclass
-class ParentBase:
+class ParentBase(Symbol):
     name: str
     value: int
 
 
-@symbol
 @dataclass
 class ChildBase(ParentBase):
     pass
 
 
-@symbol
 @dataclass
 class ParentBaseMapping(AlternativeMapping[ParentBase]):
     name: str
@@ -421,7 +407,6 @@ class ParentBaseMapping(AlternativeMapping[ParentBase]):
         return ParentBase(self.name, 0)
 
 
-@symbol
 @dataclass
 class ChildBaseMapping(ParentBaseMapping, AlternativeMapping[ChildBase]):
 
@@ -435,8 +420,7 @@ class ChildBaseMapping(ParentBaseMapping, AlternativeMapping[ChildBase]):
         return ChildBase(self.name, 0)
 
 
-@symbol
 @dataclass
-class PrivateDefaultFactory:
+class PrivateDefaultFactory(Symbol):
     public_value: int = 0
     _private_list: List[int] = field(default_factory=list)

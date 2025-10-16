@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor, Thing
+from krrood.entity_query_language.predicate import PropertyDescriptor, Thing
+from test_class_diagram.test_wrapped_field import get_field_by_name
 
 
 # Concrete descriptor used in tests
-@dataclass(frozen=True)
+@dataclass
 class WorksFor(PropertyDescriptor): ...
 
 
@@ -23,13 +24,13 @@ class Company(Organization): ...
 @dataclass
 class Person(Thing):
     name: str
-    worksForOrg: List[Organization] = WorksFor()
-    worksForCompany: List[Company] = WorksFor()
+    worksForOrg: List[Organization] = field(default_factory=WorksFor)
+    worksForCompany: List[Company] = field(default_factory=WorksFor)
 
 
 @dataclass
 class Employee(Person):
-    worksForOrg: List[Organization] = WorksFor()
+    worksForOrg: List[Organization] = field(default_factory=WorksFor)
 
 
 def test_descriptor_stores_per_instance_values_and_metadata():
@@ -49,13 +50,17 @@ def test_descriptor_stores_per_instance_values_and_metadata():
     assert person2.worksForCompany == [Company("SetAttr")]
 
     # Class access returns the descriptor
-    assert isinstance(person2.__class__.worksForOrg, WorksFor)
+    assert isinstance(person2.worksForOrg, WorksFor)
 
+    works_for_org_field = get_field_by_name(Person, "worksForOrg")
     # Domain types and range types
-    assert Person in Person.worksForOrg.domain_types
-    assert Organization in person.__class__.worksForOrg.range_types
+    assert Person in works_for_org_field.default_factory().domain_types
+    assert Organization in works_for_org_field.default_factory().range_types
     # WorksFor on Person and Employee share class variables
-    assert person2.__class__.worksForCompany.domain_types == WorksFor.domain_types
+    works_for_company_field = get_field_by_name(Person, "worksForCompany")
+    assert (
+        works_for_company_field.default_factory().domain_types == WorksFor.domain_types
+    )
 
 
 def test_nullable_and_name_attributes():

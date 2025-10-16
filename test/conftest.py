@@ -1,11 +1,9 @@
 import os
 from dataclasses import is_dataclass
-from enum import Enum
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
-from sqlalchemy.types import TypeDecorator
 
 from krrood.entity_query_language import Predicate
 from krrood.entity_query_language.symbolic import Variable
@@ -38,6 +36,7 @@ def generate_sqlalchemy_interface():
 
     all_classes = set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
+    all_classes |= set(recursive_subclasses(Symbol))
     all_classes = {c for c in all_classes if is_dataclass(c)}
     all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
     all_classes -= {NotMappedParent, ChildNotMapped}

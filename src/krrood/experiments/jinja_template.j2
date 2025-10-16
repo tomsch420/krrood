@@ -5,17 +5,17 @@ Generated using custom converter
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Union, Any
 
-from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
+from ..entity_query_language.predicate import Thing, PropertyDescriptor
 
 
 # Property descriptor classes (object properties)
 {% for prop_name in properties_order %}
 {% set prop = properties[prop_name] %}
 {% if prop.type == 'ObjectProperty' %}
-@dataclass(frozen=True)
+@dataclass
 class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     {% if prop.label or prop.comment %}
     """{{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %}\n\n{% endif %}{{ prop.comment if prop.comment else '' }}"""
@@ -53,7 +53,7 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
     {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
     {% endif %}
     {% if prop.type == 'ObjectProperty' %}
-    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = {{ prop.descriptor_name }}()
+    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = field(default_factory=lambda: {{ prop.descriptor_name }}())
     {% else %}
     {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = None
     {% endif %}
