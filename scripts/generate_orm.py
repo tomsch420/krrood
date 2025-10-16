@@ -9,13 +9,17 @@ from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module, recursive_subclasses
 from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
 import krrood.entity_query_language.orm.model
+import krrood.entity_query_language.symbol_graph
 
 
 # get all classes in the dataset modules
 Predicate.build_symbol_graph()
 symbol_graph = Predicate.symbol_graph
-Predicate.symbol_graph.to_dot("symbol_graph.svg", format="svg", graph_type="type")
 all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+all_classes |= {am.original_class() for am in recursive_subclasses(AlternativeMapping)}
+all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
+
+# remove classes that don't need persistence
 all_classes -= {HasType, HasTypes}
 # remove classes that are not dataclasses
 all_classes = {c for c in all_classes if is_dataclass(c)}

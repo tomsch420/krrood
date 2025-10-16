@@ -4,7 +4,10 @@ from __future__ import annotations
 from sqlalchemy import Column, ForeignKey, Integer, String, Float, Boolean, DateTime, Enum, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
+import builtins
+import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
+import krrood.entity_query_language.symbol_graph
 import typing
 
 
@@ -25,6 +28,55 @@ class PredicateDAO(Base, DataAccessObject[krrood.entity_query_language.predicate
 
 
 
+
+
+
+class PredicateRelationDAO(Base, DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateRelation]):
+
+    __tablename__ = 'PredicateRelationDAO'
+
+    database_id: Mapped[builtins.int] = mapped_column(Integer, primary_key=True, use_existing_column=True)
+
+
+    inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+
+    source_id: Mapped[int] = mapped_column(ForeignKey('WrappedInstanceDAO.database_id', use_alter=True), nullable=True, use_existing_column=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey('WrappedInstanceDAO.database_id', use_alter=True), nullable=True, use_existing_column=True)
+    predicate_id: Mapped[int] = mapped_column(ForeignKey('PredicateDAO.database_id', use_alter=True), nullable=True, use_existing_column=True)
+    symbolgraphmappingdao_predicate_relations_id: Mapped[typing.Optional[builtins.int]] = mapped_column(ForeignKey('SymbolGraphMappingDAO.database_id', use_alter=True), nullable=True, use_existing_column=True)
+
+    source: Mapped[WrappedInstanceDAO] = relationship('WrappedInstanceDAO', uselist=False, foreign_keys=[source_id], post_update=True)
+    target: Mapped[WrappedInstanceDAO] = relationship('WrappedInstanceDAO', uselist=False, foreign_keys=[target_id], post_update=True)
+    predicate: Mapped[PredicateDAO] = relationship('PredicateDAO', uselist=False, foreign_keys=[predicate_id], post_update=True)
+
+
+class SymbolGraphMappingDAO(Base, DataAccessObject[krrood.entity_query_language.orm.model.SymbolGraphMapping]):
+
+    __tablename__ = 'SymbolGraphMappingDAO'
+
+    database_id: Mapped[builtins.int] = mapped_column(Integer, primary_key=True, use_existing_column=True)
+
+
+
+
+
+    instances: Mapped[typing.List[WrappedInstanceDAO]] = relationship('WrappedInstanceDAO', foreign_keys='[WrappedInstanceDAO.symbolgraphmappingdao_instances_id]', post_update=True)
+    predicate_relations: Mapped[typing.List[PredicateRelationDAO]] = relationship('PredicateRelationDAO', foreign_keys='[PredicateRelationDAO.symbolgraphmappingdao_predicate_relations_id]', post_update=True)
+
+
+class WrappedInstanceDAO(Base, DataAccessObject[krrood.entity_query_language.symbol_graph.WrappedInstance]):
+
+    __tablename__ = 'WrappedInstanceDAO'
+
+    database_id: Mapped[builtins.int] = mapped_column(Integer, primary_key=True, use_existing_column=True)
+
+
+    index: Mapped[typing.Optional[builtins.int]] = mapped_column(use_existing_column=True)
+    inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+
+    symbolgraphmappingdao_instances_id: Mapped[typing.Optional[builtins.int]] = mapped_column(ForeignKey('SymbolGraphMappingDAO.database_id', use_alter=True), nullable=True, use_existing_column=True)
 
 
 

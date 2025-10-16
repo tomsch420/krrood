@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field, fields
 from functools import cached_property
-from operator import index
 from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
 
 
