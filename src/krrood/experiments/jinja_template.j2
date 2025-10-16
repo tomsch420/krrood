@@ -53,7 +53,7 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
     {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
     {% endif %}
     {% if prop.type == 'ObjectProperty' %}
-    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = field(default_factory=lambda: {{ prop.descriptor_name }}())
+    {{ prop.field_name }}: List[{{ prop.object_range_hint }}] = field(default_factory={{ prop.descriptor_name }})
     {% else %}
     {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = None
     {% endif %}

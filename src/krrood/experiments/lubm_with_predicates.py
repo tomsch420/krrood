@@ -186,15 +186,15 @@ class UnivBenchOntology(Thing):
 class Organization(UnivBenchOntology):
     """organization"""
     # is affiliated with
-    affiliated_organization_of: List[Organization] = field(default_factory=lambda: AffiliatedOrganizationOf())
+    affiliated_organization_of: List[Organization] = field(default_factory=AffiliatedOrganizationOf)
     # is affiliated with
-    affiliate_of: List[Person] = field(default_factory=lambda: AffiliateOf())
+    affiliate_of: List[Person] = field(default_factory=AffiliateOf)
     # has as a member
-    member: List[Person] = field(default_factory=lambda: Member())
+    member: List[Person] = field(default_factory=Member)
     # publishes
-    org_publication: List[Publication] = field(default_factory=lambda: OrgPublication())
+    org_publication: List[Publication] = field(default_factory=OrgPublication)
     # is part of
-    sub_organization_of: List[Organization] = field(default_factory=lambda: SubOrganizationOf())
+    sub_organization_of: List[Organization] = field(default_factory=SubOrganizationOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -204,15 +204,15 @@ class Organization(UnivBenchOntology):
 class Person(UnivBenchOntology):
     """person"""
     # is being advised by
-    advisor: List[Professor] = field(default_factory=lambda: Advisor())
+    advisor: List[Professor] = field(default_factory=Advisor)
     # has a degree from
-    degree_from: List[University] = field(default_factory=lambda: DegreeFrom())
+    degree_from: List[University] = field(default_factory=DegreeFrom)
     # has a doctoral degree from
-    doctoral_degree_from: List[University] = field(default_factory=lambda: DoctoralDegreeFrom())
+    doctoral_degree_from: List[University] = field(default_factory=DoctoralDegreeFrom)
     # has a masters degree from
-    masters_degree_from: List[University] = field(default_factory=lambda: MastersDegreeFrom())
+    masters_degree_from: List[University] = field(default_factory=MastersDegreeFrom)
     # has an undergraduate degree from
-    undergraduate_degree_from: List[University] = field(default_factory=lambda: UndergraduateDegreeFrom())
+    undergraduate_degree_from: List[University] = field(default_factory=UndergraduateDegreeFrom)
     # is age
     age: Optional[int] = None
     # can be reached at
@@ -230,11 +230,11 @@ class Person(UnivBenchOntology):
 class Publication(UnivBenchOntology):
     """publication"""
     # was written by
-    publication_author: List[Person] = field(default_factory=lambda: PublicationAuthor())
+    publication_author: List[Person] = field(default_factory=PublicationAuthor)
     # was written on
     publication_date: Optional[str] = None
     # is about
-    publication_research: List[Research] = field(default_factory=lambda: PublicationResearch())
+    publication_research: List[Research] = field(default_factory=PublicationResearch)
 
     def __hash__(self):
         return hash(id(self))
@@ -244,7 +244,7 @@ class Publication(UnivBenchOntology):
 class Schedule(UnivBenchOntology):
     """schedule"""
     # lists as a course
-    listed_course: List[Course] = field(default_factory=lambda: ListedCourse())
+    listed_course: List[Course] = field(default_factory=ListedCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -308,7 +308,7 @@ class Department(Organization):
 class Director(Person):
     """director"""
     # is the head of
-    head_of: List[Program] = field(default_factory=lambda: HeadOfProgram())
+    head_of: List[Program] = field(default_factory=HeadOfProgram)
 
     def __hash__(self):
         return hash(id(self))
@@ -318,7 +318,7 @@ class Director(Person):
 class Employee(Person):
     """Employee"""
     # Works For
-    works_for: List[Organization] = field(default_factory=lambda: WorksForOrganization())
+    works_for: List[Organization] = field(default_factory=WorksForOrganization)
 
     def __hash__(self):
         return hash(id(self))
@@ -328,7 +328,7 @@ class Employee(Person):
 class GraduateStudent(Person):
     """graduate student"""
     # is taking
-    takes_course: List[GraduateCourse] = field(default_factory=lambda: TakesCourseGraduateCourse())
+    takes_course: List[GraduateCourse] = field(default_factory=TakesCourseGraduateCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -374,7 +374,7 @@ class Research(Work):
 class ResearchAssistant(Person):
     """university research assistant"""
     # Works For
-    works_for: List[ResearchGroup] = field(default_factory=lambda: WorksForResearchGroup())
+    works_for: List[ResearchGroup] = field(default_factory=WorksForResearchGroup)
 
     def __hash__(self):
         return hash(id(self))
@@ -384,7 +384,7 @@ class ResearchAssistant(Person):
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
-    research_project: List[Research] = field(default_factory=lambda: ResearchProject())
+    research_project: List[Research] = field(default_factory=ResearchProject)
 
     def __hash__(self):
         return hash(id(self))
@@ -394,7 +394,7 @@ class ResearchGroup(Organization):
 class Software(Publication):
     """software program"""
     # is documented in
-    software_documentation: List[Publication] = field(default_factory=lambda: SoftwareDocumentation())
+    software_documentation: List[Publication] = field(default_factory=SoftwareDocumentation)
     # is version
     software_version: Optional[str] = None
 
@@ -415,7 +415,7 @@ class Specification(Publication):
 class Student(Person):
     """student"""
     # is taking
-    takes_course: List[Course] = field(default_factory=lambda: TakesCourseCourse())
+    takes_course: List[Course] = field(default_factory=TakesCourseCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -425,7 +425,7 @@ class Student(Person):
 class TeachingAssistant(Person):
     """university teaching assistant"""
     # is a teaching assistant for
-    teaching_assistant_of: List[Course] = field(default_factory=lambda: TeachingAssistantOf())
+    teaching_assistant_of: List[Course] = field(default_factory=TeachingAssistantOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -435,7 +435,7 @@ class TeachingAssistant(Person):
 class University(Organization):
     """university"""
     # has as an alumnus
-    has_alumnus: List[Person] = field(default_factory=lambda: HasAlumnus())
+    has_alumnus: List[Person] = field(default_factory=HasAlumnus)
 
     def __hash__(self):
         return hash(id(self))
@@ -472,7 +472,7 @@ class ConferencePaper(Article):
 class Faculty(Employee):
     """faculty member"""
     # teaches
-    teacher_of: List[Course] = field(default_factory=lambda: TeacherOf())
+    teacher_of: List[Course] = field(default_factory=TeacherOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -582,7 +582,7 @@ class AssociateProfessor(Professor):
 class Chair(Professor):
     """chair"""
     # is the head of
-    head_of: List[Department] = field(default_factory=lambda: HeadOfDepartment())
+    head_of: List[Department] = field(default_factory=HeadOfDepartment)
 
     def __hash__(self):
         return hash(id(self))
@@ -592,7 +592,7 @@ class Chair(Professor):
 class Dean(Professor):
     """dean"""
     # is the head of
-    head_of: List[College] = field(default_factory=lambda: HeadOfCollege())
+    head_of: List[College] = field(default_factory=HeadOfCollege)
 
     def __hash__(self):
         return hash(id(self))
