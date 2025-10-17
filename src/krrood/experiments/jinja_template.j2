@@ -14,7 +14,7 @@ from ..entity_query_language.property_descriptor import Thing, PropertyDescripto
 # Property descriptor classes (object properties)
 {% for prop_name in properties_order %}
 {% set prop = properties[prop_name] %}
-{% if prop.type == 'ObjectProperty' %}
+{% if prop.type == 'ObjectProperty' and not prop.is_specialized%}
 @dataclass
 class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     {% if prop.label or prop.comment %}

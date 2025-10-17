@@ -117,16 +117,6 @@ class MastersDegreeFrom(DegreeFrom):
 
 
 @dataclass
-class TakesCourseCourse(TakesCourse):
-    """is taking"""
-
-
-@dataclass
-class TakesCourseGraduateCourse(TakesCourse):
-    """is taking"""
-
-
-@dataclass
 class UndergraduateDegreeFrom(DegreeFrom):
     """has an undergraduate degree from"""
 
@@ -138,31 +128,6 @@ class WorksFor(MemberOf):
 
 @dataclass
 class HeadOf(WorksFor):
-    """is the head of"""
-
-
-@dataclass
-class WorksForOrganization(WorksFor):
-    """Works For"""
-
-
-@dataclass
-class WorksForResearchGroup(WorksFor):
-    """Works For"""
-
-
-@dataclass
-class HeadOfCollege(HeadOf):
-    """is the head of"""
-
-
-@dataclass
-class HeadOfDepartment(HeadOf):
-    """is the head of"""
-
-
-@dataclass
-class HeadOfProgram(HeadOf):
     """is the head of"""
 
 
@@ -209,10 +174,16 @@ class Person(UnivBenchOntology):
     degree_from: Set[University] = field(default_factory=DegreeFrom)
     # has a doctoral degree from
     doctoral_degree_from: Set[University] = field(default_factory=DoctoralDegreeFrom)
+    # is the head of
+    head_of: Set[Organization] = field(default_factory=HeadOf)
     # has a masters degree from
     masters_degree_from: Set[University] = field(default_factory=MastersDegreeFrom)
+    # member of
+    member_of: Set[Organization] = field(default_factory=MemberOf)
     # has an undergraduate degree from
     undergraduate_degree_from: Set[University] = field(default_factory=UndergraduateDegreeFrom)
+    # Works For
+    works_for: Set[Organization] = field(default_factory=WorksFor)
     # is age
     age: Optional[int] = None
     # can be reached at
@@ -308,7 +279,7 @@ class Department(Organization):
 class Director(Person):
     """director"""
     # is the head of
-    head_of: Set[Program] = field(default_factory=HeadOfProgram)
+    head_of: Set[Program] = field(default_factory=HeadOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -317,8 +288,10 @@ class Director(Person):
 @dataclass(eq=False)
 class Employee(Person):
     """Employee"""
+    # is the head of
+    head_of: Set[Organization] = field(default_factory=HeadOf)
     # Works For
-    works_for: Set[Organization] = field(default_factory=WorksForOrganization)
+    works_for: Set[Organization] = field(default_factory=WorksFor)
 
     def __hash__(self):
         return hash(id(self))
@@ -328,7 +301,7 @@ class Employee(Person):
 class GraduateStudent(Person):
     """graduate student"""
     # is taking
-    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourseGraduateCourse)
+    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -373,8 +346,10 @@ class Research(Work):
 @dataclass(eq=False)
 class ResearchAssistant(Person):
     """university research assistant"""
+    # is the head of
+    head_of: Set[Organization] = field(default_factory=HeadOf)
     # Works For
-    works_for: Set[ResearchGroup] = field(default_factory=WorksForResearchGroup)
+    works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
 
     def __hash__(self):
         return hash(id(self))
@@ -415,7 +390,7 @@ class Specification(Publication):
 class Student(Person):
     """student"""
     # is taking
-    takes_course: Set[Course] = field(default_factory=TakesCourseCourse)
+    takes_course: Set[Course] = field(default_factory=TakesCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -582,7 +557,7 @@ class AssociateProfessor(Professor):
 class Chair(Professor):
     """chair"""
     # is the head of
-    head_of: Set[Department] = field(default_factory=HeadOfDepartment)
+    head_of: Set[Department] = field(default_factory=HeadOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -592,7 +567,7 @@ class Chair(Professor):
 class Dean(Professor):
     """dean"""
     # is the head of
-    head_of: Set[College] = field(default_factory=HeadOfCollege)
+    head_of: Set[College] = field(default_factory=HeadOf)
 
     def __hash__(self):
         return hash(id(self))

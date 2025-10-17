@@ -191,6 +191,7 @@ class OwlToPythonConverter:
             "inverses": sorted(set(inverses)),
             "inverse_of": inverse_of,
             "is_transitive": is_transitive,
+            "is_specialized": False,
         }
 
     def _uri_to_python_name(self, uri) -> str:
@@ -478,13 +479,13 @@ class OwlToPythonConverter:
                         "field_name": base.get("field_name"),
                         "descriptor_name": self._to_pascal_case(
                             base.get("descriptor_name", prop_name)
-                        )
-                        + self._to_pascal_case(rng_name),
+                        ),  # + self._to_pascal_case(rng_name),
                         "superproperties": [prop_name],
                         "inverses": [],
                         "inverse_of": None,
                         "is_transitive": base.get("is_transitive", False),
                         "declared_domains": [cls_name],
+                        "is_specialized": True,
                     }
                     specialized_props[spec_key] = spec
 
@@ -671,7 +672,11 @@ class OwlToPythonConverter:
             declared: List[str] = []
             for prop_name, p in properties_copy.items():
                 declared_domains = p.get("declared_domains", [])
-                applies_to_cls = cls_name in declared_domains
+                domains = p.get("domains", [])
+                if declared_domains:
+                    applies_to_cls = cls_name in declared_domains
+                else:
+                    applies_to_cls = cls_name in domains
                 if not applies_to_cls:
                     continue
                 # If any ancestor is also a declared domain, skip on this class
@@ -684,6 +689,10 @@ class OwlToPythonConverter:
                             skip = True
                             break
                 if not skip:
+                    if p["is_specialized"]:
+                        for super_prop in p.get("superproperties", []):
+                            if super_prop in declared:
+                                declared.remove(super_prop)
                     declared.append(prop_name)
             cls_info["declared_properties"] = declared
 
@@ -693,17 +702,20 @@ class OwlToPythonConverter:
         # Note: we deliberately do not reorder by object-range dependencies to avoid
         # violating base-class ordering and creating oscillations. Forward references
         # in type hints are handled by Thing/PropertyDescriptor patches.
-
+        property_classes = {
+            k: v for k, v in properties_copy.items() if not v["is_specialized"]
+        }
         properties_order = self._topological_order(
-            properties_copy, dep_key="superproperties"
+            property_classes,
+            dep_key="superproperties",
         )
 
         # Precompute whether inverse target is defined prior in the descriptor order
         index_map = {name: idx for idx, name in enumerate(properties_order)}
-        for name, info in properties_copy.items():
+        for name, info in property_classes.items():
             inv = info.get("inverse_of")
             prior = False
-            if inv and inv in properties_copy:
+            if inv and inv in property_classes:
                 prior = index_map.get(inv, 10**9) < index_map.get(name, 10**9)
             info["inverse_target_is_prior"] = prior
 
