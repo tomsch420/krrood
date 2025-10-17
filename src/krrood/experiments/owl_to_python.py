@@ -24,7 +24,9 @@ class OwlToPythonConverter:
         path = owl_file_path
         # If a relative path was provided and does not exist relative to CWD, try repository resources
         if not os.path.isabs(path) and not os.path.exists(path):
-            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+            repo_root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..")
+            )
             candidate = os.path.join(repo_root, "resources", os.path.basename(path))
             if os.path.exists(candidate):
                 path = candidate

@@ -32,6 +32,9 @@ from krrood.experiments.lubm_with_predicates import (
     Advisor,
     HasAlumnus,
     TakesCourse,
+    TakesCourseGraduateCourse,
+    TakesCourseCourse,
+    WorksForOrganization,
 )
 from krrood.experiments.owl_instances_loader import load_instances
 
@@ -41,7 +44,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q1 = a(
             x := GraduateStudent(),
-            TakesCourse(x, GraduateCourse(name="GraduateCourse0")),
+            TakesCourseGraduateCourse(x, GraduateCourse(name="GraduateCourse0")),
         )
 
     # 2
@@ -79,7 +82,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q7 = a(
             x := Student(),
-            TakesCourse(x, y := Course()),
+            TakesCourseCourse(x, y := Course()),
             TeacherOf(AssociateProfessor(name="AssociateProfessor0"), y),
         )
 
@@ -97,12 +100,15 @@ def get_eql_queries() -> List[ResultQuantifier]:
             x := Student(),
             Advisor(x, y := Faculty()),
             TeacherOf(y, z := Course()),
-            TakesCourse(x, z),
+            TakesCourseCourse(x, z),
         )
 
     # 10
     with symbolic_mode():
-        q10 = a(x := Student(), TakesCourse(x, GraduateCourse(name="GraduateCourse0")))
+        q10 = a(
+            x := Student(),
+            TakesCourseGraduateCourse(x, GraduateCourse(name="GraduateCourse0")),
+        )
 
     # 11
     with symbolic_mode():
@@ -115,7 +121,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q12 = a(
             x := Chair(),
-            WorksFor(x, y := Department()),
+            WorksForOrganization(x, y := Department()),
             SubOrganizationOf(y, University(name="University0")),
         )
 
