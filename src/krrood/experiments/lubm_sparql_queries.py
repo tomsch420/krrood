@@ -9,8 +9,8 @@ PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X	
 WHERE
 {?X rdf:type ub:GraduateStudent .
-  ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse0>}
-
+  ?X ub:takesCourse
+<http://www.Department0.University0.edu/GraduateCourse0>}
     """
 
 query_2_sparql = """
@@ -27,12 +27,13 @@ WHERE
   """
 
 query_3_sparql = """
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X
 WHERE
 {?X rdf:type ub:Publication .
-  ?X ub:publicationAuthor <http://www.Department0.University0.edu/AssistantProfessor0>}
+  ?X ub:publicationAuthor 
+        <http://www.Department0.University0.edu/AssistantProfessor0>}
 """
 
 query_4_sparql = """
@@ -86,7 +87,7 @@ WHERE
 """
 
 query_9_sparql = """
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X ?Y ?Z
 WHERE
@@ -96,17 +97,20 @@ WHERE
   ?X ub:advisor ?Y .
   ?Y ub:teacherOf ?Z .
   ?X ub:takesCourse ?Z}
+  
 """
 
 query_10_sparql = """
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X
 WHERE
 {?X rdf:type ub:Student .
-  ?X ub:takesCourse <http://www.Department0.University0.edu/GraduateCourse0>}
+  ?X ub:takesCourse
+<http://www.Department0.University0.edu/GraduateCourse0>}
 """
-query_11_sparql = """PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+query_11_sparql = """
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X
 WHERE
@@ -114,14 +118,14 @@ WHERE
   ?X ub:subOrganizationOf <http://www.University0.edu>}
 """
 query_12_sparql = """
-PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X ?Y
 WHERE
 {?X rdf:type ub:Chair .
   ?Y rdf:type ub:Department .
   ?X ub:worksFor ?Y .
-  ?Y ub:subOrganizationOf <http://www.University0.edu>}
+  ?Y ub:subOrganizationOf <http://www.University0.edu>} 
   """
 
 query_13_sparql = """
@@ -130,13 +134,15 @@ PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X
 WHERE
 {?X rdf:type ub:Person .
-  <http://www.University0.edu> ub:hasAlumnus ?X}"""
+  <http://www.University0.edu> ub:hasAlumnus ?X}
+    """
 
 query_14_sparql = """
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>
 SELECT ?X
-WHERE {?X rdf:type ub:UndergraduateStudent}"""
+WHERE {?X rdf:type ub:UndergraduateStudent}
+"""
 
 sparql_queries = [
     query_1_sparql,
