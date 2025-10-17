@@ -288,8 +288,6 @@ class Director(Person):
 @dataclass(eq=False)
 class Employee(Person):
     """Employee"""
-    # is the head of
-    head_of: Set[Organization] = field(default_factory=HeadOf)
     # Works For
     works_for: Set[Organization] = field(default_factory=WorksFor)
 
@@ -346,8 +344,6 @@ class Research(Work):
 @dataclass(eq=False)
 class ResearchAssistant(Person):
     """university research assistant"""
-    # is the head of
-    head_of: Set[Organization] = field(default_factory=HeadOf)
     # Works For
     works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
 

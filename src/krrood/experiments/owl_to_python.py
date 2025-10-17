@@ -677,6 +677,8 @@ class OwlToPythonConverter:
                     applies_to_cls = cls_name in declared_domains
                 else:
                     applies_to_cls = cls_name in domains
+                    if applies_to_cls:
+                        declared_domains = domains
                 if not applies_to_cls:
                     continue
                 # If any ancestor is also a declared domain, skip on this class
