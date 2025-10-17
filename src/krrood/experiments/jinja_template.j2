@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Union, Any
 
-from ..entity_query_language.predicate import Thing, PropertyDescriptor
+from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
 
 # Property descriptor classes (object properties)

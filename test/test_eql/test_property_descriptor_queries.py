@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from krrood.entity_query_language.entity import symbolic_mode, in_, a
-from krrood.entity_query_language.predicate import PropertyDescriptor, Thing
+from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor
 from krrood.entity_query_language.symbolic import From
 
 

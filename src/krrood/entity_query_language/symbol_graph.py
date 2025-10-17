@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field, fields
 from functools import cached_property
+from weakref import WeakKeyDictionary
+
 from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
 
 
@@ -74,12 +76,27 @@ class SymbolGraph:
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
         default_factory=PyDiGraph
     )
+    _instance_index: WeakKeyDictionary = field(
+        default_factory=WeakKeyDictionary, init=False, repr=False
+    )
+    _relation_index: WeakKeyDictionary[type, set[tuple[int, int]]] = field(
+        default_factory=WeakKeyDictionary, init=False, repr=False
+    )
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
             wrapped_instance = WrappedInstance(wrapped_instance)
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
+        self._instance_index[wrapped_instance.instance] = wrapped_instance
+
+    def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
+        return self._instance_index.get(instance)
+
+    def clear(self):
+        self._type_graph.clear()
+        self._instance_graph.clear()
+        self._instance_index.clear()
 
     # Adapters to align with ORM alternative mapping expectations
     def add_instance(self, wrapped_instance: WrappedInstance) -> None:
@@ -98,6 +115,13 @@ class SymbolGraph:
         """
         self.add_edge(relation)
 
+    def has_edge(
+        self, source: WrappedInstance, target: WrappedInstance, predicate_type: Type
+    ) -> bool:
+        return (source.index, target.index) in self._relation_index.get(
+            predicate_type, set()
+        )
+
     def add_edge(self, relation: PredicateRelation) -> None:
         source_out_edges = self._instance_graph.out_edges(relation.source.index)
         for _, child_idx, e in source_out_edges:
@@ -109,6 +133,11 @@ class SymbolGraph:
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
+        if type(relation.predicate) not in self._relation_index:
+            self._relation_index[type(relation.predicate)] = set()
+        self._relation_index[type(relation.predicate)].add(
+            (relation.source.index, relation.target.index)
+        )
 
     def relations(self) -> Iterable[PredicateRelation]:
         yield from self._instance_graph.edges()
@@ -116,12 +145,6 @@ class SymbolGraph:
     @property
     def wrapped_instances(self) -> List[WrappedInstance]:
         return self._instance_graph.nodes()
-
-    def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
-        for wrapped_instance in self.wrapped_instances:
-            if wrapped_instance.instance is instance:
-                return wrapped_instance
-        return None
 
     def get_outgoing_neighbors_with_edge_type(
         self,
@@ -151,10 +174,6 @@ class SymbolGraph:
             self._instance_graph.get_node_data(idx)
             for idx in self._instance_graph.neighbors(wrapped_instance.index)
         )
-
-    def clear(self):
-        self._type_graph.clear()
-        self._instance_graph.clear()
 
     def to_dot(
         self,

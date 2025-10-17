@@ -8,7 +8,7 @@ import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
 # Import PropertyDescriptor to correctly detect descriptor class attributes
-from krrood.entity_query_language.predicate import PropertyDescriptor
+from krrood.entity_query_language.property_descriptor import PropertyDescriptor
 
 
 class OwlInstancesRegistry:
@@ -90,7 +90,10 @@ def _collect_model_metadata(model_module) -> Tuple[
         # Collect descriptor classes available in the module for quick lookup by name
         if isinstance(obj, type):
             try:
-                if issubclass(obj, PropertyDescriptor) and obj is not PropertyDescriptor:
+                if (
+                    issubclass(obj, PropertyDescriptor)
+                    and obj is not PropertyDescriptor
+                ):
                     descriptor_by_name[obj.__name__] = obj
             except TypeError:
                 # obj is not a class we can check issubclass on

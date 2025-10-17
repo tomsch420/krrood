@@ -4,6 +4,7 @@ from collections import UserDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
+from line_profiler import profile
 
 from . import logger
 from .enums import EQLMode, PredicateType
@@ -968,6 +969,7 @@ class Variable(CanBehaveLikeAVariable[T]):
                     self._child_vars_[k] = Literal(v, name=k)
             self._update_children_(*self._child_vars_.values())
 
+    @profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1075,6 +1077,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         }
         yield from generate_combinations(kwargs_generators)
 
+    @profile
     def _yield_from_cache_or_instantiate_new_values_(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1094,6 +1097,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         if (not retrieved) and (self._is_inferred_ or self._predicate_type_):
             yield from self._instantiate_new_values_and_yield_results_(kwargs, sources)
 
+    @profile
     def _instantiate_new_values_and_yield_results_(
         self,
         kwargs: Dict[str, Dict[int, HashedValue]],
@@ -1161,6 +1165,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         """
         return get_cache_keys_for_class_(self._cache_, self._type_)
 
+    @profile
     def _process_output_and_update_values_(
         self, function_output: Any, **kwargs
     ) -> Iterable[Dict[int, HashedValue]]:

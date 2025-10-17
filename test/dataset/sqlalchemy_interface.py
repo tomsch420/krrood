@@ -18,6 +18,7 @@ import builtins
 import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
+import krrood.entity_query_language.property_descriptor
 import krrood.entity_query_language.symbol_graph
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
@@ -767,7 +768,9 @@ class PredicateDAO(
 
 class PropertyDescriptorDAO(
     PredicateDAO,
-    DataAccessObject[krrood.entity_query_language.predicate.PropertyDescriptor],
+    DataAccessObject[
+        krrood.entity_query_language.property_descriptor.PropertyDescriptor
+    ],
 ):
 
     __tablename__ = "PropertyDescriptorDAO"
@@ -923,7 +926,7 @@ class SymbolGraphMappingDAO(
 
 
 class ThingDAO(
-    SymbolDAO, DataAccessObject[krrood.entity_query_language.predicate.Thing]
+    SymbolDAO, DataAccessObject[krrood.entity_query_language.property_descriptor.Thing]
 ):
 
     __tablename__ = "ThingDAO"

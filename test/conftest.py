@@ -9,6 +9,7 @@ import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
+from krrood.entity_query_language.property_descriptor import PropertyDescriptor
 from krrood.entity_query_language.symbolic import Variable
 from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
@@ -120,6 +121,7 @@ def cleanup_after_test():
         c.clear()
     Variable._cache_.clear()
     Predicate.symbol_graph.clear()
+    PropertyDescriptor.clear_subproperties_cache()
 
 
 @pytest.fixture(scope="session")
