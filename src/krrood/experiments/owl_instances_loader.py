@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import fields, is_dataclass
 from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
@@ -109,11 +110,7 @@ def _collect_model_metadata(model_module) -> Tuple[
         for attr in dir(cls):
             if attr.startswith("_"):
                 continue
-            try:
-                val = getattr(cls, attr)
-            except Exception:
-                # Accessor may raise; skip conservatively
-                continue
+            val = getattr(cls, attr)
             if isinstance(val, PropertyDescriptor):
                 # Map snake local predicate name to the class attribute name
                 pred_map.setdefault(attr, attr)
@@ -222,6 +219,9 @@ def load_instances(
         subj_cls = type(subj)
         # Determine the appropriate field name on the subject
         field_name = field_by_predicate_local.get(subj_cls, {}).get(snake)
+        if not field_name:
+            if snake in [f.name for f in fields(subj_cls)]:
+                field_name = snake
 
         if isinstance(o, Literal):
             if field_name and hasattr(subj, field_name):
@@ -239,11 +239,11 @@ def load_instances(
         obj = ensure_instance(o) if isinstance(o, URIRef) else None
         if field_name and hasattr(subj, field_name):
             lst = getattr(subj, field_name, None)
-            if isinstance(lst, list) and obj is not None:
-                lst.append(obj)
+            if isinstance(lst, set) and obj is not None:
+                lst.add(obj)
                 continue
+        base_desc = descriptor_base_for(snake)
         # Try inverse assignment if direct field does not exist on subject
-        base_desc = descriptor_base_for(pred_local)
         if base_desc is not None and obj is not None:
             # Find inverse_of on the base descriptor class (attribute may be missing)
             inverse = getattr(base_desc, "inverse_of", None)
@@ -259,9 +259,9 @@ def load_instances(
         if (
             field_name
             and hasattr(subj, field_name)
-            and isinstance(getattr(subj, field_name), list)
+            and isinstance(getattr(subj, field_name), set)
             and obj is not None
         ):
-            getattr(subj, field_name).append(obj)
+            getattr(subj, field_name).add(obj)
 
     return registry

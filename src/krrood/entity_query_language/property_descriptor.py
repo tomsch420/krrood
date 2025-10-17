@@ -104,7 +104,7 @@ class PropertyDescriptor(Generic[T], Predicate):
             cls,
             self.attr_name,
             field(
-                default_factory=list,
+                default_factory=set,
                 init=False,
                 repr=False,
                 hash=False,

@@ -6,7 +6,7 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Union, Any, Set
 
 from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
@@ -186,15 +186,15 @@ class UnivBenchOntology(Thing):
 class Organization(UnivBenchOntology):
     """organization"""
     # is affiliated with
-    affiliated_organization_of: List[Organization] = field(default_factory=AffiliatedOrganizationOf)
+    affiliated_organization_of: Set[Organization] = field(default_factory=AffiliatedOrganizationOf)
     # is affiliated with
-    affiliate_of: List[Person] = field(default_factory=AffiliateOf)
+    affiliate_of: Set[Person] = field(default_factory=AffiliateOf)
     # has as a member
-    member: List[Person] = field(default_factory=Member)
+    member: Set[Person] = field(default_factory=Member)
     # publishes
-    org_publication: List[Publication] = field(default_factory=OrgPublication)
+    org_publication: Set[Publication] = field(default_factory=OrgPublication)
     # is part of
-    sub_organization_of: List[Organization] = field(default_factory=SubOrganizationOf)
+    sub_organization_of: Set[Organization] = field(default_factory=SubOrganizationOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -204,15 +204,15 @@ class Organization(UnivBenchOntology):
 class Person(UnivBenchOntology):
     """person"""
     # is being advised by
-    advisor: List[Professor] = field(default_factory=Advisor)
+    advisor: Set[Professor] = field(default_factory=Advisor)
     # has a degree from
-    degree_from: List[University] = field(default_factory=DegreeFrom)
+    degree_from: Set[University] = field(default_factory=DegreeFrom)
     # has a doctoral degree from
-    doctoral_degree_from: List[University] = field(default_factory=DoctoralDegreeFrom)
+    doctoral_degree_from: Set[University] = field(default_factory=DoctoralDegreeFrom)
     # has a masters degree from
-    masters_degree_from: List[University] = field(default_factory=MastersDegreeFrom)
+    masters_degree_from: Set[University] = field(default_factory=MastersDegreeFrom)
     # has an undergraduate degree from
-    undergraduate_degree_from: List[University] = field(default_factory=UndergraduateDegreeFrom)
+    undergraduate_degree_from: Set[University] = field(default_factory=UndergraduateDegreeFrom)
     # is age
     age: Optional[int] = None
     # can be reached at
@@ -230,11 +230,11 @@ class Person(UnivBenchOntology):
 class Publication(UnivBenchOntology):
     """publication"""
     # was written by
-    publication_author: List[Person] = field(default_factory=PublicationAuthor)
+    publication_author: Set[Person] = field(default_factory=PublicationAuthor)
     # was written on
     publication_date: Optional[str] = None
     # is about
-    publication_research: List[Research] = field(default_factory=PublicationResearch)
+    publication_research: Set[Research] = field(default_factory=PublicationResearch)
 
     def __hash__(self):
         return hash(id(self))
@@ -244,7 +244,7 @@ class Publication(UnivBenchOntology):
 class Schedule(UnivBenchOntology):
     """schedule"""
     # lists as a course
-    listed_course: List[Course] = field(default_factory=ListedCourse)
+    listed_course: Set[Course] = field(default_factory=ListedCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -308,7 +308,7 @@ class Department(Organization):
 class Director(Person):
     """director"""
     # is the head of
-    head_of: List[Program] = field(default_factory=HeadOfProgram)
+    head_of: Set[Program] = field(default_factory=HeadOfProgram)
 
     def __hash__(self):
         return hash(id(self))
@@ -318,7 +318,7 @@ class Director(Person):
 class Employee(Person):
     """Employee"""
     # Works For
-    works_for: List[Organization] = field(default_factory=WorksForOrganization)
+    works_for: Set[Organization] = field(default_factory=WorksForOrganization)
 
     def __hash__(self):
         return hash(id(self))
@@ -328,7 +328,7 @@ class Employee(Person):
 class GraduateStudent(Person):
     """graduate student"""
     # is taking
-    takes_course: List[GraduateCourse] = field(default_factory=TakesCourseGraduateCourse)
+    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourseGraduateCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -374,7 +374,7 @@ class Research(Work):
 class ResearchAssistant(Person):
     """university research assistant"""
     # Works For
-    works_for: List[ResearchGroup] = field(default_factory=WorksForResearchGroup)
+    works_for: Set[ResearchGroup] = field(default_factory=WorksForResearchGroup)
 
     def __hash__(self):
         return hash(id(self))
@@ -384,7 +384,7 @@ class ResearchAssistant(Person):
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
-    research_project: List[Research] = field(default_factory=ResearchProject)
+    research_project: Set[Research] = field(default_factory=ResearchProject)
 
     def __hash__(self):
         return hash(id(self))
@@ -394,7 +394,7 @@ class ResearchGroup(Organization):
 class Software(Publication):
     """software program"""
     # is documented in
-    software_documentation: List[Publication] = field(default_factory=SoftwareDocumentation)
+    software_documentation: Set[Publication] = field(default_factory=SoftwareDocumentation)
     # is version
     software_version: Optional[str] = None
 
@@ -415,7 +415,7 @@ class Specification(Publication):
 class Student(Person):
     """student"""
     # is taking
-    takes_course: List[Course] = field(default_factory=TakesCourseCourse)
+    takes_course: Set[Course] = field(default_factory=TakesCourseCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -425,7 +425,7 @@ class Student(Person):
 class TeachingAssistant(Person):
     """university teaching assistant"""
     # is a teaching assistant for
-    teaching_assistant_of: List[Course] = field(default_factory=TeachingAssistantOf)
+    teaching_assistant_of: Set[Course] = field(default_factory=TeachingAssistantOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -435,7 +435,7 @@ class TeachingAssistant(Person):
 class University(Organization):
     """university"""
     # has as an alumnus
-    has_alumnus: List[Person] = field(default_factory=HasAlumnus)
+    has_alumnus: Set[Person] = field(default_factory=HasAlumnus)
 
     def __hash__(self):
         return hash(id(self))
@@ -472,7 +472,7 @@ class ConferencePaper(Article):
 class Faculty(Employee):
     """faculty member"""
     # teaches
-    teacher_of: List[Course] = field(default_factory=TeacherOf)
+    teacher_of: Set[Course] = field(default_factory=TeacherOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -582,7 +582,7 @@ class AssociateProfessor(Professor):
 class Chair(Professor):
     """chair"""
     # is the head of
-    head_of: List[Department] = field(default_factory=HeadOfDepartment)
+    head_of: Set[Department] = field(default_factory=HeadOfDepartment)
 
     def __hash__(self):
         return hash(id(self))
@@ -592,7 +592,7 @@ class Chair(Professor):
 class Dean(Professor):
     """dean"""
     # is the head of
-    head_of: List[College] = field(default_factory=HeadOfCollege)
+    head_of: Set[College] = field(default_factory=HeadOfCollege)
 
     def __hash__(self):
         return hash(id(self))
