@@ -96,20 +96,23 @@ class OwlToPythonConverter:
             if isinstance(superclass, rdflib.URIRef):
                 superclasses.append(self._uri_to_python_name(superclass))
 
-        # If no explicit superclasses, try owl:intersectionOf list items
-        if not superclasses:
-            for coll in self.graph.objects(class_uri, OWL.intersectionOf):
-                # Traverse RDF list
-                node = coll
-                while node and node != RDF.nil:
-                    first = self.graph.value(node, RDF.first)
-                    if isinstance(first, rdflib.URIRef):
-                        superclasses.append(self._uri_to_python_name(first))
-                    # move to next
-                    node = self.graph.value(node, RDF.rest)
-                # only process first intersectionOf occurrence
-                if superclasses:
-                    break
+        role_taker: List[Dict[str, str]] = []
+        for coll in self.graph.objects(class_uri, OWL.intersectionOf):
+            # Traverse RDF list
+            node = coll
+            while node and node != RDF.nil:
+                first = self.graph.value(node, RDF.first)
+                if isinstance(first, rdflib.URIRef):
+                    role_cls_name = self._uri_to_python_name(first)
+                    snake_cls_name = self._to_snake_case(role_cls_name)
+                    role_taker.append(
+                        {"cls_name": role_cls_name, "field_name": snake_cls_name}
+                    )
+                # move to next
+                node = self.graph.value(node, RDF.rest)
+            # only process first intersectionOf occurrence
+            # if role_taker:
+            #     break
 
         # De-duplicate while preserving order
         seen = set()
@@ -128,6 +131,7 @@ class OwlToPythonConverter:
             "superclasses": unique_superclasses or ["Thing"],
             "label": label,
             "comment": self._get_comment(class_uri),
+            "role_taker": role_taker,
         }
 
     def _extract_property_info(self, property_uri) -> Dict:
