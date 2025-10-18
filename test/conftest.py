@@ -1,4 +1,5 @@
 import os
+import logging
 from dataclasses import is_dataclass
 
 import pytest
@@ -66,7 +67,8 @@ def generate_sqlalchemy_interface():
         alternative_mappings=recursive_subclasses(AlternativeMapping),
     )
 
-    instance.make_all_tables()
+    with logging.getLogger().disabled:
+        instance.make_all_tables()
 
     file_path = os.path.join(
         os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
