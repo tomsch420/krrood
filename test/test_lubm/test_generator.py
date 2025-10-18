@@ -11,8 +11,10 @@ from krrood.entity_query_language.entity import (
     set_of,
     or_,
     and_,
+    a,
+    flatten,
 )
-from krrood.entity_query_language.predicate import Predicate, HasType
+from krrood.entity_query_language.predicate import Predicate, HasType, HasTypes
 from krrood.entity_query_language.symbolic import symbolic_mode
 from krrood.experiments.generator import UniversityDataGenerator
 from krrood.experiments.lubm import (
@@ -149,23 +151,20 @@ def query_7(specific_professor):
     """
     with symbolic_mode():
         student = let(Student)
-        course = let(Course)
+        course = let(Course, domain=specific_professor.teaches_courses)
+        graduate_student = a(
+            gs := GraduateStudent(), contains(gs.takes_graduate_courses, course)
+        )
+        undergraduate_student = a(
+            us := UndergraduateStudent(), contains(us.takes_courses, course)
+        )
         query = an(
             set_of(
                 (student, course),
-                contains(specific_professor.teaches_courses, course),
-                or_(
-                    and_(
-                        HasType(student, GraduateStudent),
-                        contains(student.takes_graduate_courses, course),
-                    ),
-                    and_(
-                        HasType(student, UndergraduateStudent),
-                        contains(student.takes_courses, course),
-                    ),
-                ),
+                or_(graduate_student, undergraduate_student),
             )
         )
+    query.visualize()
     return query
 
 
@@ -280,7 +279,7 @@ def test_ood_querying(university_data):
         query_4(university),
         query_5(university),
         query_6(),
-        # query_7(specific_professor),
+        query_7(specific_professor),
         query_8(university),
         query_9(),
         query_10(),

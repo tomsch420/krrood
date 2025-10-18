@@ -222,7 +222,7 @@ def let(
     return var
 
 
-def and_(*conditions):
+def and_(*conditions: Union[SymbolicExpression, bool, Predicate]):
     """
     Logical conjunction of conditions.
 
