@@ -20,6 +20,7 @@ class HashedValue(Generic[T]):
     :ivar value: The wrapped value.
     :ivar id_: The stable identifier used for hashing and equality.
     """
+
     value: T
     id_: Optional[int] = field(default=None)
 
@@ -57,16 +58,23 @@ class HashedIterable(Generic[T]):
     A wrapper for an iterable that hashes its items.
     This is useful for ensuring that the items in the iterable are unique and can be used as keys in a dictionary.
     """
+
     iterable: Iterable[HashedValue[T]] = field(default_factory=list)
     values: Dict[int, HashedValue[T]] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.iterable and not isinstance(self.iterable, HashedIterable):
-            self.iterable = (HashedValue(v) if not isinstance(v, HashedValue) else v for v in self.iterable)
+            self.iterable = (
+                HashedValue(v) if not isinstance(v, HashedValue) else v
+                for v in self.iterable
+            )
 
     def set_iterable(self, iterable):
         if iterable and not isinstance(iterable, HashedIterable):
-            self.iterable = (HashedValue(v) if not isinstance(v, HashedValue) else v for v in iterable)
+            self.iterable = (
+                HashedValue(v) if not isinstance(v, HashedValue) else v
+                for v in iterable
+            )
 
     def get(self, key: int, default: Any) -> HashedValue[T]:
         return self.values.get(key, default)
@@ -82,7 +90,11 @@ class HashedIterable(Generic[T]):
         for v in iterable:
             self.add(v)
 
-    def map(self, func: Callable[[HashedValue], HashedValue], ids: Optional[List[int]] = None) -> HashedIterable[T]:
+    def map(
+        self,
+        func: Callable[[HashedValue], HashedValue],
+        ids: Optional[List[int]] = None,
+    ) -> HashedIterable[T]:
         if ids:
             func = lambda v: func(v) if v.id_ in ids else v
         return HashedIterable(map(func, self))
@@ -92,7 +104,7 @@ class HashedIterable(Generic[T]):
 
     @property
     def unwrapped_values(self) -> List[T]:
-        return [v.value for v in self.values.values()]
+        return [v.value for v in self]
 
     @property
     def first_value(self) -> HashedValue:
@@ -135,7 +147,9 @@ class HashedIterable(Generic[T]):
 
     def union(self, other):
         if not isinstance(other, HashedIterable):
-            other = HashedIterable(values={HashedValue(v).id_: HashedValue(v) for v in make_list(other)})
+            other = HashedIterable(
+                values={HashedValue(v).id_: HashedValue(v) for v in make_list(other)}
+            )
         all_keys = self.values.keys() | other.values.keys()
         all_values = {k: self.values.get(k, other.values.get(k)) for k in all_keys}
         return HashedIterable(values=all_values)
@@ -191,7 +205,10 @@ class HashedIterable(Generic[T]):
         keys_are_equal = self.values.keys() == other.values.keys()
         if not keys_are_equal:
             return False
-        values_are_equal = all(my_v == other_v for my_v, other_v in zip(self.values.values(), other.values.values()))
+        values_are_equal = all(
+            my_v == other_v
+            for my_v, other_v in zip(self.values.values(), other.values.values())
+        )
         return values_are_equal
 
     def __bool__(self):
