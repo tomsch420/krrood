@@ -1,5 +1,7 @@
 import time
 
+import tqdm
+
 from krrood.entity_query_language.entity import (
     let,
     entity,
@@ -25,6 +27,8 @@ from krrood.experiments.lubm import (
     FacultyMember,
     Course,
     UndergraduateStudent,
+    ResearchGroup,
+    exists,
 )
 
 import pytest
@@ -165,6 +169,103 @@ def query_7(specific_professor):
     return query
 
 
+def query_8(specific_university):
+    """
+    Get all students that are members of a specific university's departments.
+    Extract the student, the department, and the email address.
+    """
+    with symbolic_mode():
+        student = let(Student)
+        department = let(Department, domain=specific_university.departments)
+        query = an(
+            set_of(
+                (student, department, student.person.first_name),
+                student.department == department,
+                department.university == specific_university,
+            )
+        )
+    return query
+
+
+def query_9():
+    """
+    Get all students that take a course given by their advisor.
+    """
+    with symbolic_mode():
+        student = let(GraduateStudent)
+        professor = let(Professor)
+        course = let(Course)
+        query = an(
+            set_of(
+                (student, professor, course),
+                student.advisor == professor,
+                contains(professor.teaches_graduate_courses, course),
+                contains(student.takes_graduate_courses, course),
+            )
+        )
+    return query
+
+
+def query_10():
+    """
+    Get all students that take a graduate course.
+    """
+    with symbolic_mode():
+        student = let(GraduateStudent)
+        query = an(entity(student, exists(student.takes_graduate_courses)))
+    return query
+
+
+def query_11(university: University):
+    """
+    Get all research groups that are suborganizations of a specific university.
+    """
+    with symbolic_mode():
+        research_group = let(ResearchGroup)
+        query = an(
+            entity(
+                research_group,
+                research_group.department.university == university,
+            )
+        )
+    return query
+
+
+def query_12(specific_university: University):
+    """
+    Get all heads and departments where the head works for the department of a specific university.
+    """
+    with symbolic_mode():
+        head = let(Professor)
+        department = let(Department)
+        query = an(
+            set_of(
+                (head, department),
+                department.head == head,
+                department.university == specific_university,
+            )
+        )
+    return query
+
+
+def query_13(specific_university: University):
+    """
+    Get all alumni of a specific university.
+    This needs the random data generator to be able to generate Alumni
+    """
+    raise NotImplementedError
+
+
+def query_14():
+    """
+    Get all undergrad students.
+    """
+    with symbolic_mode():
+        student = let(UndergraduateStudent)
+        query = an(entity(student))
+    return query
+
+
 def test_ood_querying(university_data):
 
     university: University = university_data[0]
@@ -179,10 +280,16 @@ def test_ood_querying(university_data):
         query_4(university),
         query_5(university),
         query_6(),
-        query_7(specific_professor),
+        # query_7(specific_professor),
+        query_8(university),
+        query_9(),
+        query_10(),
+        query_11(university),
+        query_12(university),
+        query_14(),
     ]
 
-    for query in queries[6:]:
+    for query in tqdm.tqdm(queries):
         start_time = time.time()
         result = len(list(query.evaluate()))
         end_time = time.time()

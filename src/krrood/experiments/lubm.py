@@ -2,14 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, TypeVar
+from typing import List, Optional, TypeVar, Iterable, Any
 
-from ..entity_query_language.predicate import Symbol
+from ..entity_query_language.predicate import Symbol, Predicate, predicate
 
 # Type variable for the base role
 TFacultyRole = TypeVar("TFacultyRole", bound="FacultyMember")
 TStudentRole = TypeVar("TStudentRole", bound="Student")
 TProfessorRole = TypeVar("TProfessorRole", bound="Professor")
+
+
+@predicate
+def exists(value: Iterable[Symbol]) -> bool:
+    return any(value)
+
 
 # --- Enums for data pools ---
 
