@@ -125,7 +125,9 @@ class UniversityDataGenerator:
 
     # Generated collections
     all_universities: List[University] = field(default_factory=list, init=False)
-    all_external_universities: List[University] = field(default_factory=list, init=False)
+    all_external_universities: List[University] = field(
+        default_factory=list, init=False
+    )
     all_faculty: List[FacultyMember] = field(default_factory=list, init=False)
     all_students: List[Student] = field(default_factory=list, init=False)
 
@@ -430,16 +432,6 @@ class UniversityDataGenerator:
             research_assistants.append(ra)
 
     def generate(self) -> List[University]:
-        """Main generation function."""
-        # Ensure configuration and seeding are applied
-        if self.config is None:
-            self.config = GeneratorConfiguration()
-        if self.seed is not None:
-            self.config.seed = self.seed
-        random.seed(self.config.seed or 42)
-        if self.university_count is None:
-            self.university_count = self._randint_from_range(self.config.universities)
-
         print("Generating external universities for degree sources...")
         self._create_degree_universities()
 

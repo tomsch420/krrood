@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import List, Optional, Type, TypeVar
 from enum import Enum
-import random
-import uuid
+from typing import List, Optional, TypeVar
+
+from ..entity_query_language.predicate import Symbol
 
 # Type variable for the base role
 TFacultyRole = TypeVar("TFacultyRole", bound="FacultyMember")
@@ -11,6 +12,7 @@ TStudentRole = TypeVar("TStudentRole", bound="Student")
 TProfessorRole = TypeVar("TProfessorRole", bound="Professor")
 
 # --- Enums for data pools ---
+
 
 class DepartmentName(Enum):
     """Canonical department names used across the generator."""
@@ -96,14 +98,14 @@ class PublicationNoun(Enum):
 
 
 @dataclass
-class Organization:
+class Organization(Symbol):
     """Base class for organizational units."""
 
     name: str
 
 
 @dataclass
-class Publication:
+class Publication(Symbol):
     """Represents a research publication."""
 
     title: str
@@ -111,11 +113,11 @@ class Publication:
 
 
 @dataclass
-class Course:
+class Course(Symbol):
     """Represents an undergraduate course."""
 
     name: str
-    department: Optional[Department] = field(default=None)
+    department: Optional[Department] = field(default=None, repr=False)
 
 
 @dataclass
@@ -130,14 +132,14 @@ class ResearchGroup(Organization):
     """Represents a sub-organization for research within a Department."""
 
     lead: Optional[Professor] = field(default=None)
-    department: Optional[Department] = field(default=None)
+    department: Optional[Department] = field(default=None, repr=False)
 
 
 # --- Person & Base Roles (Composition) ---
 
 
 @dataclass
-class Person:
+class Person(Symbol):
     """Base entity representing an individual."""
 
     first_name: str
@@ -146,20 +148,22 @@ class Person:
 
 
 @dataclass
-class FacultyMember:
+class FacultyMember(Symbol):
     """
     Base role for academic staff. Composed with a Person entity.
     This separation allows a Person to hold multiple, distinct roles (SRP).
     """
 
     person: Person
-    undergraduate_degree_from: "University"
-    masters_degree_from: "University"
-    doctoral_degree_from: "University"
-    publications: List[Publication] = field(default_factory=list)
-    teaches_courses: List[Course] = field(default_factory=list)
-    teaches_graduate_courses: List[GraduateCourse] = field(default_factory=list)
-    department: Optional["Department"] = field(default=None)
+    undergraduate_degree_from: "University" = field(repr=False)
+    masters_degree_from: "University" = field(repr=False)
+    doctoral_degree_from: "University" = field(repr=False)
+    publications: List[Publication] = field(default_factory=list, repr=False)
+    teaches_courses: List[Course] = field(default_factory=list, repr=False)
+    teaches_graduate_courses: List[GraduateCourse] = field(
+        default_factory=list, repr=False
+    )
+    department: Optional["Department"] = field(default=None, repr=False)
 
 
 @dataclass
@@ -204,7 +208,7 @@ class Lecturer(FacultyMember):
 
 
 @dataclass
-class Student:
+class Student(Symbol):
     """Base role for all students. Composed with a Person entity."""
 
     person: Person
@@ -232,7 +236,7 @@ class GraduateStudent(Student):
 
 
 @dataclass
-class TeachingAssistant:
+class TeachingAssistant(Symbol):
     """A specific temporary role for GraduateStudents."""
 
     graduate_student: GraduateStudent
@@ -240,7 +244,7 @@ class TeachingAssistant:
 
 
 @dataclass
-class ResearchAssistant:
+class ResearchAssistant(Symbol):
     """A specific temporary role for GraduateStudents."""
 
     graduate_student: GraduateStudent
@@ -288,6 +292,11 @@ class Department(Organization):
         return (
             self.full_professors + self.associate_professors + self.assistant_professors
         )
+
+    @property
+    def courses(self) -> List[Course]:
+        """Convenience property for all courses."""
+        return self.graduate_courses + self.undergraduate_courses
 
 
 @dataclass

@@ -1,37 +1,40 @@
+import time
+
+from krrood.entity_query_language.entity import let, entity, an, contains, the
+from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.symbolic import symbolic_mode
 from krrood.experiments.generator import UniversityDataGenerator
+from krrood.experiments.lubm import University, Student, GraduateStudent, GraduateCourse
 
 
 def test_generator():
+    Predicate.build_symbol_graph()
     generator = UniversityDataGenerator(university_count=1, seed=123)
     universities = generator.generate()
 
-    if universities:
-        main_university = universities[0]
-        first_dept = main_university.departments[0]
+    university: University = universities[0]
 
-        print("\n--- Detailed Look at First Department ---")
-        print(f"Department: {first_dept.name}")
-        print(f"Faculty Count: {len(first_dept.all_faculty)}")
-        print(f"UG Student Count: {len(first_dept.undergraduate_students)}")
-        print(f"Grad Student Count: {len(first_dept.graduate_students)}")
+    course_name = university.departments[0].graduate_courses[0]
 
-        # Example of an Undergraduate Student
-        if first_dept.undergraduate_students:
-            ug = first_dept.undergraduate_students[0]
-            print(
-                f"\nExample UG Student ({ug.person.first_name} {ug.person.last_name}):"
-            )
-            print(
-                f"  - Advisor: {ug.advisor.person.last_name if ug.advisor else 'None'}"
-            )
-            print(f"  - Takes {len(ug.takes_courses)} courses.")
+    with symbolic_mode():
+        graduate_student = let(GraduateStudent)
+        graduate_course = let(GraduateCourse)
 
-        # Example of a Full Professor
-        if first_dept.full_professors:
-            prof = first_dept.full_professors[0]
-            print(
-                f"\nExample Full Professor ({prof.person.first_name} {prof.person.last_name}):"
+        specific_graduate_course = an(
+            entity(graduate_course),
+            graduate_course == course_name,
+        )
+
+        q1 = an(
+            entity(
+                graduate_student,
+                contains(
+                    graduate_student.takes_graduate_courses, specific_graduate_course
+                ),
             )
-            print(f"  - Publications: {len(prof.publications)}")
-            print(f"  - Advises UG: {len(prof.advises_undergraduate_students)}")
-            print(f"  - Teaches UG Courses: {[c.name for c in prof.teaches_courses]}")
+        )
+
+    start_time = time.time()
+    q1.evaluate()
+    end_time = time.time()
+    print(end_time - start_time)
