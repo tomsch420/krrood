@@ -77,6 +77,6 @@ def test_ood_querying(university_data):
     for query in queries[1:]:
         start_time = time.time()
         result = query.evaluate()
-        print(([r.departments for r in result]))
+        # print(len(list(result)))
         end_time = time.time()
         print(end_time - start_time)

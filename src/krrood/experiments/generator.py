@@ -103,6 +103,15 @@ class GeneratorConfiguration:
     The probability that a graduate student is a research assistant.
     """
 
+    # Unified configuration to control undergrad degree source for graduate students
+    probability_grad_undergrad_same_university: float = 0.5
+    """
+    Probability that a graduate student has their undergraduate degree from the same university that their department belongs to.
+    If 0.0, degrees are never sourced from main universities (external only). If > 0.0, main
+    universities are allowed and this value is the probability of picking the current university.
+    Value should be between 0.0 and 1.0.
+    """
+
     seed: Optional[int] = None
     """
     A seed for the random number generator.
@@ -165,6 +174,34 @@ class UniversityDataGenerator:
             self._get_random_university() for _ in range(count)
         ]
 
+    def _pick_undergrad_university(self, current_university: University) -> University:
+        """Selects a university for a graduate student's undergraduate degree.
+
+        Prefers the current university with a configurable probability and,
+        otherwise, selects from a pool consisting of external universities and,
+        when allowed by probability > 0, main universities as well.
+        """
+        # Clamp probability to [0.0, 1.0]
+        prob = max(
+            0.0, min(1.0, self.config.probability_grad_undergrad_same_university)
+        )
+
+        # If probability triggers, return the same university
+        if prob > 0.0 and random.random() < prob:
+            return current_university
+
+        # Build the selection pool
+        pool: List[University] = list(self.all_external_universities)
+        # If prob == 0.0, we do not allow degrees from main universities
+        if prob > 0.0:
+            pool.extend(self.all_universities)
+
+        # Fallbacks if pool is empty (should not happen in normal flow)
+        if not pool:
+            return current_university
+
+        return random.choice(pool)
+
     # --- Generation Logic ---
 
     def _generate_publications_for_faculty(self, role: TFacultyRole):
@@ -221,7 +258,7 @@ class UniversityDataGenerator:
         if student_class is UndergraduateStudent:
             student = UndergraduateStudent(person=person, department=dept)
         elif student_class is GraduateStudent:
-            ug_univ = random.choice(self.all_external_universities)
+            ug_univ = self._pick_undergrad_university(dept.university)
             student = GraduateStudent(
                 person=person, department=dept, undergraduate_degree_from=ug_univ
             )
