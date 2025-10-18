@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import os
+import typing
+from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
+from typing import ClassVar, Type
 from weakref import WeakKeyDictionary
 
 from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
@@ -10,6 +13,7 @@ from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
 
 from rustworkx import PyDiGraph
 
+from .utils import recursive_subclasses
 from .. import logger
 from ..class_diagrams import ClassDiagram, Relation
 from ..class_diagrams.wrapped_field import WrappedField
@@ -72,7 +76,7 @@ class SymbolGraph:
     contains also the Predicate object that represents the relation.
     """
 
-    _type_graph: ClassDiagram
+    _type_graph: Optional[ClassDiagram] = field(default=None)
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
         default_factory=PyDiGraph
     )
@@ -82,6 +86,25 @@ class SymbolGraph:
     _relation_index: WeakKeyDictionary[type, set[tuple[int, int]]] = field(
         default_factory=WeakKeyDictionary, init=False, repr=False
     )
+    _current_graph: ClassVar[Optional[SymbolGraph]] = None
+    _initialized: ClassVar[bool] = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._current_graph is None:
+            cls._current_graph = super().__new__(cls)
+        return cls._current_graph
+
+    def __init__(self, type_graph: Optional[ClassDiagram] = None):
+        if not self._initialized:
+            self._type_graph = type_graph or ClassDiagram([])
+            self._instance_graph = PyDiGraph()
+            self._instance_index = WeakKeyDictionary()
+            self._relation_index = WeakKeyDictionary()
+            self.__class__._initialized = True
+
+    @property
+    def type_graph(self) -> ClassDiagram:
+        return self._current_graph._type_graph
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
@@ -97,6 +120,8 @@ class SymbolGraph:
         self._type_graph.clear()
         self._instance_graph.clear()
         self._instance_index.clear()
+        self.__class__._current_graph = None
+        self.__class__._initialized = False
 
     # Adapters to align with ORM alternative mapping expectations
     def add_instance(self, wrapped_instance: WrappedInstance) -> None:
@@ -175,6 +200,14 @@ class SymbolGraph:
             for idx in self._instance_graph.neighbors(wrapped_instance.index)
         )
 
+    @classmethod
+    def build(cls, classes: List[Type] = None) -> SymbolGraph:
+        if not classes:
+            for cls_ in copy(symbols_registry):
+                symbols_registry.update(recursive_subclasses(cls_))
+            classes = symbols_registry
+        return SymbolGraph(ClassDiagram(list(classes)))
+
     def to_dot(
         self,
         filepath: str,
@@ -216,3 +249,6 @@ class SymbolGraph:
                 os.remove(tmp_filepath)
             except Exception as e:
                 logger.error(e)
+
+
+symbols_registry: typing.Set[Type] = set()

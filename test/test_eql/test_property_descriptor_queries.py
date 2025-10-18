@@ -25,7 +25,7 @@ class Organization(Thing):
 class Company(Organization): ...
 
 
-@dataclass(eq=False)
+@dataclass(unsafe_hash=True)
 class Person(Thing):
     name: str
 

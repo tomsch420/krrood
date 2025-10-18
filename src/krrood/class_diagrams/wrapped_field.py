@@ -63,6 +63,14 @@ class WrappedField:
     A list of container types that are supported by the parser.
     """
 
+    @cached_property
+    def core_value_type(self):
+        return (
+            self.contained_type
+            if self.is_container or self.is_optional
+            else self.resolved_type
+        )
+
     def __hash__(self):
         return hash((self.clazz.clazz, self.field))
 

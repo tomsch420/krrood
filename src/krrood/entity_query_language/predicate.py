@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 import inspect
-import typing
 from abc import ABC, abstractmethod
 from collections import deque
-from copy import copy
 from dataclasses import dataclass
 from functools import wraps
 from typing import (
     Iterable,
-    List,
-    TypeVar,
 )
 
 from line_profiler import profile
@@ -21,7 +17,12 @@ from typing_extensions import ClassVar
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
-from .symbol_graph import PredicateRelation, SymbolGraph, WrappedInstance
+from .symbol_graph import (
+    PredicateRelation,
+    WrappedInstance,
+    SymbolGraph,
+    symbols_registry,
+)
 from .symbolic import (
     T,
     SymbolicExpression,
@@ -35,10 +36,7 @@ from .symbolic import (
     From,
 )
 from .utils import is_iterable, make_list
-from ..class_diagrams import ClassDiagram
 
-
-symbols_registry: typing.Set[Type] = set()
 cls_args = {}
 
 
@@ -74,13 +72,6 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     return wrapper
 
 
-def recursive_subclasses(cls_):
-    subclasses = cls_.__subclasses__()
-    for subclass in subclasses:
-        yield from recursive_subclasses(subclass)
-        yield subclass
-
-
 @dataclass
 class Symbol:
     """Base class for things that can be described by property descriptors."""
@@ -89,10 +80,11 @@ class Symbol:
         if in_symbolic_mode():
             return cls._symbolic_new_(cls, *args, **kwargs)
         else:
-            instance = instantiate_class_and_update_cache(
-                cls, super().__new__, *args, **kwargs
-            )
-            return instance
+            return super().__new__(cls)
+
+    def __post_init__(self):
+        if not in_symbolic_mode():
+            update_cache(self)
 
     def __init_subclass__(cls, **kwargs):
         symbols_registry.add(cls)
@@ -139,15 +131,6 @@ class Predicate(Symbol, ABC):
     is_expensive: ClassVar[bool] = False
     transitive: ClassVar[bool] = False
     inverse_of: ClassVar[Optional[Type[Predicate]]] = None
-    symbol_graph: ClassVar[SymbolGraph] = SymbolGraph(ClassDiagram([]))
-
-    @classmethod
-    def build_symbol_graph(cls, classes: List[Type] = None):
-        if not classes:
-            for cls_ in copy(symbols_registry):
-                symbols_registry.update(recursive_subclasses(cls_))
-            classes = symbols_registry
-        cls.symbol_graph = SymbolGraph(ClassDiagram(list(classes)))
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -174,6 +157,10 @@ class Predicate(Symbol, ABC):
         the given domain and range values.
         """
         ...
+
+    @property
+    def symbol_graph(self) -> SymbolGraph:
+        return SymbolGraph()
 
     def _neighbors(self, value: Any) -> Iterable[Any]:
         """
@@ -391,17 +378,11 @@ def extract_selected_variable_and_expression(
     return var, expression
 
 
-def instantiate_class_and_update_cache(
-    symbolic_cls: Type, original_new: Callable, *args, **kwargs
-):
+def update_cache(instance: Symbol):
     """
-    :param symbolic_cls: The constructed class.
-    :param original_new: The original class __new__ method.
-    :param args: The positional arguments to the class constructor.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The instantiated class.
+    :param instance: The instance to update the cache with.
     """
-    instance = original_new(symbolic_cls)
+    symbolic_cls = type(instance)
     index = index_class_cache(symbolic_cls)
     if index:
         update_cls_args(symbolic_cls)
@@ -416,8 +397,8 @@ def instantiate_class_and_update_cache(
     else:
         kwargs = {}
     Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    if not isinstance(instance, Predicate):
-        Predicate.symbol_graph.add_node(WrappedInstance(instance))
+    if not isinstance(instance, Predicate) and isinstance(instance, Symbol):
+        SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
 

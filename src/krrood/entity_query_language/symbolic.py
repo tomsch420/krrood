@@ -9,6 +9,10 @@ from line_profiler import profile
 from . import logger
 from .enums import EQLMode, PredicateType
 from .rxnode import RWXNode, ColorLegend
+from .symbol_graph import SymbolGraph
+from ..class_diagrams import Relation
+from ..class_diagrams.class_diagram import Association, WrappedClass
+from ..class_diagrams.wrapped_field import WrappedField
 
 """
 Core symbolic expression system used to build and evaluate entity queries.
@@ -20,8 +24,8 @@ import contextvars
 import operator
 import typing
 from abc import abstractmethod, ABC
-from dataclasses import dataclass, field
-from functools import lru_cache
+from dataclasses import dataclass, field, fields
+from functools import lru_cache, cached_property
 
 from typing_extensions import (
     Iterable,
@@ -34,7 +38,6 @@ from typing_extensions import (
     Generic,
     TypeVar,
     TYPE_CHECKING,
-    Set,
 )
 from typing_extensions import List, Tuple, Callable
 
@@ -50,7 +53,7 @@ from .cache_data import (
     yield_class_values_from_cache,
 )
 from .failures import MultipleSolutionFound, NoSolutionFound
-from .utils import IDGenerator, is_iterable, generate_combinations, lazy_iterate_dicts
+from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
 
 if TYPE_CHECKING:
@@ -372,6 +375,10 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
+    _path_: List[Relation] = field(init=False, default_factory=list)
+    """
+    The path of the variable in the symbol graph as a sequence of relation instances.
+    """
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
@@ -384,7 +391,11 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
             raise AttributeError(
                 f"{self.__class__.__name__} object has no attribute {name}"
             )
-        return Attribute(self, name)
+        return Attribute(self, name, self._type__)
+
+    @cached_property
+    def _type__(self):
+        return self._type_
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
         self._if_not_in_symbolic_mode_raise_error_("__getitem__")
@@ -445,6 +456,13 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     def __post_init__(self):
         super().__post_init__()
         self._var_ = self._child_._var_
+
+    @cached_property
+    def _type_(self):
+        if self._var_:
+            return self._var_._type_
+        else:
+            raise ValueError("No type available as _var_ is None")
 
     @property
     def _name_(self) -> str:
@@ -664,6 +682,13 @@ class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
             self.rule_mode = True
         for variable in self.selected_variables:
             variable._var_._node_.enclosed = True
+
+    @cached_property
+    def _type_(self):
+        if self._var_:
+            return self._var_._type_
+        else:
+            raise ValueError("No type available as _var_ is None")
 
     @lru_cache(maxsize=None)
     def _required_variables_from_child_(
@@ -1295,6 +1320,10 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
     def _all_variable_instances_(self) -> List[Variable]:
         return self._child_._all_variable_instances_
 
+    @cached_property
+    def _type_(self):
+        return self._child_._type_
+
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1347,6 +1376,50 @@ class Attribute(DomainMapping):
     """
 
     _attr_name_: str
+    _child_type_: Type
+
+    def __post_init__(self):
+        super().__post_init__()
+        with symbolic_mode(mode=None):
+            if self._child_wrapped_cls_:
+                self._path_ = self._child_._path_ + [
+                    Association(
+                        self._child_wrapped_cls_,
+                        self._wrapped_type_,
+                        self._wrapped_field_,
+                    )
+                ]
+
+    def _update_path_(self):
+        self._path_ = self._child_._path_ + [self._relation_]
+
+    @cached_property
+    def _relation_(self):
+        return Association(
+            self._child_wrapped_cls_, self._wrapped_type_, self._wrapped_field_
+        )
+
+    @cached_property
+    def _wrapped_type_(self):
+        return SymbolGraph().type_graph.get_wrapped_class(self._type_)
+
+    @cached_property
+    def _type_(self):
+        if self._child_wrapped_cls_:
+            return self._wrapped_field_.core_value_type
+        else:
+            return WrappedField(
+                WrappedClass(self._child_type_),
+                [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
+            ).core_value_type
+
+    @cached_property
+    def _wrapped_field_(self):
+        return self._child_wrapped_cls_._wrapped_field_name_map_[self._attr_name_]
+
+    @cached_property
+    def _child_wrapped_cls_(self):
+        return SymbolGraph().type_graph.get_wrapped_class(self._child_type_)
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         yield HashedValue(id_=value.id_, value=getattr(value.value, self._attr_name_))

@@ -132,3 +132,10 @@ class ALL:
 
 
 All = ALL()
+
+
+def recursive_subclasses(cls_):
+    subclasses = cls_.__subclasses__()
+    for subclass in subclasses:
+        yield from recursive_subclasses(subclass)
+        yield subclass

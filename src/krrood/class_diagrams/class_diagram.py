@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 from abc import ABC
+from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
 from functools import cached_property
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
@@ -62,6 +63,34 @@ class Association(Relation):
     def __str__(self):
         return f"has-{self.field.field.name}"
 
+    @classmethod
+    def from_source_cls_and_field_name(
+        cls, source: WrappedClass, field_name: str
+    ) -> Association:
+        """
+        Create an Association relation from a source class and field name.
+
+        :param source: The source WrappedClass
+        :param field_name: The name of the field in the source class that creates the association
+        :return: An Association instance if the field exists and is associated with a target class, else None
+        """
+        wrapped_field = source._wrapped_field_name_map_.get(field_name)
+        if not wrapped_field:
+            raise ValueError(f"Field {field_name} not found in class {source.clazz}")
+
+        target_type = wrapped_field.core_value_type
+
+        wrapped_target_class = source._class_diagram.get_wrapped_class(target_type)
+
+        if not wrapped_target_class:
+            return None
+
+        return cls(
+            field=wrapped_field,
+            source=source,
+            target=wrapped_target_class,
+        )
+
 
 class ParseError(TypeError):
     """
@@ -80,15 +109,20 @@ class WrappedClass:
     _class_diagram: Optional[ClassDiagram] = field(
         init=False, hash=False, default=None, repr=False
     )
+    _wrapped_field_name_map_: Dict[str, WrappedField] = field(
+        init=False, hash=False, default_factory=dict, repr=False
+    )
 
     @cached_property
     def fields(self) -> List[WrappedField]:
         try:
-            return [
-                WrappedField(self, f)
-                for f in fields(self.clazz)
-                if not f.name.startswith("_")
-            ]
+            wrapped_fields = []
+            for f in fields(self.clazz):
+                if not f.name.startswith("_"):
+                    wf = WrappedField(self, f)
+                    self._wrapped_field_name_map_[wf.field.name] = wf
+                    wrapped_fields.append(wf)
+            return wrapped_fields
         except TypeError as e:
             logging.error(f"Error parsing class {self.clazz}: {e}")
             raise ParseError(e) from e
@@ -108,6 +142,9 @@ class ClassDiagram:
 
     _dependency_graph: rx.PyDiGraph[WrappedClass, Relation] = field(
         default_factory=rx.PyDiGraph, init=False
+    )
+    _cls_wrapped_cls_map: Dict[Type, WrappedClass] = field(
+        default_factory=dict, init=False, repr=False
     )
 
     def __post_init__(self, classes: List[Type]):
@@ -215,12 +252,12 @@ class ClassDiagram:
         ]
 
     def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
-        base = [cls for cls in self.wrapped_classes if cls.clazz == clazz]
-        return base[0] if base else None
+        return self._cls_wrapped_cls_map.get(clazz, None)
 
     def add_node(self, clazz: WrappedClass):
         clazz.index = self._dependency_graph.add_node(clazz)
         clazz._class_diagram = self
+        self._cls_wrapped_cls_map[clazz.clazz] = clazz
 
     def add_relation(self, relation: Relation):
         self._dependency_graph.add_edge(
@@ -245,11 +282,7 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-                target_type = (
-                    wrapped_field.contained_type
-                    if wrapped_field.is_container or wrapped_field.is_optional
-                    else wrapped_field.resolved_type
-                )
+                target_type = wrapped_field.core_value_type
 
                 wrapped_target_class = self.get_wrapped_class(target_type)
 

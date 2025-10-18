@@ -28,7 +28,8 @@ from .symbolic import (
     Concatenate,
     ForAll,
 )
-from .predicate import Predicate, symbols_registry
+from .symbol_graph import symbols_registry
+from .predicate import Predicate
 
 T = TypeVar("T")  # Define type variable "T"
 
