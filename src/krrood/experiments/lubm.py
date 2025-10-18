@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Type, TypeVar
+from enum import Enum
 import random
 import uuid
 
@@ -8,6 +9,88 @@ import uuid
 TFacultyRole = TypeVar("TFacultyRole", bound="FacultyMember")
 TStudentRole = TypeVar("TStudentRole", bound="Student")
 TProfessorRole = TypeVar("TProfessorRole", bound="Professor")
+
+# --- Enums for data pools ---
+
+class DepartmentName(Enum):
+    """Canonical department names used across the generator."""
+
+    COMPUTER_SCIENCE = "Computer Science"
+    PHYSICS = "Physics"
+    CHEMISTRY = "Chemistry"
+    MATHEMATICS = "Mathematics"
+    BIOLOGY = "Biology"
+    LITERATURE = "Literature"
+    HISTORY = "History"
+    ENGINEERING = "Engineering"
+
+
+class UniversityName(Enum):
+    """Sample university names used to simulate external degrees."""
+
+    STATE_UNIVERSITY = "State University"
+    POLYTECHNIC_INSTITUTE = "Polytechnic Institute"
+    METROPOLITAN_COLLEGE = "Metropolitan College"
+    GLOBAL_RESEARCH_HUB = "Global Research Hub"
+    TECH_UNIVERSITY = "Tech University"
+
+
+class FirstName(Enum):
+    """Sample first names for synthetic persons."""
+
+    ALEX = "Alex"
+    BEN = "Ben"
+    CARA = "Cara"
+    DEV = "Dev"
+    EVE = "Eve"
+    FINN = "Finn"
+    GIA = "Gia"
+    HAL = "Hal"
+    IVY = "Ivy"
+    JAKE = "Jake"
+
+
+class LastName(Enum):
+    """Sample last names for synthetic persons."""
+
+    SMITH = "Smith"
+    JONES = "Jones"
+    LEE = "Lee"
+    CHEN = "Chen"
+    GUPTA = "Gupta"
+    ALI = "Ali"
+    CRUZ = "Cruz"
+    SILVA = "Silva"
+    SCHMIDT = "Schmidt"
+    KIM = "Kim"
+
+
+class Gender(Enum):
+    """Gender values for synthetic persons."""
+
+    MALE = "Male"
+    FEMALE = "Female"
+
+
+class PublicationAdjective(Enum):
+    """Adjectives used in generated publication titles."""
+
+    ADVANCED = "Advanced"
+    NOVEL = "Novel"
+    STATISTICAL = "Statistical"
+    QUANTUM = "Quantum"
+    DEEP = "Deep"
+
+
+class PublicationNoun(Enum):
+    """Nouns used in generated publication titles."""
+
+    ALGORITHM = "Algorithm"
+    ANALYSIS = "Analysis"
+    SIMULATION = "Simulation"
+    THEORY = "Theory"
+    MODEL = "Model"
+
 
 # --- Core Entities ---
 

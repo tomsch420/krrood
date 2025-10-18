@@ -27,6 +27,13 @@ from .lubm import (
     Professor,
     TeachingAssistant,
     ResearchAssistant,
+    DepartmentName,
+    UniversityName,
+    FirstName,
+    LastName,
+    Gender,
+    PublicationAdjective,
+    PublicationNoun,
 )
 
 
@@ -102,83 +109,51 @@ class GeneratorConfiguration:
     """
 
 
+@dataclass
 class UniversityDataGenerator:
     """
     Generates instances of the University model based on the provided constraints.
     Uses simple randomized data generation.
     """
 
-    # --- Simulated Data Pools ---
-    FIRST_NAMES = [
-        "Alex",
-        "Ben",
-        "Cara",
-        "Dev",
-        "Eve",
-        "Finn",
-        "Gia",
-        "Hal",
-        "Ivy",
-        "Jake",
-    ]
-    LAST_NAMES = [
-        "Smith",
-        "Jones",
-        "Lee",
-        "Chen",
-        "Gupta",
-        "Ali",
-        "Cruz",
-        "Silva",
-        "Schmidt",
-        "Kim",
-    ]
-    GENDERS = ["Male", "Female"]
-    PUB_NOUNS = ["Algorithm", "Analysis", "Simulation", "Theory", "Model"]
-    PUB_ADJS = ["Advanced", "Novel", "Statistical", "Quantum", "Deep"]
-    UNIVERSITY_NAMES = [
-        "State University",
-        "Polytechnic Institute",
-        "Metropolitan College",
-        "Global Research Hub",
-        "Tech University",
-    ]
-    DEPT_NAMES = [
-        "Computer Science",
-        "Physics",
-        "Chemistry",
-        "Mathematics",
-        "Biology",
-        "Literature",
-        "History",
-        "Engineering",
-    ]
+    # --- Simulated Data Pools moved to enums in lubm.py ---
 
-    def __init__(self, university_count: int = 1, seed: int = 42):
-        random.seed(seed)
-        self.university_count = university_count
-        self.all_universities: List[University] = []
-        self.all_external_universities: List[University] = []
-        self.all_faculty: List[FacultyMember] = []
-        self.all_students: List[Student] = []
+    # Configuration and input parameters
+    university_count: Optional[int] = None
+    seed: Optional[int] = 42
+    config: GeneratorConfiguration = field(default_factory=GeneratorConfiguration)
+
+    # Generated collections
+    all_universities: List[University] = field(default_factory=list, init=False)
+    all_external_universities: List[University] = field(default_factory=list, init=False)
+    all_faculty: List[FacultyMember] = field(default_factory=list, init=False)
+    all_students: List[Student] = field(default_factory=list, init=False)
 
     # --- Helper Functions for Random Data ---
 
+    def _randint_from_range(self, r: Range) -> int:
+        """Returns a random integer within the inclusive range."""
+        return random.randint(int(r.min), int(r.max))
+
+    def _random_uniform_from_range(self, r: Range) -> float:
+        """Returns a random float within the inclusive range."""
+        return random.uniform(float(r.min), float(r.max))
+
     def _get_random_name(self, gender: str) -> Person:
         """Generates a random Person."""
-        first = random.choice(self.FIRST_NAMES)
-        last = random.choice(self.LAST_NAMES)
+        first = random.choice(list(FirstName)).value
+        last = random.choice(list(LastName)).value
         return Person(first_name=first, last_name=last, gender=gender)
 
     def _get_random_university(self) -> University:
         """Generates a simple University entity for degree purposes."""
         return University(
-            name=f"{random.choice(self.UNIVERSITY_NAMES)} {random.randint(1, 99)}"
+            name=f"{random.choice(list(UniversityName)).value} {random.randint(1, 99)}"
         )
 
     def _get_random_publication(self) -> Publication:
         """Generates a random Publication."""
-        title = f"{random.choice(self.PUB_ADJS)} {random.choice(self.PUB_NOUNS)} of {uuid.uuid4().hex[:6]}"
+        title = f"{random.choice(list(PublicationAdjective)).value} {random.choice(list(PublicationNoun)).value} of {uuid.uuid4().hex[:6]}"
         year = random.randint(2000, 2024)
         return Publication(title=title, year=year)
 
@@ -213,7 +188,7 @@ class UniversityDataGenerator:
         self, role_class: Type[TFacultyRole], dept: Department
     ) -> TFacultyRole:
         """Creates a FacultyMember object with degrees and publications."""
-        person = self._get_random_name(random.choice(self.GENDERS))
+        person = self._get_random_name(random.choice(list(Gender)).value)
 
         # All degrees must be from a University (randomly selected from external pool)
         ug_univ = random.choice(self.all_external_universities)
@@ -239,7 +214,7 @@ class UniversityDataGenerator:
         self, student_class: Type[TStudentRole], dept: Department
     ) -> TStudentRole:
         """Creates a Student object (UG or Grad)."""
-        person = self._get_random_name(random.choice(self.GENDERS))
+        person = self._get_random_name(random.choice(list(Gender)).value)
 
         if student_class is UndergraduateStudent:
             student = UndergraduateStudent(person=person, department=dept)
@@ -260,22 +235,22 @@ class UniversityDataGenerator:
         """Generates a Department and its internal structure."""
         dept = Department(name=dept_name, university=university)
 
-        # 1. Generate Faculty (Ignoring strict counts for design, using representative numbers)
+        # 1. Generate Faculty (counts driven by configuration)
         dept.full_professors = [
             self._generate_faculty_member(FullProfessor, dept)
-            for _ in range(random.randint(7, 10))
+            for _ in range(self._randint_from_range(self.config.full_professors))
         ]
         dept.associate_professors = [
             self._generate_faculty_member(AssociateProfessor, dept)
-            for _ in range(random.randint(10, 14))
+            for _ in range(self._randint_from_range(self.config.associate_professors))
         ]
         dept.assistant_professors = [
             self._generate_faculty_member(AssistantProfessor, dept)
-            for _ in range(random.randint(8, 11))
+            for _ in range(self._randint_from_range(self.config.assistant_professors))
         ]
         dept.lecturers = [
             self._generate_faculty_member(Lecturer, dept)
-            for _ in range(random.randint(5, 7))
+            for _ in range(self._randint_from_range(self.config.lecturers))
         ]
 
         all_faculty = dept.all_faculty
@@ -316,7 +291,7 @@ class UniversityDataGenerator:
         ]
 
         # 6. Generate Research Groups
-        num_groups = random.randint(10, 20)
+        num_groups = self._randint_from_range(self.config.research_groups)
         for i in range(num_groups):
             # Lead is a Professor
             lead = random.choice(all_professors)
@@ -420,7 +395,9 @@ class UniversityDataGenerator:
 
         # 1. Teaching Assistants (TAs)
         # 1/5 - 1/4 of the GraduateStudents are chosen as TA for one Course
-        ta_ratio = random.uniform(0.20, 0.25)  # 1/5 to 1/4
+        ta_ratio = self._random_uniform_from_range(
+            self.config.probability_graduate_student_is_teaching_assistant
+        )
         num_tas = int(len(grad_students) * ta_ratio)
 
         ta_candidates = random.sample(grad_students, min(num_tas, len(grad_students)))
@@ -440,7 +417,9 @@ class UniversityDataGenerator:
 
         # 2. Research Assistants (RAs)
         # 1/4 - 1/3 of the GraduateStudents are chosen as ResearchAssistant
-        ra_ratio = random.uniform(0.25, 1 / 3)  # 1/4 to 1/3
+        ra_ratio = self._random_uniform_from_range(
+            self.config.probability_graduate_student_is_research_assistant
+        )
         num_ras = int(len(grad_students) * ra_ratio)
 
         ra_candidates = random.sample(grad_students, min(num_ras, len(grad_students)))
@@ -452,6 +431,15 @@ class UniversityDataGenerator:
 
     def generate(self) -> List[University]:
         """Main generation function."""
+        # Ensure configuration and seeding are applied
+        if self.config is None:
+            self.config = GeneratorConfiguration()
+        if self.seed is not None:
+            self.config.seed = self.seed
+        random.seed(self.config.seed or 42)
+        if self.university_count is None:
+            self.university_count = self._randint_from_range(self.config.universities)
+
         print("Generating external universities for degree sources...")
         self._create_degree_universities()
 
@@ -459,10 +447,11 @@ class UniversityDataGenerator:
             univ_name = f"Main University {i+1}"
             university = University(name=univ_name)
 
-            # 15-25 Departments are subOrgnization of the University
-            num_departments = random.randint(15, 25)
+            # Departments are subOrganization of the University (count from configuration)
+            num_departments = self._randint_from_range(self.config.departments)
             department_names_sample = random.sample(
-                self.DEPT_NAMES, min(num_departments, len(self.DEPT_NAMES))
+                [d.value for d in DepartmentName],
+                min(num_departments, len(list(DepartmentName))),
             )
 
             print(
