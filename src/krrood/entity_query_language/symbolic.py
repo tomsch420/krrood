@@ -1399,6 +1399,11 @@ class Flatten(DomainMapping):
     similar to UNNEST in SQL.
     """
 
+    def __post_init__(self):
+        if not isinstance(self._child_, SymbolicExpression):
+            self._child_ = Literal(self._child_)
+        super().__post_init__()
+
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         inner = value.value
         # Treat non-iterables as singletons
@@ -2143,13 +2148,14 @@ def properties_to_expression_tree(
 
 
 def _optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
-    left_vars = left._unique_variables_.filter(
-        lambda v: not isinstance(v.value, Literal)
-    )
-    right_vars = right._unique_variables_.filter(
-        lambda v: not isinstance(v.value, Literal)
-    )
-    if left_vars == right_vars:
-        return ElseIf(left, right)
-    else:
-        return Union(left, right)
+    with symbolic_mode(mode=None):
+        left_vars = left._unique_variables_.filter(
+            lambda v: not isinstance(v.value, Literal)
+        )
+        right_vars = right._unique_variables_.filter(
+            lambda v: not isinstance(v.value, Literal)
+        )
+        if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
+            return ElseIf(left, right)
+        else:
+            return Union(left, right)
