@@ -14,15 +14,15 @@ def test_generator():
 
     university: University = universities[0]
 
-    course_name = university.departments[0].graduate_courses[0]
+    course = university.departments[0].graduate_courses[0]
 
     with symbolic_mode():
         graduate_student = let(GraduateStudent)
         graduate_course = let(GraduateCourse)
 
-        specific_graduate_course = an(
+        specific_graduate_course = the(
             entity(graduate_course),
-            graduate_course == course_name,
+            graduate_course == course,
         )
 
         q1 = an(
