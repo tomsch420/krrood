@@ -8,6 +8,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
+from .utils import get_generic_type_param
+
 # Import PropertyDescriptor to correctly detect descriptor class attributes
 from ..entity_query_language.property_descriptor import PropertyDescriptor
 from .lubm_with_predicates import *
@@ -23,10 +25,23 @@ class OwlInstancesRegistry:
         self._by_uri: Dict[URIRef, Any] = {}
         self._by_class: Dict[Type, List[Any]] = {}
 
-    def get_or_create_for(self, uri: URIRef, factory: Type) -> Any:
+    def get_or_create_for(
+        self, uri: URIRef, factory: Type, role_taker: Optional[Role] = None
+    ) -> Any:
         inst = self._by_uri.get(uri)
         if inst is None:
-            inst = factory()
+            if not issubclass(factory, Role):
+                inst = factory()
+            else:
+                # get role taker from T in Role[T]
+                role_taker_type = get_generic_type_param(factory, Role)[0]
+                if role_taker_type is None:
+                    raise ValueError(
+                        f"Role factory {factory} must be generic with exactly one type parameter"
+                    )
+                role_taker = role_taker or role_taker_type()
+                inst = factory(role_taker)
+
             # Fill a best-effort human-readable name if available
             local = local_name(uri)
             if hasattr(inst, "name") and getattr(inst, "name") is None:
@@ -243,7 +258,36 @@ def load_instances(
             if isinstance(lst, set) and obj is not None:
                 lst.add(obj)
                 continue
+        if issubclass(subj_cls, Role):
+            role_taker_cls = get_generic_type_param(subj_cls, Role)[0]
+            try:
+                role_taker_field = [
+                    f for f in fields(subj_cls) if eval(f.type) == role_taker_cls
+                ][0]
+            except IndexError:
+                pass
+            role_taker_val = getattr(subj, role_taker_field.name)
+            if hasattr(role_taker_val, snake):
+                lst = getattr(role_taker_val, snake)
+                if isinstance(lst, set) and obj is not None:
+                    lst.add(obj)
+                    continue
         base_desc = descriptor_base_for(snake)
+
+        if base_desc is not None:
+            if len(base_desc.domain_types) == 1:
+                new_role_class = list(base_desc.domain_types)[0]
+            else:
+                raise ValueError("Need to handle multiple domain types")
+            new_role = registry.get_or_create_for(
+                subj.name, new_role_class, role_taker=role_taker_val
+            )
+            if hasattr(new_role, snake):
+                lst = getattr(new_role, snake)
+                if isinstance(lst, set) and obj is not None:
+                    lst.add(obj)
+                    continue
+
         # Try inverse assignment if direct field does not exist on subject
         if base_desc is not None and obj is not None:
             # Find inverse_of on the base descriptor class (attribute may be missing)

@@ -72,6 +72,10 @@ class PropertyDescriptor(Generic[T], Predicate):
     # Weak keys prevent memory leaks when domain classes are unloaded.
     _subprops_cache: ClassVar[WeakKeyDictionary] = WeakKeyDictionary()
 
+    def __init_subclass__(cls, **kwargs):
+        cls.domain_types = set()
+        cls.range_types = set()
+
     def __set_name__(self, owner, name):
         # Only wire once per owner
         if not hasattr(owner, self.attr_name):

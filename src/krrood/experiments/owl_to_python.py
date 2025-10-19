@@ -334,8 +334,8 @@ class OwlToPythonConverter:
         classes_copy["Role"] = {
             "name": "Role",
             "superclasses": [
-                ontology_base_class_name,
                 f"Generic[T]",
+                ontology_base_class_name,
             ],
             "label": "Role class which represents a role that a persistent identifier can take on in a certain context",
         }

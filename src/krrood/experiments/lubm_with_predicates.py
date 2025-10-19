@@ -149,7 +149,7 @@ class UnivBenchOntology(Thing):
 
 T = TypeVar('T', bound=UnivBenchOntology)
 
-    
+
 @dataclass(eq=False)
 class Organization(UnivBenchOntology):
     """organization"""
@@ -211,7 +211,7 @@ class Publication(UnivBenchOntology):
 
 
 @dataclass(eq=False)
-class Role(UnivBenchOntology, Generic[T]):
+class Role(Generic[T], UnivBenchOntology):
     """Role class which represents a role that a persistent identifier can take on in a certain context"""
     ...
 
