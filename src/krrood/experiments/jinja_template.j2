@@ -6,7 +6,7 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Any, Set
+from typing_extensions import List, Optional, Union, Any, Set, Generic, TypeVar
 
 from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
@@ -50,9 +50,11 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
     {% else %}
     {% if cls.role_taker|length > 0 %}
     # Role taker
+    {% if cls.add_role_taker %}
     {% for role in cls.role_taker %}
     {{ role.field_name }}: {{ role.cls_name }}
     {% endfor %}
+    {% endif %}
     {% endif %}
     {% if cls.declared_properties|length > 0 %}
     {% for prop_name in cls.declared_properties %}
@@ -72,4 +74,9 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
         return hash(id(self))
 
 
+{% if cls_name == ontology_base_class_name %}
+T = TypeVar('T', bound={{ ontology_base_class_name }})
+
+
+{% endif %}
 {% endfor %}

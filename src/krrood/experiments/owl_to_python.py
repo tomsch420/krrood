@@ -130,6 +130,7 @@ class OwlToPythonConverter:
             "label": label,
             "comment": self._get_comment(class_uri),
             "role_taker": role_taker,
+            "add_role_taker": True,
         }
 
     def _extract_property_info(self, property_uri) -> Dict:
@@ -225,7 +226,6 @@ class OwlToPythonConverter:
                 # the restriction on the property (the restricted range type of the property)
                 class_info = classes.get(cls_name)
                 if class_info:
-                    class_info["is_role"] = True
                     class_info["role_taker"] = [
                         {
                             "cls_name": superclass,
@@ -324,16 +324,28 @@ class OwlToPythonConverter:
 
         self._walk_restrictions(classes=classes_copy)
 
-        for info in classes_copy.values():
-            info["base_classes"] = [
-                b for b in info.get("superclasses", []) if b != "Thing"
-            ]
         # Create ontology base class name from ontology label
         ontology_base_class_name = self._to_pascal_case(
             re.sub(r"\W+", " ", getattr(self, "ontology_label", "Ontology")).strip()
         )
         if not ontology_base_class_name.endswith("Ontology"):
             ontology_base_class_name = ontology_base_class_name + "Ontology"
+
+        classes_copy["Role"] = {
+            "name": "Role",
+            "superclasses": [
+                ontology_base_class_name,
+                f"Generic[T]",
+            ],
+            "label": "Role class which represents a role that a persistent identifier can take on in a certain context",
+        }
+
+        for info in classes_copy.values():
+            if info.get("role_taker"):
+                info["superclasses"].append("Role")
+            info["base_classes"] = [
+                b for b in info.get("superclasses", []) if b != "Thing"
+            ]
         # Create synthetic ontology base class entry if not exists
         if ontology_base_class_name not in classes_copy:
             classes_copy[ontology_base_class_name] = {
@@ -381,7 +393,7 @@ class OwlToPythonConverter:
                 if base_info and base_info.get("role_taker"):
                     for prop_name in info["role_taker"]:
                         if prop_name in base_info["role_taker"]:
-                            info["role_taker"].remove(prop_name)
+                            info["add_role_taker"] = False
 
         # Prepare property descriptor bases and compute type-hint helpers
         properties_copy: Dict[str, Dict] = {
@@ -769,6 +781,13 @@ class OwlToPythonConverter:
             if inv and inv in property_classes:
                 prior = index_map.get(inv, 10**9) < index_map.get(name, 10**9)
             info["inverse_target_is_prior"] = prior
+
+        for info in classes_copy.values():
+            if "Role" in info["base_classes"]:
+                info["base_classes"].remove("Role")
+                info["base_classes"].append(
+                    f"Role[{info['role_taker'][0]['cls_name']}]"
+                )
 
         template_dir = os.path.dirname(__file__)
         env = Environment(

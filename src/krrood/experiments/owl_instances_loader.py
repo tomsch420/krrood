@@ -9,7 +9,8 @@ import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
 # Import PropertyDescriptor to correctly detect descriptor class attributes
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+from ..entity_query_language.property_descriptor import PropertyDescriptor
+from .lubm_with_predicates import *
 
 
 class OwlInstancesRegistry:

@@ -6,7 +6,7 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Union, Any, Set
+from typing_extensions import List, Optional, Union, Any, Set, Generic, TypeVar
 
 from ..entity_query_language.property_descriptor import Thing, PropertyDescriptor
 
@@ -147,42 +147,9 @@ class UnivBenchOntology(Thing):
         return hash(id(self))
 
 
-@dataclass(eq=False)
-class Director(UnivBenchOntology):
-    """director"""
-    # Role taker
-    person: Person
-    # is the head of
-    head_of: Set[Program] = field(default_factory=HeadOf)
+T = TypeVar('T', bound=UnivBenchOntology)
 
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
-class Employee(UnivBenchOntology):
-    """Employee"""
-    # Role taker
-    person: Person
-    # Works For
-    works_for: Set[Organization] = field(default_factory=WorksFor)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
-class GraduateStudent(UnivBenchOntology):
-    """graduate student"""
-    # Role taker
-    person: Person
-    # is taking
-    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourse)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
+    
 @dataclass(eq=False)
 class Organization(UnivBenchOntology):
     """organization"""
@@ -244,12 +211,9 @@ class Publication(UnivBenchOntology):
 
 
 @dataclass(eq=False)
-class ResearchAssistant(UnivBenchOntology):
-    """university research assistant"""
-    # Role taker
-    person: Person
-    # Works For
-    works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
+class Role(UnivBenchOntology, Generic[T]):
+    """Role class which represents a role that a persistent identifier can take on in a certain context"""
+    ...
 
     def __hash__(self):
         return hash(id(self))
@@ -266,41 +230,8 @@ class Schedule(UnivBenchOntology):
 
 
 @dataclass(eq=False)
-class Student(UnivBenchOntology):
-    """student"""
-    # Role taker
-    person: Person
-    # is taking
-    takes_course: Set[Course] = field(default_factory=TakesCourse)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
-class TeachingAssistant(UnivBenchOntology):
-    """university teaching assistant"""
-    # Role taker
-    person: Person
-    # is a teaching assistant for
-    teaching_assistant_of: Set[Course] = field(default_factory=TeachingAssistantOf)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
 class Work(UnivBenchOntology):
     """Work"""
-    ...
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
-class AdministrativeStaff(Employee):
-    """administrative staff worker"""
     ...
 
     def __hash__(self):
@@ -353,10 +284,36 @@ class Department(Organization):
 
 
 @dataclass(eq=False)
-class Faculty(Employee):
-    """faculty member"""
-    # teaches
-    teacher_of: Set[Course] = field(default_factory=TeacherOf)
+class Director(Role[Person]):
+    """director"""
+    # Role taker
+    person: Person
+    # is the head of
+    head_of: Set[Program] = field(default_factory=HeadOf)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class Employee(Role[Person]):
+    """Employee"""
+    # Role taker
+    person: Person
+    # Works For
+    works_for: Set[Organization] = field(default_factory=WorksFor)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class GraduateStudent(Role[Person]):
+    """graduate student"""
+    # Role taker
+    person: Person
+    # is taking
+    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourse)
 
     def __hash__(self):
         return hash(id(self))
@@ -399,6 +356,18 @@ class Research(Work):
 
 
 @dataclass(eq=False)
+class ResearchAssistant(Role[Person]):
+    """university research assistant"""
+    # Role taker
+    person: Person
+    # Works For
+    works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
@@ -430,9 +399,24 @@ class Specification(Publication):
 
 
 @dataclass(eq=False)
-class UndergraduateStudent(Student):
-    """undergraduate student"""
-    ...
+class Student(Role[Person]):
+    """student"""
+    # Role taker
+    person: Person
+    # is taking
+    takes_course: Set[Course] = field(default_factory=TakesCourse)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class TeachingAssistant(Role[Person]):
+    """university teaching assistant"""
+    # Role taker
+    person: Person
+    # is a teaching assistant for
+    teaching_assistant_of: Set[Course] = field(default_factory=TeachingAssistantOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -458,8 +442,8 @@ class UnofficialPublication(Publication):
 
 
 @dataclass(eq=False)
-class ClericalStaff(AdministrativeStaff):
-    """clerical staff worker"""
+class AdministrativeStaff(Employee):
+    """administrative staff worker"""
     ...
 
     def __hash__(self):
@@ -470,6 +454,16 @@ class ClericalStaff(AdministrativeStaff):
 class ConferencePaper(Article):
     """conference paper"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class Faculty(Employee):
+    """faculty member"""
+    # teaches
+    teacher_of: Set[Course] = field(default_factory=TeacherOf)
 
     def __hash__(self):
         return hash(id(self))
@@ -487,6 +481,33 @@ class GraduateCourse(Course):
 @dataclass(eq=False)
 class JournalArticle(Article):
     """journal article"""
+    ...
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class TechnicalReport(Article):
+    """technical report"""
+    ...
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class UndergraduateStudent(Student):
+    """undergraduate student"""
+    ...
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class ClericalStaff(AdministrativeStaff):
+    """clerical staff worker"""
     ...
 
     def __hash__(self):
@@ -531,15 +552,6 @@ class SystemsStaff(AdministrativeStaff):
 
 
 @dataclass(eq=False)
-class TechnicalReport(Article):
-    """technical report"""
-    ...
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
 class AssistantProfessor(Professor):
     """assistant professor"""
     ...
@@ -558,8 +570,9 @@ class AssociateProfessor(Professor):
 
 
 @dataclass(eq=False)
-class Chair(Professor):
+class Chair(Professor, Role[Person]):
     """chair"""
+    # Role taker
     # is the head of
     head_of: Set[Department] = field(default_factory=HeadOf)
 
