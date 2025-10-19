@@ -350,10 +350,10 @@ class OwlToPythonConverter:
                 continue
             bases = info.get("base_classes", [])
             if len(bases) == 0:
-                if not info["role_taker"]:
-                    info["base_classes"] = [ontology_base_class_name]
-                else:
-                    info["base_classes"] = ["Thing"]
+                # if not info["role_taker"]:
+                info["base_classes"] = [ontology_base_class_name]
+                # else:
+                #     info["base_classes"] = ["Thing"]
 
         # Compute full ancestor sets for each class (transitive closure)
         name_to_bases = {
@@ -378,7 +378,7 @@ class OwlToPythonConverter:
                 if base == name:
                     continue
                 base_info = classes_copy.get(base)
-                if base_info and base_info["role_taker"]:
+                if base_info and base_info.get("role_taker"):
                     for prop_name in info["role_taker"]:
                         if prop_name in base_info["role_taker"]:
                             info["role_taker"].remove(prop_name)
