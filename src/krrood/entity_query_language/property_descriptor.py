@@ -76,11 +76,6 @@ class PropertyDescriptor(Generic[T], Predicate):
         cls.domain_types = set()
         cls.range_types = set()
 
-    def __set_name__(self, owner, name):
-        # Only wire once per owner
-        if not hasattr(owner, self.attr_name):
-            self.create_managed_attribute_for_class(owner, name)
-
     @property
     def domain_value(self) -> Optional[Any]:
         return self._domain_value
@@ -117,40 +112,47 @@ class PropertyDescriptor(Generic[T], Predicate):
         # Preserve the declared annotation for the hidden field
         cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
 
-        self.update_domain_types(cls)
-        self.update_range_types(cls, attr_name)
+        self.update_domain_types()
+        self.update_range_types()
 
-    def update_domain_types(self, cls: Type) -> None:
+    def update_domain_types(self) -> None:
         """
         Add a class to the domain types if it is not already a subclass of any existing domain type.
 
         This method is used to keep track of the classes that are valid as values for the property descriptor.
         It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
-        :param cls: The class to add to the domain types.
         :return: None
         """
+        cls = self._cls_
         if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
             return
         self.domain_types.add(cls)
 
-    def update_range_types(self, cls: Type, attr_name: str) -> None:
-        type_hint = cls.__annotations__[attr_name]
+    @property
+    def range_type(self):
+        type_hint = self._cls_.__annotations__[self.attr_name]
         if isinstance(type_hint, str):
             try:
                 type_hint = eval(
-                    type_hint, vars(__import__(cls.__module__, fromlist=["*"]))
+                    type_hint, vars(__import__(self._cls_.__module__, fromlist=["*"]))
                 )
             except NameError:
                 # Try again with the class under construction injected; if still failing, skip for now.
                 try:
                     module_globals = vars(
-                        __import__(cls.__module__, fromlist=["*"])
+                        __import__(self._cls_.__module__, fromlist=["*"])
                     ).copy()
-                    module_globals[cls.__name__] = cls
+                    module_globals[self._cls_.__name__] = self._cls_
                     type_hint = eval(type_hint, module_globals)
                 except NameError:
                     return
-        for new_type in get_range_types(type_hint):
+        return get_range_types(type_hint)
+
+    def update_range_types(self) -> None:
+        range_types = self.range_type
+        if range_types is None:
+            return
+        for new_type in range_types:
             try:
                 is_sub = any(
                     issubclass(new_type, range_cls) for range_cls in self.range_types

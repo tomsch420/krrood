@@ -13,6 +13,8 @@ from .utils import get_generic_type_param
 # Import PropertyDescriptor to correctly detect descriptor class attributes
 from ..entity_query_language.property_descriptor import PropertyDescriptor
 from .lubm_with_predicates import *
+from ..entity_query_language.symbol_graph import SymbolGraph
+from ..ormatic.utils import classes_of_module
 
 
 class OwlInstancesRegistry:
@@ -181,6 +183,8 @@ def load_instances(
     """
     if isinstance(model_module, str):
         model_module = __import__(model_module, fromlist=["*"])
+    SymbolGraph().clear()
+    symbol_graph = SymbolGraph.build(classes=classes_of_module(model_module))
     g = rdflib.Graph()
     g.parse(owl_path)
 
@@ -275,10 +279,34 @@ def load_instances(
         base_desc = descriptor_base_for(snake)
 
         if base_desc is not None:
-            if len(base_desc.domain_types) == 1:
-                new_role_class = list(base_desc.domain_types)[0]
+            possible_roles = list(base_desc.domain_types)
+            if len(possible_roles) == 1:
+                new_role_class = possible_roles[0]
             else:
-                raise ValueError("Need to handle multiple domain types")
+                o_type = type(obj)
+                wrapped_field_types = {}
+                chosen_role = None
+                for pr in possible_roles:
+                    try:
+                        pr_wrapped_field = getattr(pr, snake)
+                    except AttributeError:
+                        continue
+                    range_types = tuple(pr_wrapped_field.range_type)
+                    if issubclass(o_type, range_types):
+                        wrapped_field_types[pr] = range_types
+                # choose the nearest wrapped field type
+                if wrapped_field_types:
+                    chosen_role = min(
+                        wrapped_field_types.keys(),
+                        key=lambda k: min(
+                            len(vi.__mro__) for vi in wrapped_field_types[k]
+                        ),
+                    )
+                if chosen_role is None:
+                    raise ValueError(
+                        f"Could not determine role for {obj} ({o_type}) and predicate {p} ({base_desc})"
+                    )
+                new_role_class = chosen_role
             new_role = registry.get_or_create_for(
                 subj.name, new_role_class, role_taker=role_taker_val
             )
