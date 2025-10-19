@@ -23,6 +23,7 @@ from typing_extensions import (
     Union,
 )
 
+from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
@@ -58,10 +59,18 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
+    public_name: Optional[str] = None
+    """
+    If the field is a relationship managed field, this is public name of the relationship that manages the field.
+    """
+
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
     """
+
+    def __post_init__(self):
+        self.public_name = self.public_name or self.field.name
 
     @cached_property
     def core_value_type(self):

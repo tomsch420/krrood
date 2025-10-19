@@ -12,7 +12,11 @@ import rustworkx as rx
 from rustworkx_utils import RWXNode
 from typing_extensions import Type
 
-from krrood.class_diagrams.wrapped_field import WrappedField
+from .attribute_introspector import (
+    AttributeIntrospector,
+    DataclassOnlyIntrospector,
+)
+from .wrapped_field import WrappedField
 
 
 @dataclass
@@ -61,7 +65,7 @@ class Association(Relation):
     """The field in the source class that creates this association with the target class."""
 
     def __str__(self):
-        return f"has-{self.field.field.name}"
+        return f"has-{self.field.public_name}"
 
     @classmethod
     def from_source_cls_and_field_name(
@@ -115,13 +119,19 @@ class WrappedClass:
 
     @cached_property
     def fields(self) -> List[WrappedField]:
+        """Return wrapped fields discovered by the diagram’s attribute introspector.
+
+        Public names from the introspector are used to index `_wrapped_field_name_map_`.
+        """
         try:
-            wrapped_fields = []
-            for f in fields(self.clazz):
-                if not f.name.startswith("_"):
-                    wf = WrappedField(self, f)
-                    self._wrapped_field_name_map_[wf.field.name] = wf
-                    wrapped_fields.append(wf)
+            wrapped_fields: list[WrappedField] = []
+            introspector = self._class_diagram.introspector
+            discovered = introspector.discover(self.clazz)
+            for item in discovered:
+                wf = WrappedField(self, item.field, public_name=item.public_name)
+                # Map under the public attribute name (e.g., "advisor")
+                self._wrapped_field_name_map_[item.public_name] = wf
+                wrapped_fields.append(wf)
             return wrapped_fields
         except TypeError as e:
             logging.error(f"Error parsing class {self.clazz}: {e}")
@@ -139,6 +149,10 @@ class WrappedClass:
 class ClassDiagram:
 
     classes: InitVar[List[Type]]
+
+    introspector: AttributeIntrospector = field(
+        default_factory=DataclassOnlyIntrospector, init=True, repr=False
+    )
 
     _dependency_graph: rx.PyDiGraph[WrappedClass, Relation] = field(
         default_factory=rx.PyDiGraph, init=False

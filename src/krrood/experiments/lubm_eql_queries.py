@@ -11,10 +11,14 @@ from krrood.entity_query_language.entity import (
     the,
 )
 from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.entity_query_language.symbolic import ResultQuantifier
 
 from krrood.experiments import lubm_with_predicates
-from krrood.experiments.helpers import evaluate_eql
+from krrood.experiments.helpers import (
+    evaluate_eql,
+    load_instances_for_lubm_with_predicates,
+)
 from krrood.experiments.lubm_with_predicates import (
     GraduateStudent,
     GraduateCourse,
@@ -42,10 +46,13 @@ from krrood.experiments.lubm_with_predicates import (
     TakesCourse,
 )
 from krrood.experiments.owl_instances_loader import load_instances
+from krrood.ormatic.utils import classes_of_module
 
 
 def get_eql_queries() -> List[ResultQuantifier]:
     # 1 (No joining, just filtration of graduate students through taking a certain course)
+    SymbolGraph().clear()
+    SymbolGraph.build(classes=classes_of_module(lubm_with_predicates))
     with symbolic_mode():
         q1 = a(
             x := GraduateStudent(),
@@ -169,11 +176,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
 
 if __name__ == "__main__":
-    instances_path = os.path.join("..", "..", "..", "resources", "lubm_instances.owl")
-    load_instances(
-        instances_path,
-        model_module=lubm_with_predicates,
-    )
+    load_instances_for_lubm_with_predicates()
     start_time = time.time()
     counts, results = evaluate_eql(get_eql_queries())
     end_time = time.time()
