@@ -5,10 +5,19 @@ import typing
 from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
-from typing import ClassVar, Type
 from weakref import WeakKeyDictionary
 
-from typing_extensions import TYPE_CHECKING, Any, Iterable, Optional, List, Type
+from typing_extensions import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    Optional,
+    List,
+    Type,
+    Dict,
+    ClassVar,
+    Set,
+)
 
 
 from rustworkx import PyDiGraph
@@ -80,11 +89,9 @@ class SymbolGraph:
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
         default_factory=PyDiGraph
     )
-    _instance_index: WeakKeyDictionary = field(
-        default_factory=WeakKeyDictionary, init=False, repr=False
-    )
-    _relation_index: WeakKeyDictionary[type, set[tuple[int, int]]] = field(
-        default_factory=WeakKeyDictionary, init=False, repr=False
+    _instance_index: Dict = field(default_factory=dict, init=False, repr=False)
+    _relation_index: Dict[type, set[tuple[int, int]]] = field(
+        default_factory=dict, init=False, repr=False
     )
     _current_graph: ClassVar[Optional[SymbolGraph]] = None
     _initialized: ClassVar[bool] = False
@@ -98,8 +105,8 @@ class SymbolGraph:
         if not self._initialized:
             self._type_graph = type_graph or ClassDiagram([])
             self._instance_graph = PyDiGraph()
-            self._instance_index = WeakKeyDictionary()
-            self._relation_index = WeakKeyDictionary()
+            self._instance_index = {}
+            self._relation_index = {}
             self.__class__._initialized = True
 
     @property
@@ -111,10 +118,10 @@ class SymbolGraph:
             wrapped_instance = WrappedInstance(wrapped_instance)
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
-        self._instance_index[wrapped_instance.instance] = wrapped_instance
+        self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
-        return self._instance_index.get(instance)
+        return self._instance_index.get(id(instance), None)
 
     def clear(self):
         self._type_graph.clear()
@@ -251,4 +258,4 @@ class SymbolGraph:
                 logger.error(e)
 
 
-symbols_registry: typing.Set[Type] = set()
+symbols_registry: Set[Type] = set()

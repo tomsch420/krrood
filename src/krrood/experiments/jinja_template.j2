@@ -62,7 +62,7 @@ class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif c
     {% if prop.type == 'ObjectProperty' %}
     {{ prop.field_name }}: Set[{{ prop.object_range_hint }}] = field(default_factory={{ prop.descriptor_name }})
     {% else %}
-    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = field(default=None, init=False)
+    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = field(kw_only=True, default=None)
     {% endif %}
     {% endfor %}
     {% endif %}

@@ -296,13 +296,10 @@ class OwlToPythonConverter:
                 continue
             bases = info.get("base_classes", [])
             if len(bases) == 0:
-                info["base_classes"] = [ontology_base_class_name]
-        # Determine decorator/metaclass application flags: only on original root classes (kept for compatibility)
-        for name, info in classes_copy.items():
-            bases = info.get("base_classes", [])
-            is_root = name == ontology_base_class_name
-            info["define_metaclass"] = is_root
-            info["apply_symbol"] = is_root
+                if not info["role_taker"]:
+                    info["base_classes"] = [ontology_base_class_name]
+                else:
+                    info["base_classes"] = ["Thing"]
 
         # Compute full ancestor sets for each class (transitive closure)
         name_to_bases = {
@@ -318,6 +315,19 @@ class OwlToPythonConverter:
                 ancestors.add(base)
                 stack.extend(name_to_bases.get(base, []))
             info["all_base_classes"] = sorted(ancestors)
+
+        for name, info in classes_copy.items():
+            if not info.get("role_taker"):
+                continue
+            # Remove role_taker properties that are already defined in ancestors
+            for base in info["all_base_classes"]:
+                if base == name:
+                    continue
+                base_info = classes_copy.get(base)
+                if base_info and base_info["role_taker"]:
+                    for prop_name in info["role_taker"]:
+                        if prop_name in base_info["role_taker"]:
+                            info["role_taker"].remove(prop_name)
 
         # Prepare property descriptor bases and compute type-hint helpers
         properties_copy: Dict[str, Dict] = {

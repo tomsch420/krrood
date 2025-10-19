@@ -27,12 +27,12 @@ SymbolGraph.build(classes=classes_of_module(lubm_with_predicates))
 
 
 def test_query_on_descriptor_field_filters():
-    org1 = Organization("ACME")
-    org2 = Company("ABC")
+    org1 = Organization(name="ACME")
+    org2 = Company(name="ABC")
 
     people = [
-        Employee("John"),
-        Employee("Jane"),
+        Employee(name="John"),
+        Employee(name="Jane"),
     ]
     people[0].works_for = [org1]
     people[1].works_for = [org2]

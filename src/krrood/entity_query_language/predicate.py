@@ -80,11 +80,9 @@ class Symbol:
         if in_symbolic_mode():
             return cls._symbolic_new_(cls, *args, **kwargs)
         else:
-            return super().__new__(cls)
-
-    def __post_init__(self):
-        if not in_symbolic_mode():
-            update_cache(self)
+            instance = super().__new__(cls)
+            update_cache(instance)
+            return instance
 
     def __init_subclass__(cls, **kwargs):
         symbols_registry.add(cls)
