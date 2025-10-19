@@ -1,6 +1,7 @@
 import os
 import re
-from typing import Dict, List
+from collections import defaultdict
+from typing import Dict, List, Callable, Optional, Any
 
 import rdflib
 from jinja2 import Environment, FileSystemLoader
@@ -110,9 +111,6 @@ class OwlToPythonConverter:
                     )
                 # move to next
                 node = self.graph.value(node, RDF.rest)
-            # only process first intersectionOf occurrence
-            # if role_taker:
-            #     break
 
         # De-duplicate while preserving order
         seen = set()
@@ -198,6 +196,59 @@ class OwlToPythonConverter:
             "is_specialized": False,
         }
 
+    def _walk_restrictions(
+        self,
+        declared_dom_map: Optional[Dict[str, set]] = None,
+        restrictions_handler: Optional[Callable] = None,
+        classes: Optional[Dict[str, Dict[str, Any]]] = None,
+    ):
+        if declared_dom_map is None:
+            declared_dom_map: Dict[str, set] = defaultdict(set)
+        # Walk class restrictions
+        for cls_uri in self.graph.subjects(RDF.type, OWL.Class):
+            cls_name = self._uri_to_python_name(cls_uri)
+            # direct subclass restrictions
+            superclass = None
+            on_prop = None
+            for restr in self.graph.objects(cls_uri, RDFS.subClassOf):
+                if restrictions_handler:
+                    restrictions_handler(cls_name, restr)
+                # If restriction mentions a property, count this class as declared domain for that property
+                on_prop = self.graph.value(restr, OWL.onProperty)
+                if on_prop:
+                    declared_dom_map[self._uri_to_python_name(on_prop)].add(cls_name)
+                else:
+                    superclass = self._uri_to_python_name(restr)
+
+            if classes and superclass and on_prop:
+                # this means that this is likely a role, defined as a subclass and a restriction, with context being
+                # the restriction on the property (the restricted range type of the property)
+                class_info = classes.get(cls_name)
+                if class_info:
+                    class_info["is_role"] = True
+                    class_info["role_taker"] = [
+                        {
+                            "cls_name": superclass,
+                            "field_name": self._to_snake_case(superclass),
+                        }
+                    ]
+                    if superclass in class_info["superclasses"]:
+                        class_info["superclasses"].remove(superclass)
+
+            # restrictions inside intersectionOf
+            for coll in self.graph.objects(cls_uri, OWL.intersectionOf):
+                node = coll
+                while node and node != RDF.nil:
+                    first = self.graph.value(node, RDF.first)
+                    if restrictions_handler:
+                        restrictions_handler(cls_name, first)
+                    on_prop = self.graph.value(first, OWL.onProperty) if first else None
+                    if on_prop:
+                        declared_dom_map[self._uri_to_python_name(on_prop)].add(
+                            cls_name
+                        )
+                    node = self.graph.value(node, RDF.rest)
+
     def _uri_to_python_name(self, uri) -> str:
         """Convert URI to valid Python identifier"""
         if isinstance(uri, rdflib.URIRef):
@@ -270,6 +321,9 @@ class OwlToPythonConverter:
         classes_copy: Dict[str, Dict] = {
             name: dict(info) for name, info in self.classes.items()
         }
+
+        self._walk_restrictions(classes=classes_copy)
+
         for info in classes_copy.values():
             info["base_classes"] = [
                 b for b in info.get("superclasses", []) if b != "Thing"
@@ -394,27 +448,8 @@ class OwlToPythonConverter:
         }
 
         # Walk class restrictions
-        for cls_uri in self.graph.subjects(RDF.type, OWL.Class):
-            cls_name = self._uri_to_python_name(cls_uri)
-            # direct subclass restrictions
-            for restr in self.graph.objects(cls_uri, RDFS.subClassOf):
-                _handle_restriction(cls_name, restr)
-                # If restriction mentions a property, count this class as declared domain for that property
-                on_prop = self.graph.value(restr, OWL.onProperty)
-                if on_prop:
-                    declared_dom_map[self._uri_to_python_name(on_prop)].add(cls_name)
-            # restrictions inside intersectionOf
-            for coll in self.graph.objects(cls_uri, OWL.intersectionOf):
-                node = coll
-                while node and node != RDF.nil:
-                    first = self.graph.value(node, RDF.first)
-                    _handle_restriction(cls_name, first)
-                    on_prop = self.graph.value(first, OWL.onProperty) if first else None
-                    if on_prop:
-                        declared_dom_map[self._uri_to_python_name(on_prop)].add(
-                            cls_name
-                        )
-                    node = self.graph.value(node, RDF.rest)
+        self._walk_restrictions(declared_dom_map, _handle_restriction)
+
         # Fixed-point propagate via subPropertyOf and inverseOf (for types/ranges), but do NOT add to declared domains
         changed = True
         while changed:
@@ -428,7 +463,7 @@ class OwlToPythonConverter:
                         len(rng_map[name]),
                         len(rng_uri_map[name]),
                     )
-                    dom_map[name].update(dom_map.get(sp, set()))
+                    # dom_map[name].update(dom_map.get(sp, set()))
                     rng_map[name].update(rng_map.get(sp, set()))
                     rng_uri_map[name].update(rng_uri_map.get(sp, set()))
                     if (
