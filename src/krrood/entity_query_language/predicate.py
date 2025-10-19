@@ -265,20 +265,6 @@ class HasType(Predicate):
     types_: Type
     is_expensive: ClassVar[bool] = False
 
-    def __new__(cls, *args, **kwargs):
-        if in_symbolic_mode():
-            variable = kwargs.get("variable") if "variable" in kwargs else args[0]
-            first_element = next(iter(variable))[variable._id_].value
-            if is_iterable(first_element) and not isinstance(first_element, Symbol):
-                variable = Flatten(variable)
-                if "variable" in kwargs:
-                    kwargs["variable"] = variable
-                elif len(args) > 1:
-                    args = (variable, *args[1:])
-                else:
-                    args = (variable,)
-        return super().__new__(cls, *args, **kwargs)
-
     def _holds_direct(
         self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
     ) -> bool:
