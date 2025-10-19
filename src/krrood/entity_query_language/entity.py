@@ -66,7 +66,7 @@ def the(
     entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
     *properties: Union[SymbolicExpression, bool, Predicate],
     has_type: Optional[Type[T]] = None,
-) -> The[T]:
+) -> Union[The[T], T]:
     """
     Select the unique element satisfying the given entity description.
 
@@ -280,7 +280,7 @@ def in_(item, container):
 
 def flatten(
     var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
-) -> Union[CanBehaveLikeAVariable[T], Iterable[T]]:
+) -> Union[CanBehaveLikeAVariable[T], T]:
     """
     Flatten a nested iterable domain into individual items while preserving the parent bindings.
     This returns a DomainMapping that, when evaluated, yields one solution per inner element

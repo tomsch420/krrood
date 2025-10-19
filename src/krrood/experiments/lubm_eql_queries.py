@@ -2,7 +2,15 @@ import os
 import time
 from typing import List
 
-from krrood.entity_query_language.entity import symbolic_mode, a
+from krrood.entity_query_language.entity import (
+    symbolic_mode,
+    a,
+    flatten,
+    contains,
+    set_of,
+    the,
+)
+from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbolic import ResultQuantifier
 
 from krrood.experiments import lubm_with_predicates
@@ -37,39 +45,43 @@ from krrood.experiments.owl_instances_loader import load_instances
 
 
 def get_eql_queries() -> List[ResultQuantifier]:
-    # 1
+    # 1 (No joining, just filtration of graduate students through taking a certain course)
     with symbolic_mode():
         q1 = a(
             x := GraduateStudent(),
-            TakesCourse(x, GraduateCourse(name="GraduateCourse0")),
+            flatten(x.takes_course).name == "GraduateCourse0",
         )
 
     # 2
     with symbolic_mode():
         q2 = a(
             x := GraduateStudent(),
-            MemberOf(x, z := Department()),
-            SubOrganizationOf(z, y := University()),
-            UndergraduateDegreeFrom(x, y),
+            HasType(
+                z := flatten(x.person.member_of), Department
+            ),  # filtration of x producing z
+            HasType(
+                y := flatten(z.sub_organization_of), University
+            ),  # filtration of z (which in turn filters x again) producing y
+            contains(x.person.undergraduate_degree_from, y),  # join between x and y
         )
 
     # 3
     with symbolic_mode():
         q3 = a(
             x := Publication(),
-            PublicationAuthor(x, AssistantProfessor(name="AssistantProfessor0")),
+            contains(
+                x.publication_author,
+                the(AssistantProfessor(name="AssistantProfessor0")).person,
+            ),
         )
 
     # 4
     with symbolic_mode():
-        q4 = a(x := Professor(), WorksFor(x, Department(name="Department0")))
+        q4 = a(x := Professor(), flatten(x.works_for).name == "Department0")
 
     # 5
     with symbolic_mode():
-        q5 = a(
-            x := Person(),
-            MemberOf(x, Department(name="Department0")),
-        )
+        q5 = a(x := Person(), flatten(x.member_of).name == "Department0")
 
     # 6
     with symbolic_mode():
@@ -78,55 +90,74 @@ def get_eql_queries() -> List[ResultQuantifier]:
     # 7
     with symbolic_mode():
         q7 = a(
-            x := Student(),
-            TakesCourse(x, y := Course()),
-            TeacherOf(AssociateProfessor(name="AssociateProfessor0"), y),
+            set_of(
+                (
+                    x := Student(),
+                    y := the(AssociateProfessor(name="AssociateProfessor0")).teacher_of,
+                ),
+                contains(y, flatten(x.takes_course)),
+                # can be optimized by walking from student.takes_course to teacher_of to AssociateProfessor
+                # in the SymbolGraph
+            )
         )
 
     # 8
     with symbolic_mode():
         q8 = a(
-            x := Student(),
-            MemberOf(x, y := Department()),
-            SubOrganizationOf(y, University(name="University0")),
+            set_of(
+                (
+                    x := Student(),
+                    y := flatten(x.person.member_of),
+                    z := x.person.email_address,
+                ),
+                HasType(y, Department),
+                contains(y.sub_organization_of, the(University(name="University0"))),
+            )
         )
 
     # 9
     with symbolic_mode():
         q9 = a(
-            x := Student(),
-            Advisor(x, y := Faculty()),
-            TeacherOf(y, z := Course()),
-            TakesCourse(x, z),
+            set_of(
+                (
+                    x := Student(),
+                    y := flatten(x.person.advisor),
+                    z := flatten(x.takes_course),
+                ),
+                HasType(y, Faculty),
+                contains(y.teacher_of, z),
+            )
         )
 
     # 10
     with symbolic_mode():
         q10 = a(
             x := Student(),
-            TakesCourse(x, GraduateCourse(name="GraduateCourse0")),
+            contains(x.takes_course, the(GraduateCourse(name="GraduateCourse0"))),
         )
 
     # 11
     with symbolic_mode():
         q11 = a(
             x := ResearchGroup(),
-            SubOrganizationOf(x, University(name="University0")),
+            contains(x.sub_organization_of, the(University(name="University0"))),
         )
 
     # 12
     with symbolic_mode():
         q12 = a(
-            x := Chair(),
-            WorksFor(x, y := Department()),
-            SubOrganizationOf(y, University(name="University0")),
+            set_of(
+                (x := Chair(), y := flatten(x.works_for)),
+                HasType(y, Department),
+                contains(y.sub_organization_of, the(University(name="University0"))),
+            )  # writing contains like this implies that the user knows that this is a set of objects.
+            # A more declarative way would be to write SubOrganizationOf(y, the(University(name="University0"))).
         )
 
     # 13
     with symbolic_mode():
         q13 = a(
-            x := Person(),
-            HasAlumnus(University(name="University0"), x),
+            x := the(University(name="University0")).has_alumnus,
         )
 
     # 14
@@ -138,7 +169,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
 
 if __name__ == "__main__":
-    instances_path = os.path.join("../..", "..", "resources", "lubm_instances.owl")
+    instances_path = os.path.join("..", "..", "..", "resources", "lubm_instances.owl")
     load_instances(
         instances_path,
         model_module=lubm_with_predicates,
