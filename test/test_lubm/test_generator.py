@@ -143,7 +143,13 @@ def query_7(specific_professor):
     """
     with symbolic_mode():
         student = let(Student)
-        course = let(Course)
+        course = let(Course, domain=specific_professor.teaches_courses)
+        graduate_student = a(
+            gs := GraduateStudent(), contains(gs.takes_graduate_courses, course)
+        )
+        undergraduate_student = a(
+            us := UndergraduateStudent(), contains(us.takes_courses, course)
+        )
         query = an(
             set_of(
                 (student, course),
