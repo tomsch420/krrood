@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, TypeVar, Iterable, Any
 
-from ..entity_query_language.predicate import Symbol, Predicate, predicate
+from krrood.entity_query_language.predicate import Symbol, Predicate, predicate
 
 # Type variable for the base role
 TFacultyRole = TypeVar("TFacultyRole", bound="FacultyMember")

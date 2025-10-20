@@ -14,8 +14,8 @@ from krrood.entity_query_language.entity import (
 )
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.symbolic import symbolic_mode
-from krrood.experiments.generator import UniversityDataGenerator
-from krrood.experiments.lubm import (
+from krrood.experiments.ood.generator import UniversityDataGenerator
+from krrood.experiments.ood.lubm import (
     University,
     Student,
     Department,
