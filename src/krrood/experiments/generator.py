@@ -18,9 +18,6 @@ from .lubm import (
     AssistantProfessor,
     Lecturer,
     Department,
-    TStudentRole,
-    UndergraduateStudent,
-    GraduateStudent,
     Course,
     GraduateCourse,
     ResearchGroup,
@@ -249,21 +246,22 @@ class UniversityDataGenerator:
         self.all_faculty.append(faculty_role)
         return faculty_role
 
-    def _generate_student(
-        self, student_class: Type[TStudentRole], dept: Department
-    ) -> TStudentRole:
-        """Creates a Student object (UG or Grad)."""
+    def _generate_student(self, dept: Department, is_graduate: bool) -> Student:
+        """Creates a Student object.
+
+        When is_graduate is True, the student represents a graduate student and
+        receives an undergraduate degree source. Otherwise, it represents an
+        undergraduate student.
+        """
         person = self._get_random_name(random.choice(list(Gender)).value)
 
-        if student_class is UndergraduateStudent:
-            student = UndergraduateStudent(person=person, department=dept)
-        elif student_class is GraduateStudent:
+        if is_graduate:
             ug_univ = self._pick_undergrad_university(dept.university)
-            student = GraduateStudent(
+            student = Student(
                 person=person, department=dept, undergraduate_degree_from=ug_univ
             )
         else:
-            raise ValueError("Invalid student class provided")
+            student = Student(person=person, department=dept)
 
         self.all_students.append(student)
         return student
@@ -310,12 +308,13 @@ class UniversityDataGenerator:
         num_grad = total_faculty * grad_ratio
 
         # 4. Generate Students
-        dept.undergraduate_students = [
-            self._generate_student(UndergraduateStudent, dept) for _ in range(num_ug)
+        undergrads = [
+            self._generate_student(dept, is_graduate=False) for _ in range(num_ug)
         ]
-        dept.graduate_students = [
-            self._generate_student(GraduateStudent, dept) for _ in range(num_grad)
+        grads = [
+            self._generate_student(dept, is_graduate=True) for _ in range(num_grad)
         ]
+        dept.students = undergrads + grads
 
         # 5. Generate Courses
         num_courses = random.randint(
@@ -341,8 +340,8 @@ class UniversityDataGenerator:
 
         # 7. Establish Relationships
         self._establish_faculty_relationships(dept, all_faculty)
-        self._establish_student_relationships(dept, all_professors)
-        self._establish_graduate_student_roles(dept)
+        self._establish_student_relationships(dept, all_professors, grads, undergrads)
+        self._establish_graduate_student_roles(dept, grads)
 
         return dept
 
@@ -372,18 +371,22 @@ class UniversityDataGenerator:
                     faculty.teaches_graduate_courses.append(course)
 
     def _establish_student_relationships(
-        self, dept: Department, all_professors: List[Professor]
+        self,
+        dept: Department,
+        all_professors: List[Professor],
+        grad_students: List[Student],
+        undergrad_students: List[Student],
     ):
         """Assigns advisors and courses to all students."""
 
         # --- Graduate Student Advisors ---
-        # Every GraduateStudent has a Professor as his advisor
-        for g_student in dept.graduate_students:
+        # Every graduate-like Student has a Professor as advisor
+        for g_student in grad_students:
             advisor = random.choice(all_professors)
             g_student.advisor = advisor
-            advisor.advises_graduate_students.append(g_student)
+            advisor.advised_students.append(g_student)
 
-            # Every GraduateStudent takesCourse 1-3 GraduateCourses
+            # Every graduate-like Student takes 1-3 GraduateCourses
             num_courses = random.randint(1, 3)
             g_student.takes_graduate_courses.extend(
                 random.sample(
@@ -391,7 +394,7 @@ class UniversityDataGenerator:
                 )
             )
 
-            # GraduateStudent co-authors 0-5 Publications with some Professors
+            # Graduate-like Student co-authors 0-5 Publications with some Professors
             num_co_pubs = random.randint(0, 5)
             # Find all faculty publications
             all_faculty_pubs = [
@@ -406,19 +409,19 @@ class UniversityDataGenerator:
                 )
 
         # --- Undergraduate Student Advisors ---
-        # 1/5 - 1/4 of the UndergraduateStudents have a Professor as their advisor
+        # 1/5 - 1/4 of the undergraduates have a Professor as their advisor
         ug_advisor_ratio = random.uniform(0.20, 0.25)  # 1/5 to 1/4
-        num_advised_ug = int(len(dept.undergraduate_students) * ug_advisor_ratio)
+        num_advised_ug = int(len(undergrad_students) * ug_advisor_ratio)
 
-        advised_students = random.sample(dept.undergraduate_students, num_advised_ug)
+        advised_students = random.sample(undergrad_students, num_advised_ug)
 
         for ug_student in advised_students:
             advisor = random.choice(all_professors)
             ug_student.advisor = advisor
-            advisor.advises_undergraduate_students.append(ug_student)
+            advisor.advised_students.append(ug_student)
 
-        # Every UndergraduateStudent takesCourse 2-4 Courses
-        for ug_student in dept.undergraduate_students:
+        # Every undergrad takes 2-4 Courses
+        for ug_student in undergrad_students:
             num_courses = random.randint(2, 4)
             ug_student.takes_courses.extend(
                 random.sample(
@@ -427,10 +430,10 @@ class UniversityDataGenerator:
                 )
             )
 
-    def _establish_graduate_student_roles(self, dept: Department):
+    def _establish_graduate_student_roles(
+        self, dept: Department, grad_students: List[Student]
+    ):
         """Assigns Teaching Assistant and Research Assistant roles."""
-
-        grad_students = dept.graduate_students
 
         # 1. Teaching Assistants (TAs)
         # 1/5 - 1/4 of the GraduateStudents are chosen as TA for one Course
