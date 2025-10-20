@@ -15,4 +15,11 @@ class DatasetConverter:
 
     def convert(self):
         university = self.ontology.University.instances()[0]
-        print(university)
+        # get all departments of this university
+
+        departments_in_university = list(
+            self.ontology.search(
+                is_a=self.ontology.Department, subOrganizationOf=university
+            )
+        )
+        print(departments_in_university)
