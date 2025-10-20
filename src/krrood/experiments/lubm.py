@@ -241,16 +241,14 @@ class Student(Symbol):
     undergraduate_degree_from: Optional["University"] = None
     co_authored_publications: List["Publication"] = field(default_factory=list)
 
+    @property
+    def takes_any_graduate_courses(self) -> bool:
+        return len(self.takes_graduate_courses) > 0
 
-@dataclass
-class UndergraduateStudent(Student):
-    """Marker subclass for undergraduate students (kept for compatibility)."""
+    @property
+    def takes_any_undergraduate_courses(self) -> bool:
+        return len(self.takes_courses) > 0
 
-    pass
-
-
-# Backwards-compatibility alias: GraduateStudent now unified into Student
-GraduateStudent = Student
 
 # --- Ancillary Roles (Composition on GraduateStudent) ---
 
