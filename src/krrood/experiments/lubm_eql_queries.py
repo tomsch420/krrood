@@ -75,21 +75,29 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
     # 3
     with symbolic_mode():
+        assistant_professor = the(
+            AssistantProfessor(
+                uri="http://www.Department0.University0.edu/AssistantProfessor0"
+            )
+        )
         q3 = a(
             x := Publication(),
-            contains(
-                x.publication_author,
-                the(AssistantProfessor(name="AssistantProfessor0")).person,
-            ),
+            contains(x.publication_author, assistant_professor.person),
         )
 
     # 4
     with symbolic_mode():
-        q4 = a(x := Professor(), flatten(x.works_for).name == "Department0")
+        q4 = a(
+            x := Professor(),
+            flatten(x.works_for).uri == "http://www.Department0.University0.edu",
+        )
 
     # 5
     with symbolic_mode():
-        q5 = a(x := Person(), flatten(x.member_of).name == "Department0")
+        q5 = a(
+            x := Person(),
+            flatten(x.member_of).uri == "http://www.Department0.University0.edu",
+        )
 
     # 6
     with symbolic_mode():
@@ -101,7 +109,11 @@ def get_eql_queries() -> List[ResultQuantifier]:
             set_of(
                 (
                     x := Student(),
-                    y := the(AssociateProfessor(name="AssociateProfessor0")).teacher_of,
+                    y := the(
+                        AssociateProfessor(
+                            uri="http://www.Department0.University0.edu/AssociateProfessor0"
+                        )
+                    ).teacher_of,
                 ),
                 contains(y, flatten(x.takes_course)),
                 # can be optimized by walking from student.takes_course to teacher_of to AssociateProfessor
@@ -119,7 +131,10 @@ def get_eql_queries() -> List[ResultQuantifier]:
                     z := x.person.email_address,
                 ),
                 HasType(y, Department),
-                contains(y.sub_organization_of, the(University(name="University0"))),
+                contains(
+                    y.sub_organization_of,
+                    the(University(uri="http://www.University0.edu")),
+                ),
             )
         )
 
@@ -141,14 +156,23 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q10 = a(
             x := Student(),
-            contains(x.takes_course, the(GraduateCourse(name="GraduateCourse0"))),
+            contains(
+                x.takes_course,
+                the(
+                    GraduateCourse(
+                        uri="http://www.Department0.University0.edu/GraduateCourse0"
+                    )
+                ),
+            ),
         )
 
     # 11
     with symbolic_mode():
         q11 = a(
             x := ResearchGroup(),
-            contains(x.sub_organization_of, the(University(name="University0"))),
+            contains(
+                x.sub_organization_of, the(University(uri="http://www.University0.edu"))
+            ),
         )
 
     # 12
@@ -157,7 +181,10 @@ def get_eql_queries() -> List[ResultQuantifier]:
             set_of(
                 (x := Chair(), y := flatten(x.works_for)),
                 HasType(y, Department),
-                contains(y.sub_organization_of, the(University(name="University0"))),
+                contains(
+                    y.sub_organization_of,
+                    the(University(uri="http://www.University0.edu")),
+                ),
             )  # writing contains like this implies that the user knows that this is a set of objects.
             # A more declarative way would be to write SubOrganizationOf(y, the(University(name="University0"))).
         )
@@ -165,7 +192,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
     # 13
     with symbolic_mode():
         q13 = a(
-            x := the(University(name="University0")).has_alumnus,
+            x := the(University(uri="http://www.University0.edu")).has_alumnus,
         )
 
     # 14

@@ -171,7 +171,7 @@ class Predicate(Symbol, ABC):
             return
         yield from (
             n.instance
-            for n in self.symbol_graph.get_outgoing_neighbors_with_edge_type(
+            for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
                 wrapped_instance, self.__class__
             )
         )

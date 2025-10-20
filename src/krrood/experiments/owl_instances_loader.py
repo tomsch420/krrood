@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from dataclasses import fields, is_dataclass
 from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
@@ -9,6 +10,7 @@ import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
 from .utils import get_generic_type_param
+from ..class_diagrams.class_diagram import Association
 
 # Import PropertyDescriptor to correctly detect descriptor class attributes
 from ..entity_query_language.property_descriptor import PropertyDescriptor
@@ -24,33 +26,26 @@ class OwlInstancesRegistry:
     """
 
     def __init__(self) -> None:
-        self._by_uri: Dict[URIRef, Any] = {}
+        self._by_uri: Dict[URIRef, List[Any]] = defaultdict(list)
         self._by_class: Dict[Type, List[Any]] = {}
 
-    def get_or_create_for(
-        self, uri: URIRef, factory: Type, role_taker: Optional[Role] = None
-    ) -> Any:
-        inst = self.resolve(uri)
-        if inst is None:
-            if not issubclass(factory, Role):
-                inst = factory()
-            else:
-                # get role taker from T in Role[T]
-                role_taker_type = get_generic_type_param(factory, Role)[0]
-                if role_taker_type is None:
-                    raise ValueError(
-                        f"Role factory {factory} must be generic with exactly one type parameter"
-                    )
-                role_taker = role_taker or role_taker_type()
-                inst = factory(role_taker)
+    def get_or_create_for(self, uri: URIRef, factory: Type, *args, **kwargs) -> Any:
+        instances = self.resolve(uri)
+        if (instances is None) or (
+            not any(isinstance(inst, factory) for inst in instances)
+        ):
+            kwargs["uri"] = str(uri)
+            inst = factory(*args, **kwargs)
 
             # Fill a best-effort human-readable name if available
             # local = local_name(uri)
             local = str(uri)
             if hasattr(inst, "uri") and getattr(inst, "uri") is None:
                 setattr(inst, "uri", local)
-            self._by_uri[uri] = inst
+            self._by_uri[uri].append(inst)
             self._by_class.setdefault(factory, []).append(inst)
+        else:
+            inst = [i for i in instances if isinstance(i, factory)][0]
         return inst
 
     def get(self, cls: Type) -> List[Any]:
@@ -225,10 +220,34 @@ def load_instances(
         py_cls = _get_python_class_for_rdf_class(class_by_name, o_class)
         if py_cls is None:
             continue
-        registry.get_or_create_for(s, py_cls)
+        existing_roles = registry.resolve(s)
+        kwargs = {}
+        if existing_roles:
+            for er in existing_roles:
+                for (
+                    assoc1,
+                    assoc2,
+                ) in symbol_graph.type_graph.get_common_role_taker_associations(
+                    type(er), py_cls
+                ):
+                    if assoc2.field.public_name in kwargs:
+                        continue
+                    kwargs[assoc2.field.public_name] = getattr(
+                        er, assoc1.field.public_name
+                    )
+        role_taker_associations = (
+            symbol_graph.type_graph.get_role_taker_associations_of_cls(py_cls)
+        )
+        for role_taker_assoc in role_taker_associations:
+            role_taker_field = role_taker_assoc.field
+            # assumes role takers are not themselves roles (In general this is not true)
+            if role_taker_field.public_name in kwargs:
+                continue
+            kwargs[role_taker_field.public_name] = role_taker_assoc.target.clazz()
+        registry.get_or_create_for(s, py_cls, **kwargs)
 
     # Helper to ensure object instance exists by looking up its type dynamically
-    def ensure_instance(uri: URIRef) -> Optional[Any]:
+    def ensure_instance(uri: URIRef) -> Optional[List[Any]]:
         inst = registry.resolve(uri)
         if inst is not None:
             return inst
@@ -236,7 +255,7 @@ def load_instances(
         for _, _, o_class in g.triples((uri, RDF.type, None)):
             py_cls = _get_python_class_for_rdf_class(class_by_name, o_class)
             if py_cls is not None:
-                return registry.get_or_create_for(uri, py_cls)
+                return [registry.get_or_create_for(uri, py_cls)]
         return None
 
     # For convenience: map property local name to descriptor base class (if exists)
@@ -255,6 +274,7 @@ def load_instances(
             subj = ensure_instance(s)
             if subj is None:
                 continue
+        subj = subj[0]
         pred_local = local_name(p)
         snake = to_snake(pred_local)
         subj_cls = type(subj)
@@ -278,25 +298,27 @@ def load_instances(
 
         # Object property
         obj = ensure_instance(o) if isinstance(o, URIRef) else None
+        if obj is not None:
+            obj = obj[0]
         if field_name and hasattr(subj, field_name):
             lst = getattr(subj, field_name, None)
             if isinstance(lst, set) and obj is not None:
                 lst.add(obj)
                 continue
-        if issubclass(subj_cls, Role):
-            role_taker_cls = get_generic_type_param(subj_cls, Role)[0]
-            try:
-                role_taker_field = [
-                    f for f in fields(subj_cls) if eval(f.type) == role_taker_cls
-                ][0]
-            except IndexError:
-                pass
-            role_taker_val = getattr(subj, role_taker_field.name)
+
+        role_taker_vals = symbol_graph.get_role_takers_of_instance(subj)
+
+        assigned: bool = False
+        for role_taker_val in role_taker_vals:
             if hasattr(role_taker_val, snake):
                 lst = getattr(role_taker_val, snake)
                 if isinstance(lst, set) and obj is not None:
                     lst.add(obj)
-                    continue
+                    assigned = True
+                    break
+        if assigned:
+            continue
+
         base_desc = descriptor_base_for(snake)
 
         if base_desc is not None:
@@ -328,14 +350,33 @@ def load_instances(
                         f"Could not determine role for {obj} ({o_type}) and predicate {p} ({base_desc})"
                     )
                 new_role_class = chosen_role
-            new_role = registry.get_or_create_for(
-                subj.name, new_role_class, role_taker=role_taker_val
-            )
+
+            existing_roles = registry.resolve(s)
+            new_role = None
+            for er in existing_roles:
+                if type(er) is new_role_class:
+                    new_role = er
+                    break
+            if new_role is None:
+                type_graph = symbol_graph.type_graph
+                kwargs = {}
+                for assoc1, assoc2 in type_graph.get_common_role_taker_associations(
+                    subj_cls, new_role_class
+                ):
+                    kwargs[assoc2.field.public_name] = getattr(
+                        subj, assoc1.field.public_name
+                    )
+
+                new_role = registry.get_or_create_for(
+                    subj.uri, new_role_class, **kwargs
+                )
             if hasattr(new_role, snake):
                 lst = getattr(new_role, snake)
                 if isinstance(lst, set) and obj is not None:
                     lst.add(obj)
                     continue
+
+        raise ValueError(f"Could not assign {obj} to {subj} ({p})")
 
         # Try inverse assignment if direct field does not exist on subject
         if base_desc is not None and obj is not None:

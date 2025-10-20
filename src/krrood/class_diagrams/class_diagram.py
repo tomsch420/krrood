@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
 from functools import cached_property
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Iterable, Union, Any, Tuple
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
@@ -63,6 +64,14 @@ class Association(Relation):
 
     field: WrappedField
     """The field in the source class that creates this association with the target class."""
+
+    one_to_many: bool = dataclasses.field(init=False)
+    """Whether the association is one-to-many (True) or many-to-one (False)."""
+
+    def __post_init__(self):
+        self.one_to_many = (
+            self.field.is_one_to_many_relationship and not self.field.is_type_type
+        )
 
     def __str__(self):
         return f"has-{self.field.public_name}"
@@ -167,6 +176,50 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
+    def get_common_role_taker_associations(
+        self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
+    ) -> Iterable[Tuple[Association, Association]]:
+        cls1 = self.get_wrapped_class(cls1)
+        cls2 = self.get_wrapped_class(cls2)
+        for assoc1 in self.get_role_taker_associations_of_cls(cls1):
+            target_1 = assoc1.target
+            for _, _, assoc2 in self._dependency_graph.in_edges(target_1.index):
+                if not isinstance(assoc2, Association):
+                    continue
+                if assoc2.source.clazz != cls2.clazz:
+                    continue
+                if assoc2.field.is_role_taker:
+                    yield assoc1, assoc2
+                    break
+
+    def get_role_taker_associations_of_cls(
+        self, cls: Union[Type, WrappedClass]
+    ) -> Iterable[Association]:
+        """
+        :return: Association objects representing the role takers of the given class, a role taker is
+        a field that is a one-to-one relationship and is not optional.
+        """
+        for assoc in self.get_out_edges(cls):
+            if not isinstance(assoc, Association):
+                continue
+            if assoc.field.is_role_taker:
+                yield assoc
+
+    def get_outgoing_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Iterable[WrappedClass]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        for _, child_idx, edge in self._dependency_graph.out_edges(wrapped_cls.index):
+            if isinstance(edge, relation_type):
+                yield self._dependency_graph.get_node_data(child_idx)
+
+    def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Iterable[Relation]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        for _, _, edge in self._dependency_graph.out_edges(wrapped_cls.index):
+            yield edge
+
     def to_subdiagram_without_inherited_associations(
         self,
         include_field_name: bool = False,
@@ -266,6 +319,8 @@ class ClassDiagram:
         ]
 
     def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
+        if isinstance(clazz, WrappedClass):
+            return clazz
         return self._cls_wrapped_cls_map.get(clazz, None)
 
     def add_node(self, clazz: WrappedClass):

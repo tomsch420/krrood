@@ -5,7 +5,7 @@ import importlib
 import inspect
 import logging
 import sys
-from dataclasses import dataclass, Field
+from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
@@ -176,6 +176,15 @@ class WrappedField:
             return self.contained_type
         else:
             return self.resolved_type
+
+    @cached_property
+    def is_role_taker(self) -> bool:
+        return (
+            self.is_one_to_one_relationship
+            and not self.is_optional
+            and self.field.default == MISSING
+            and self.field.default_factory == MISSING
+        )
 
 
 @lru_cache(maxsize=None)

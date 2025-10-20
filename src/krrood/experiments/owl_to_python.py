@@ -331,18 +331,7 @@ class OwlToPythonConverter:
         if not ontology_base_class_name.endswith("Ontology"):
             ontology_base_class_name = ontology_base_class_name + "Ontology"
 
-        classes_copy["Role"] = {
-            "name": "Role",
-            "superclasses": [
-                f"Generic[T]",
-                ontology_base_class_name,
-            ],
-            "label": "Role class which represents a role that a persistent identifier can take on in a certain context",
-        }
-
         for info in classes_copy.values():
-            if info.get("role_taker"):
-                info["superclasses"].append("Role")
             info["base_classes"] = [
                 b for b in info.get("superclasses", []) if b != "Thing"
             ]
@@ -362,10 +351,7 @@ class OwlToPythonConverter:
                 continue
             bases = info.get("base_classes", [])
             if len(bases) == 0:
-                # if not info["role_taker"]:
                 info["base_classes"] = [ontology_base_class_name]
-                # else:
-                #     info["base_classes"] = ["Thing"]
 
         # Compute full ancestor sets for each class (transitive closure)
         name_to_bases = {
@@ -802,13 +788,6 @@ class OwlToPythonConverter:
             if inv and inv in property_classes:
                 prior = index_map.get(inv, 10**9) < index_map.get(name, 10**9)
             info["inverse_target_is_prior"] = prior
-
-        for info in classes_copy.values():
-            if "Role" in info["base_classes"]:
-                info["base_classes"].remove("Role")
-                info["base_classes"].append(
-                    f"Role[{info['role_taker'][0]['cls_name']}]"
-                )
 
         template_dir = os.path.dirname(__file__)
         env = Environment(

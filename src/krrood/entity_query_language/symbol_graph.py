@@ -110,6 +110,20 @@ class SymbolGraph:
             self._relation_index = {}
             self.__class__._initialized = True
 
+    def get_role_takers_of_instance(self, instance: Any) -> Iterable[Any]:
+        """
+        :param instance: The instance to get the role takers for.
+        :return: Role takers of the given instance. A role taker is a field that represents
+         a one-to-one relationship and is not optional.
+        """
+        wrapped_instance = self.get_wrapped_instance(instance)
+        if not wrapped_instance:
+            raise ValueError(f"Instance {instance} not found in graph.")
+        for role_taker_assoc in self.type_graph.get_role_taker_associations_of_cls(
+            type(wrapped_instance.instance)
+        ):
+            yield getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
+
     @property
     def type_graph(self) -> ClassDiagram:
         return self._current_graph._type_graph
@@ -122,7 +136,17 @@ class SymbolGraph:
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
+        if isinstance(instance, WrappedInstance):
+            return instance
         return self._instance_index.get(id(instance), None)
+
+    def get_cls_associations(self, cls: Type) -> List[WrappedField]:
+        if self._type_graph is None:
+            return []
+        wrapped_cls = self._type_graph.get_wrapped_class(cls)
+        if wrapped_cls is None:
+            return []
+        return self._type_graph.g
 
     def clear(self):
         self._type_graph.clear()
@@ -179,11 +203,12 @@ class SymbolGraph:
     def wrapped_instances(self) -> List[WrappedInstance]:
         return self._instance_graph.nodes()
 
-    def get_outgoing_neighbors_with_edge_type(
+    def get_outgoing_neighbors_with_predicate_type(
         self,
         wrapped_instance: WrappedInstance,
         predicate_type: Type[Predicate],
     ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         for _, child_idx, edge in self._instance_graph.out_edges(
             wrapped_instance.index
         ):
@@ -193,6 +218,7 @@ class SymbolGraph:
     def get_outgoing_neighbors(
         self, wrapped_instance: WrappedInstance
     ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
             self._instance_graph.get_node_data(child_idx)
             for _, child_idx, _ in self._instance_graph.out_edges(
@@ -203,6 +229,7 @@ class SymbolGraph:
     def get_neighbors(
         self, wrapped_instance: WrappedInstance
     ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
             self._instance_graph.get_node_data(idx)
             for idx in self._instance_graph.neighbors(wrapped_instance.index)
