@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, TypeVar, Iterable, Any
 
-from ..entity_query_language.predicate import Symbol, Predicate, predicate
+from krrood.entity_query_language.predicate import Symbol, Predicate, predicate
 
 # Type variable for the base role
 TFacultyRole = TypeVar("TFacultyRole", bound="FacultyMember")
@@ -179,10 +179,22 @@ class Professor(FacultyMember):
     This intermediate role holds the advising relationship common to professors.
     """
 
-    advises_graduate_students: List["GraduateStudent"] = field(default_factory=list)
-    advises_undergraduate_students: List["UndergraduateStudent"] = field(
-        default_factory=list
-    )
+    advised_students: List["Student"] = field(default_factory=list, repr=False)
+
+    @property
+    def advises_students(self) -> List["Student"]:
+        """All students advised by this professor."""
+        return self.advised_students
+
+    @property
+    def advises_graduate_students(self) -> List["Student"]:
+        """Backwards-compatible view: students with graduate-course participation."""
+        return [s for s in self.advised_students if s.takes_graduate_courses]
+
+    @property
+    def advises_undergraduate_students(self) -> List["Student"]:
+        """Backwards-compatible view: students with undergraduate-course participation."""
+        return [s for s in self.advised_students if s.takes_courses]
 
 
 # --- Specific Faculty Ranks (Type Markers) ---
@@ -215,27 +227,27 @@ class Lecturer(FacultyMember):
 
 @dataclass
 class Student(Symbol):
-    """Base role for all students. Composed with a Person entity."""
+    """Base role for all students. Composed with a Person entity.
+
+    Unifies undergraduate and graduate student attributes.
+    """
 
     person: Person
     department: Optional[Department] = field(default=None)
-    advisor: Optional[Professor] = field(default=None)  # Advisor is always a Professor
+    advisor: Optional["Professor"] = field(default=None)
+    # Unified attributes
+    takes_courses: List["Course"] = field(default_factory=list)
+    takes_graduate_courses: List["GraduateCourse"] = field(default_factory=list)
+    undergraduate_degree_from: Optional["University"] = None
+    co_authored_publications: List["Publication"] = field(default_factory=list)
 
+    @property
+    def takes_any_graduate_courses(self) -> bool:
+        return len(self.takes_graduate_courses) > 0
 
-@dataclass
-class UndergraduateStudent(Student):
-    """Undergraduate-specific attributes."""
-
-    takes_courses: List[Course] = field(default_factory=list)
-
-
-@dataclass
-class GraduateStudent(Student):
-    """Graduate-specific attributes."""
-
-    undergraduate_degree_from: University = None
-    takes_graduate_courses: List[GraduateCourse] = field(default_factory=list)
-    co_authored_publications: List[Publication] = field(default_factory=list)
+    @property
+    def takes_any_undergraduate_courses(self) -> bool:
+        return len(self.takes_courses) > 0
 
 
 # --- Ancillary Roles (Composition on GraduateStudent) ---
@@ -243,17 +255,17 @@ class GraduateStudent(Student):
 
 @dataclass
 class TeachingAssistant(Symbol):
-    """A specific temporary role for GraduateStudents."""
+    """A specific temporary role for Students (historically graduate students)."""
 
-    graduate_student: GraduateStudent
+    graduate_student: Student
     course_assistant_for: Course
 
 
 @dataclass
 class ResearchAssistant(Symbol):
-    """A specific temporary role for GraduateStudents."""
+    """A specific temporary role for Students (historically graduate students)."""
 
-    graduate_student: GraduateStudent
+    graduate_student: Student
 
 
 # --- Structural Units ---
@@ -274,13 +286,22 @@ class Department(Organization):
     associate_professors: List[AssociateProfessor] = field(default_factory=list)
     assistant_professors: List[AssistantProfessor] = field(default_factory=list)
     lecturers: List[Lecturer] = field(default_factory=list)
-    undergraduate_students: List[UndergraduateStudent] = field(default_factory=list)
-    graduate_students: List[GraduateStudent] = field(default_factory=list)
+    students: List[Student] = field(default_factory=list)
 
     # Collections of other entities
     research_groups: List[ResearchGroup] = field(default_factory=list)
     undergraduate_courses: List[Course] = field(default_factory=list)
     graduate_courses: List[GraduateCourse] = field(default_factory=list)
+
+    @property
+    def undergraduate_students(self) -> List[Student]:
+        """Backwards-compatible view of undergraduates (takes undergrad courses)."""
+        return [s for s in self.students if s.takes_courses]
+
+    @property
+    def graduate_students(self) -> List[Student]:
+        """Backwards-compatible view of graduates (takes graduate courses)."""
+        return [s for s in self.students if s.takes_graduate_courses]
 
     @property
     def all_faculty(self) -> List[FacultyMember]:

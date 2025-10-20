@@ -1,5 +1,6 @@
 import time
 
+import pytest
 import tqdm
 
 from krrood.entity_query_language.entity import (
@@ -7,35 +8,24 @@ from krrood.entity_query_language.entity import (
     entity,
     an,
     contains,
-    the,
     set_of,
     or_,
-    and_,
-    a,
-    flatten,
+    not_,
 )
-from krrood.entity_query_language.predicate import Predicate, HasType, HasTypes
+from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.symbolic import symbolic_mode
-from krrood.experiments.generator import UniversityDataGenerator
-from krrood.experiments.lubm import (
+from krrood.experiments.ood.generator import UniversityDataGenerator
+from krrood.experiments.ood.lubm import (
     University,
     Student,
-    GraduateStudent,
-    GraduateCourse,
     Department,
     Publication,
     Professor,
-    Person,
     FacultyMember,
     Course,
-    UndergraduateStudent,
     ResearchGroup,
     exists,
 )
-
-import pytest
-from krrood.entity_query_language.predicate import Predicate
-from krrood.experiments.generator import UniversityDataGenerator
 
 
 @pytest.fixture(scope="session")
@@ -50,11 +40,12 @@ def query_1(specific_graduate_course):
     Select all graduate students that take the given graduate course.
     """
     with symbolic_mode():
-        graduate_student = let(GraduateStudent)
+        graduate_student = let(Student)
 
         query = an(
             entity(
                 graduate_student,
+                graduate_student.takes_any_graduate_courses,
                 contains(
                     graduate_student.takes_graduate_courses, specific_graduate_course
                 ),
@@ -69,13 +60,14 @@ def query_2():
     degree from.
     """
     with symbolic_mode():
-        graduate_student = let(GraduateStudent)
+        graduate_student = let(Student)
         university = let(University)
         department = let(Department)
 
         query = an(
             set_of(
                 (graduate_student, university, department),
+                graduate_student.takes_any_graduate_courses,
                 contains(university.departments, department),
                 contains(department.graduate_students, graduate_student),
                 graduate_student.undergraduate_degree_from == university,
@@ -161,10 +153,14 @@ def query_7(specific_professor):
         query = an(
             set_of(
                 (student, course),
-                or_(graduate_student, undergraduate_student),
-            )
+                contains(specific_professor.teaches_courses, course),
+                or_(
+                    contains(student.takes_graduate_courses, course),
+                    contains(student.takes_courses, course),
+                ),
+            ),
         )
-    query.visualize()
+
     return query
 
 
@@ -191,12 +187,13 @@ def query_9():
     Get all students that take a course given by their advisor.
     """
     with symbolic_mode():
-        student = let(GraduateStudent)
+        student = let(Student)
         professor = let(Professor)
         course = let(Course)
         query = an(
             set_of(
                 (student, professor, course),
+                student.takes_any_graduate_courses,
                 student.advisor == professor,
                 contains(professor.teaches_graduate_courses, course),
                 contains(student.takes_graduate_courses, course),
@@ -210,7 +207,7 @@ def query_10():
     Get all students that take a graduate course.
     """
     with symbolic_mode():
-        student = let(GraduateStudent)
+        student = let(Student)
         query = an(entity(student, exists(student.takes_graduate_courses)))
     return query
 
@@ -260,8 +257,8 @@ def query_14():
     Get all undergrad students.
     """
     with symbolic_mode():
-        student = let(UndergraduateStudent)
-        query = an(entity(student))
+        student = let(Student)
+        query = an(entity(student), not_(student.takes_any_graduate_courses))
     return query
 
 
