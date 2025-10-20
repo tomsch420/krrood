@@ -142,6 +142,8 @@ class UnivBenchOntology(Thing):
     office_number: Optional[int] = field(kw_only=True, default=None)
     # is researching
     research_interest: Optional[str] = field(kw_only=True, default=None)
+    # URI of the ontology element - The unique resource identifier (URI) of the ontology element.
+    uri: Optional[str] = field(kw_only=True, default=None)
 
     def __hash__(self):
         return hash(id(self))

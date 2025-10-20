@@ -553,6 +553,27 @@ class OwlToPythonConverter:
         # Merge specialized properties
         properties_copy.update(specialized_props)
 
+        # Add uri data property to the ontology base class
+        if "uri" not in properties_copy:
+            properties_copy["uri"] = {
+                "name": "uri",
+                "uri": "",
+                "type": "DataProperty",
+                "domains": [ontology_base_class_name],
+                "ranges": ["str"],
+                "range_uris": [XSD.anyURI],
+                "label": "URI of the ontology element",
+                "comment": "The unique resource identifier (URI) of the ontology element.",
+                "field_name": "uri",
+                "descriptor_name": "Uri",
+                "superproperties": [],
+                "inverses": [],
+                "inverse_of": None,
+                "is_transitive": False,
+                "declared_domains": [ontology_base_class_name],
+                "is_specialized": False,
+            }
+
         # Attach datatype properties without an explicit domain to the ontology base class
         for name, info in properties_copy.items():
             if info.get("type") == "DataProperty" and not info.get("declared_domains"):

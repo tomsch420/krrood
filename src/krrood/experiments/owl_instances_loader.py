@@ -30,7 +30,7 @@ class OwlInstancesRegistry:
     def get_or_create_for(
         self, uri: URIRef, factory: Type, role_taker: Optional[Role] = None
     ) -> Any:
-        inst = self._by_uri.get(uri)
+        inst = self.resolve(uri)
         if inst is None:
             if not issubclass(factory, Role):
                 inst = factory()
@@ -45,9 +45,10 @@ class OwlInstancesRegistry:
                 inst = factory(role_taker)
 
             # Fill a best-effort human-readable name if available
-            local = local_name(uri)
-            if hasattr(inst, "name") and getattr(inst, "name") is None:
-                setattr(inst, "name", local)
+            # local = local_name(uri)
+            local = str(uri)
+            if hasattr(inst, "uri") and getattr(inst, "uri") is None:
+                setattr(inst, "uri", local)
             self._by_uri[uri] = inst
             self._by_class.setdefault(factory, []).append(inst)
         return inst
@@ -173,8 +174,27 @@ def _coerce_literal(val: Literal, target_type: Optional[Type]) -> Any:
     return val.toPython()
 
 
+def load_multi_file_instances(
+    owl_paths: Iterable[str], model_module: Union[str, ModuleType]
+) -> OwlInstancesRegistry:
+    """Load OWL/RDF instances into the provided generated Python model module."""
+    if isinstance(model_module, str):
+        model_module = __import__(model_module, fromlist=["*"])
+    combined_registry = OwlInstancesRegistry()
+    SymbolGraph().clear()
+    symbol_graph = SymbolGraph.build(classes=classes_of_module(model_module))
+    for path in owl_paths:
+        load_instances(
+            path, model_module, symbol_graph=symbol_graph, registry=combined_registry
+        )
+    return combined_registry
+
+
 def load_instances(
-    owl_path: str, model_module: Union[str, ModuleType]
+    owl_path: str,
+    model_module: Union[str, ModuleType],
+    symbol_graph: Optional[SymbolGraph] = None,
+    registry: Optional[OwlInstancesRegistry] = None,
 ) -> OwlInstancesRegistry:
     """Load OWL/RDF instances into the provided generated Python model module.
 
@@ -183,8 +203,9 @@ def load_instances(
     """
     if isinstance(model_module, str):
         model_module = __import__(model_module, fromlist=["*"])
-    SymbolGraph().clear()
-    symbol_graph = SymbolGraph.build(classes=classes_of_module(model_module))
+    if not symbol_graph:
+        SymbolGraph().clear()
+        symbol_graph = SymbolGraph.build(classes=classes_of_module(model_module))
     g = rdflib.Graph()
     g.parse(owl_path)
 
@@ -194,8 +215,8 @@ def load_instances(
         field_by_predicate_local,
         field_by_descriptor,
     ) = _collect_model_metadata(model_module)
-
-    registry = OwlInstancesRegistry()
+    if registry is None:
+        registry = OwlInstancesRegistry()
 
     # First, create all instances that have an explicit rdf:type matching our model
     for s, _, o_class in g.triples((None, RDF.type, None)):

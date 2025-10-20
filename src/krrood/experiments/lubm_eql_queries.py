@@ -56,7 +56,8 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q1 = a(
             x := GraduateStudent(),
-            flatten(x.takes_course).name == "GraduateCourse0",
+            flatten(x.takes_course).uri
+            == "http://www.Department0.University0.edu/GraduateCourse0",
         )
 
     # 2
