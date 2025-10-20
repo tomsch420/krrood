@@ -297,10 +297,34 @@ def load_instances(
             continue
 
         # Object property
-        obj = ensure_instance(o) if isinstance(o, URIRef) else None
-        if obj is not None:
-            obj = obj[0]
+        obj_roles = ensure_instance(o) if isinstance(o, URIRef) else None
+        if obj_roles is not None:
+            obj = obj_roles[0]
         if field_name and hasattr(subj, field_name):
+            subj_wrapped_cls = symbol_graph.type_graph.get_wrapped_class(subj_cls)
+            subj_wrapped_field = subj_wrapped_cls._wrapped_field_name_map_.get(
+                field_name
+            )
+            req_obj_type = subj_wrapped_field.core_value_type
+            matched_obj = None
+            for obj_role in obj_roles:
+                if issubclass(type(obj_role), req_obj_type):
+                    matched_obj = obj_role
+                    break
+            if not matched_obj:
+                for (
+                    role_taker_assoc
+                ) in symbol_graph.type_graph.get_role_taker_associations_of_cls(
+                    type(obj_roles[0])
+                ):
+                    if role_taker_assoc.target.clazz is req_obj_type:
+                        matched_obj = getattr(
+                            obj_roles[0], role_taker_assoc.field.public_name
+                        )
+                        break
+            if not matched_obj:
+                raise ValueError(f"Could not assign {obj} to {subj} ({p})")
+            obj = matched_obj
             lst = getattr(subj, field_name, None)
             if isinstance(lst, set) and obj is not None:
                 lst.add(obj)
