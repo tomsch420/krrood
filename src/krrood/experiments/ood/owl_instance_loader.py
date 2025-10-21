@@ -27,8 +27,13 @@ class _SparqlClient:
     """
     Minimal SPARQL client abstraction.
 
-    Executes SELECT queries against either an in-memory rdflib Graph or a
-    SPARQL HTTP endpoint via SPARQLWrapper.
+    Attributes
+    - graph: In-memory rdflib.Graph used to evaluate SPARQL locally.
+    - endpoint: SPARQL HTTP endpoint URL used when no graph is provided.
+
+    Notes
+    - Only ``SELECT`` queries are supported.
+    - Values in result rows are returned as strings.
     """
 
     graph: Optional[Any] = None
@@ -52,7 +57,10 @@ class _SparqlClient:
             sparql = SPARQLWrapper(self.endpoint)
             sparql.setQuery(query)
             sparql.setReturnFormat(JSON)
-            results = sparql.query().convert()
+            try:
+                results = sparql.query().convert()
+            except Exception:
+                return []
             rows: List[Dict[str, str]] = []
             for b in results.get("results", {}).get("bindings", []):
                 row: Dict[str, str] = {}
@@ -75,12 +83,32 @@ class DatasetConversionConfigurationError(Exception):
 @dataclass
 class DatasetConverter:
     """
-    Converts LUBM instances into in-memory Python dataclasses defined in
-    lubm.py using SPARQL only (no Owlready2 dependency).
+    Converts LUBM instances into in-memory dataclasses defined in ``lubm.py`` using SPARQL only.
 
-    You can either provide a SPARQL HTTP endpoint via ``sparql_endpoint``
-    or an in-memory rdflib Graph via ``sparql_graph``. If both are given,
-    the in-memory graph takes precedence.
+    Overview
+    - Reads source data via either an in-memory ``rdflib.Graph`` or a SPARQL HTTP endpoint.
+    - Uses SPARQL ``SELECT`` queries to obtain universities, departments, faculty, students,
+      courses, research groups, and publications.
+    - Maintains internal caches to guarantee a one-to-one mapping between IRIs and Python objects.
+    - Assembles the object graph and wires relationships such as teaching, advising, TA/RA
+      assignments, and department heads.
+
+    Attributes
+    - sparql_graph: In-memory ``rdflib.Graph`` to execute SPARQL against. Takes precedence when provided.
+    - sparql_endpoint: SPARQL endpoint URL used when no graph is provided.
+    - _uni_map: Cache from IRI to ``University`` instances.
+    - _dept_map: Cache from IRI to ``Department`` instances.
+    - _prof_map: Cache from IRI to ``Professor`` instances.
+    - _lect_map: Cache from IRI to ``Lecturer`` instances.
+    - _course_map: Cache from IRI to ``Course``/``GraduateCourse`` instances.
+    - _pub_map: Cache from IRI to ``Publication`` instances.
+    - _student_map: Cache from local-name string to ``Student`` instances.
+    - _client: Internal SPARQL client wrapper.
+
+    Methods
+    - convert(): Convert the dataset and return a list of ``University`` instances.
+    - _convert_via_sparql(): Orchestrate SPARQL-driven conversion.
+    - Helper methods prefixed with ``_`` construct specific parts of the object model.
     """
 
     sparql_graph: Optional[Any] = None
@@ -133,6 +161,7 @@ class DatasetConverter:
     # --- Mapping helpers ---
 
     def _get_or_create_university(self, u) -> University:
+        """Return a University for the given IRI, creating and caching it if needed."""
         if u in self._uni_map:
             return self._uni_map[u]
         py_u = University(name=self._local_name(u))
@@ -140,6 +169,7 @@ class DatasetConverter:
         return py_u
 
     def _get_or_create_department(self, d, py_university: University) -> Department:
+        """Return a Department for the given IRI, creating it with its university and caching it."""
         if d in self._dept_map:
             return self._dept_map[d]
         py_d = Department(name=self._local_name(d), university=py_university)
@@ -147,6 +177,7 @@ class DatasetConverter:
         return py_d
 
     def _get_or_create_publication(self, p) -> Publication:
+        """Return a Publication for the given IRI, creating and caching it if absent."""
         if p in self._pub_map:
             return self._pub_map[p]
         pub = Publication(title=self._local_name(p), year=0)
@@ -154,6 +185,7 @@ class DatasetConverter:
         return pub
 
     def _build_person(self, individual_iri: str) -> Person:
+        """Build a minimal Person from an individual's IRI (first name from local name)."""
         return Person(first_name=self._local_name(individual_iri), last_name="")
 
     # --- SPARQL helpers ---
@@ -163,6 +195,7 @@ class DatasetConverter:
         return self._client.select(query)
 
     def _is_graduate_course_via_sparql(self, course_iri: str) -> bool:
+        """Return True if the given course IRI is typed as a GraduateCourse."""
         q = (
             self._prefix
             + f"SELECT ?c WHERE {{ ?c rdf:type ub:GraduateCourse . FILTER(?c = <{course_iri}>) }}"
@@ -173,6 +206,7 @@ class DatasetConverter:
     # --- Query builders / assemblers (extracted to reduce complexity) ---
 
     def _departments_for_university(self, u_iri: str) -> List[str]:
+        """List Department IRIs that are sub-organizations of the given University IRI."""
         q = (
             self._prefix
             + f"SELECT ?d WHERE {{ ?d rdf:type ub:Department . ?d ub:subOrganizationOf <{u_iri}> }}"
@@ -180,6 +214,7 @@ class DatasetConverter:
         return [row["d"] for row in self._sparql_select(q)]
 
     def _add_research_groups(self, dept_py: Department, d_iri: str) -> None:
+        """Populate a department with its research groups discovered by SPARQL."""
         q = (
             self._prefix
             + f"SELECT ?g WHERE {{ ?g rdf:type ub:ResearchGroup . ?g ub:subOrganizationOf <{d_iri}> }}"
@@ -190,6 +225,7 @@ class DatasetConverter:
             )
 
     def _degree_universities(self, person_iri: str, default_uni: University) -> tuple[University, University, University]:
+        """Resolve the person's degree universities, falling back to a default when absent."""
         q = (
             self._prefix
             + f"SELECT ?ug ?ms ?dr WHERE {{ OPTIONAL {{ <{person_iri}> ub:undergraduateDegreeFrom ?ug }} . OPTIONAL {{ <{person_iri}> ub:mastersDegreeFrom ?ms }} . OPTIONAL {{ <{person_iri}> ub:doctoralDegreeFrom ?dr }} }}"
@@ -213,6 +249,7 @@ class DatasetConverter:
         )
 
     def _course_from_iri(self, c_iri: str, dept_py: Department) -> Course:
+        """Return a Course (Graduate or Undergraduate) for the IRI, creating and caching it."""
         cached = self._course_map.get(c_iri)
         if cached is not None:
             return cached
@@ -230,6 +267,7 @@ class DatasetConverter:
         return course
 
     def _build_faculty_of_type(self, type_name: str, ctor, d_iri: str, dept_py: Department, u_py: University) -> List[Professor | Lecturer]:
+        """Create all faculty of the given type for a department and return them."""
         q = self._prefix + f"SELECT ?x WHERE {{ ?x rdf:type ub:{type_name} . ?x ub:worksFor <{d_iri}> }}"
         roles: List[Professor | Lecturer] = []
         for row in self._sparql_select(q):
@@ -263,6 +301,7 @@ class DatasetConverter:
         return roles
 
     def _assign_department_head(self, dept_py: Department, d_iri: str) -> None:
+        """Assign the department head when a FullProfessor with headOf is present."""
         q = self._prefix + f"SELECT ?h WHERE {{ ?h rdf:type ub:FullProfessor . ?h ub:headOf <{d_iri}> }}"
         rows = self._sparql_select(q)
         if not rows:
@@ -274,6 +313,7 @@ class DatasetConverter:
                 break
 
     def _build_student(self, s_iri: str, is_grad: bool, dept_py: Department) -> Student:
+        """Create a Student for the given IRI, attach advisor, courses, and co-authored publications."""
         person = self._build_person(s_iri)
         ug_py_local = None
         if is_grad:
@@ -311,6 +351,7 @@ class DatasetConverter:
         return student
 
     def _build_students_for_department(self, dept_py: Department, d_iri: str) -> List[Student]:
+        """Create all students for the department identified by the given IRI."""
         students: List[Student] = []
         grad_q = self._prefix + f"SELECT ?s WHERE {{ ?s rdf:type ub:GraduateStudent . ?s ub:memberOf <{d_iri}> }}"
         for row in self._sparql_select(grad_q):
@@ -327,6 +368,7 @@ class DatasetConverter:
         return students
 
     def _attach_tas(self, dept_py: Department) -> None:
+        """Create TeachingAssistant roles for department students assisting its courses."""
         q = self._prefix + "SELECT ?ta ?course WHERE { ?ta rdf:type ub:TeachingAssistant . ?ta ub:teachingAssistantOf ?course }"
         for row in self._sparql_select(q):
             course_iri = row["course"]
@@ -337,6 +379,7 @@ class DatasetConverter:
                     _ = TeachingAssistant(graduate_student=st, course_assistant_for=course)
 
     def _attach_ras(self, dept_py: Department) -> None:
+        """Create ResearchAssistant roles for department students working in its research groups."""
         q = self._prefix + "SELECT ?ra ?org WHERE { ?ra rdf:type ub:ResearchAssistant . ?ra ub:worksFor ?org }"
         for row in self._sparql_select(q):
             org_local = self._local_name(row["org"])
