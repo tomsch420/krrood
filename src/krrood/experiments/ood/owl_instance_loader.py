@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
-import owlready2
 import tqdm
 
 from .lubm import (
@@ -24,21 +23,72 @@ from .lubm import (
 
 
 @dataclass
+class _SparqlClient:
+    """
+    Minimal SPARQL client abstraction.
+
+    Executes SELECT queries against either an in-memory rdflib Graph or a
+    SPARQL HTTP endpoint via SPARQLWrapper.
+    """
+
+    graph: Optional[Any] = None
+    endpoint: Optional[str] = None
+
+    def select(self, query: str) -> List[Dict[str, str]]:
+        """
+        Execute a SPARQL SELECT query and return rows as dictionaries with string values.
+        """
+        if self.graph is not None:
+            results = self.graph.query(query)
+            rows: List[Dict[str, str]] = []
+            for row in results:
+                as_dict = row.asdict()
+                rows.append({str(k): str(v) for k, v in as_dict.items()})
+            return rows
+
+        if self.endpoint is not None:
+            from SPARQLWrapper import SPARQLWrapper, JSON  # type: ignore
+
+            sparql = SPARQLWrapper(self.endpoint)
+            sparql.setQuery(query)
+            sparql.setReturnFormat(JSON)
+            results = sparql.query().convert()
+            rows: List[Dict[str, str]] = []
+            for b in results.get("results", {}).get("bindings", []):
+                row: Dict[str, str] = {}
+                for k, v in b.items():
+                    row[k] = v.get("value")
+                rows.append(row)
+            return rows
+
+        return []
+
+
+class DatasetConversionConfigurationError(Exception):
+    """Raised when the dataset conversion is misconfigured.
+
+    Currently unused to preserve backward compatibility: the converter
+    returns an empty result if no SPARQL source is configured.
+    """
+
+
+@dataclass
 class DatasetConverter:
     """
-    Converts an OWLReady2 world containing LUBM instances into in-memory
-    Python dataclasses defined in lubm.py.
+    Converts LUBM instances into in-memory Python dataclasses defined in
+    lubm.py using SPARQL only (no Owlready2 dependency).
 
-    The converter preserves the organizational structure (Universities,
-    Departments, ResearchGroups), roles (Professors, Lecturers, Students),
-    and relationships (advisor, courses taught/taken, heads of departments,
-    sub-organization links, publications, and degrees) so the generated
-    objects behave similarly to the original OWL dataset.
+    You can either provide a SPARQL HTTP endpoint via ``sparql_endpoint``
+    or an in-memory rdflib Graph via ``sparql_graph``. If both are given,
+    the in-memory graph takes precedence.
     """
 
-    world: owlready2.World
+    sparql_graph: Optional[Any] = None
+    sparql_endpoint: Optional[str] = None
 
-    # Internal caches to ensure 1:1 mapping between OWL instances and Python objects
+    # Internal caches to ensure 1:1 mapping between source instances and Python objects
+
+    # Internal caches to ensure 1:1 mapping between source instances and Python objects
     _uni_map: Dict[Any, University] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -56,21 +106,29 @@ class DatasetConverter:
     _student_map: Dict[Any, Student] = field(
         default_factory=dict, init=False, repr=False
     )
+    _client: _SparqlClient = field(init=False, repr=False, default=None)  # type: ignore
+
+    def __post_init__(self) -> None:
+        """Initialize internal SPARQL client based on provided configuration."""
+        self._client = _SparqlClient(graph=self.sparql_graph, endpoint=self.sparql_endpoint)
 
     @property
-    def ontology(self):
-        """
-        Returns the Univ-Bench ontology loaded in the world.
-        """
-        return self.world.get_ontology(
-            "http://swat.cse.lehigh.edu/onto/univ-bench.owl#"
+    def _prefix(self) -> str:
+        """Common SPARQL prefixes used throughout conversion."""
+        return (
+            "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
+            "PREFIX ub: <http://swat.cse.lehigh.edu/onto/univ-bench.owl#>\n"
         )
 
     def _local_name(self, entity) -> str:
         """
-        Returns the local name of an OWL entity.
+        Returns the local name of an IRI string (or a named object with ``name``).
         """
-        return entity.name
+        if isinstance(entity, str):
+            frag = entity.split("#")[-1]
+            return frag.split("/")[-1]
+        # Fallback for any object that may carry a name attribute
+        return getattr(entity, "name", str(entity))
 
     # --- Mapping helpers ---
 
@@ -91,292 +149,246 @@ class DatasetConverter:
     def _get_or_create_publication(self, p) -> Publication:
         if p in self._pub_map:
             return self._pub_map[p]
-        # Use the OWL individual's name as title; year unknown in LUBM base
         pub = Publication(title=self._local_name(p), year=0)
         self._pub_map[p] = pub
         return pub
 
-    def _get_or_create_course(self, c, dept: Department) -> Course:
-        if c in self._course_map:
-            return self._course_map[c]
-        # Determine if this course is a GraduateCourse
-        is_grad = False
-        try:
-            # Owlready2 allows isinstance checks against ontology classes
-            is_grad = isinstance(c, self.ontology.GraduateCourse)
-        except Exception:
-            is_grad = False
-        if is_grad:
-            py_c = GraduateCourse(name=self._local_name(c), department=dept)
-        else:
-            py_c = Course(name=self._local_name(c), department=dept)
-        self._course_map[c] = py_c
-        # Also add to department lists if not already present
-        if isinstance(py_c, GraduateCourse):
-            if py_c not in dept.graduate_courses:
-                dept.graduate_courses.append(py_c)
-        else:
-            if py_c not in dept.undergraduate_courses:
-                dept.undergraduate_courses.append(py_c)
-        return py_c
+    def _build_person(self, individual_iri: str) -> Person:
+        return Person(first_name=self._local_name(individual_iri), last_name="")
 
-    def _build_person(self, individual) -> Person:
-        # Owlready2 individuals often have technical names; we store them as first_name
-        # and leave last_name empty to keep interfaces consistent.
-        return Person(first_name=self._local_name(individual), last_name="")
+    # --- SPARQL helpers ---
 
-    def _create_faculty(
-        self, cls, individual, dept: Department
-    ) -> Professor | Lecturer:
-        person = self._build_person(individual)
-        # Degrees (for faculty we expect all to be present in LUBM instances)
-        ug = None
-        ms = None
-        dr = None
-        if individual.undergraduateDegreeFrom:
-            ug = self._get_or_create_university(individual.undergraduateDegreeFrom[0])
-        if individual.mastersDegreeFrom:
-            ms = self._get_or_create_university(individual.mastersDegreeFrom[0])
-        if individual.doctoralDegreeFrom:
-            dr = self._get_or_create_university(individual.doctoralDegreeFrom[0])
+    def _sparql_select(self, query: str) -> List[Dict[str, str]]:
+        """Execute a SPARQL SELECT query via the configured client."""
+        return self._client.select(query)
 
-        # Fallbacks: if any degree missing, reuse available university or department's university
-        base_uni = dept.university
-        ug = ug or base_uni
-        ms = ms or base_uni
-        dr = dr or base_uni
-
-        role = cls(
-            person=person,
-            undergraduate_degree_from=ug,
-            masters_degree_from=ms,
-            doctoral_degree_from=dr,
-            department=dept,
+    def _is_graduate_course_via_sparql(self, course_iri: str) -> bool:
+        q = (
+            self._prefix
+            + f"SELECT ?c WHERE {{ ?c rdf:type ub:GraduateCourse . FILTER(?c = <{course_iri}>) }}"
         )
+        rows = self._sparql_select(q)
+        return len(rows) > 0
 
-        # Publications authored by this faculty member
-        authored = list(
-            self.ontology.search(
-                is_a=self.ontology.Publication, publicationAuthor=individual
-            )
+    # --- Query builders / assemblers (extracted to reduce complexity) ---
+
+    def _departments_for_university(self, u_iri: str) -> List[str]:
+        q = (
+            self._prefix
+            + f"SELECT ?d WHERE {{ ?d rdf:type ub:Department . ?d ub:subOrganizationOf <{u_iri}> }}"
         )
-        for pub in authored:
-            role.publications.append(self._get_or_create_publication(pub))
+        return [row["d"] for row in self._sparql_select(q)]
 
-        # Courses taught by this faculty member
-        for c in individual.teacherOf:
-            py_c = self._get_or_create_course(c, dept)
-            # Assign to correct list (grad or undergrad)
-            if isinstance(py_c, GraduateCourse):
-                role.teaches_graduate_courses.append(py_c)
-            else:
-                role.teaches_courses.append(py_c)
-
-        return role
-
-    def _ensure_department_faculty(self, dept_owl, dept_py: Department):
-        # Full professors
-        fulls = list(
-            self.ontology.search(is_a=self.ontology.FullProfessor, worksFor=dept_owl)
+    def _add_research_groups(self, dept_py: Department, d_iri: str) -> None:
+        q = (
+            self._prefix
+            + f"SELECT ?g WHERE {{ ?g rdf:type ub:ResearchGroup . ?g ub:subOrganizationOf <{d_iri}> }}"
         )
-        dept_py.full_professors = [
-            self._create_faculty(FullProfessor, f, dept_py) for f in fulls
-        ]
-
-        # Associate professors
-        associates = list(
-            self.ontology.search(
-                is_a=self.ontology.AssociateProfessor, worksFor=dept_owl
-            )
-        )
-        dept_py.associate_professors = [
-            self._create_faculty(AssociateProfessor, a, dept_py) for a in associates
-        ]
-
-        # Assistant professors
-        assistants = list(
-            self.ontology.search(
-                is_a=self.ontology.AssistantProfessor, worksFor=dept_owl
-            )
-        )
-        dept_py.assistant_professors = [
-            self._create_faculty(AssistantProfessor, a, dept_py) for a in assistants
-        ]
-
-        # Lecturers
-        lecturers = list(
-            self.ontology.search(is_a=self.ontology.Lecturer, worksFor=dept_owl)
-        )
-        dept_py.lecturers = [
-            self._create_faculty(Lecturer, l, dept_py) for l in lecturers
-        ]
-
-        # Cache professor roles for advisor linking
-        for p in dept_py.all_professors:
-            self._prof_map[p.person.first_name] = p  # key by local name string
-        for l in dept_py.lecturers:
-            self._lect_map[l.person.first_name] = l
-
-        # Department head (a FullProfessor with headOf relation)
-        heads = list(
-            self.ontology.search(is_a=self.ontology.FullProfessor, headOf=dept_owl)
-        )
-        if heads:
-            head_local = self._local_name(heads[0])
-            # Map back to created FullProfessor by person local name
-            for fp in dept_py.full_professors:
-                if fp.person.first_name == head_local:
-                    dept_py.head = fp
-                    break
-
-    def _ensure_department_research_groups(self, dept_owl, dept_py: Department):
-        groups = list(
-            self.ontology.search(
-                is_a=self.ontology.ResearchGroup, subOrganizationOf=dept_owl
-            )
-        )
-        for g in groups:
+        for row in self._sparql_select(q):
             dept_py.research_groups.append(
-                ResearchGroup(name=self._local_name(g), lead=None, department=dept_py)
+                ResearchGroup(name=self._local_name(row["g"]), lead=None, department=dept_py)
             )
 
-    def _create_or_get_course_for_student(
-        self, course_owl, dept_py: Department
-    ) -> Course:
-        return self._get_or_create_course(course_owl, dept_py)
+    def _degree_universities(self, person_iri: str, default_uni: University) -> tuple[University, University, University]:
+        q = (
+            self._prefix
+            + f"SELECT ?ug ?ms ?dr WHERE {{ OPTIONAL {{ <{person_iri}> ub:undergraduateDegreeFrom ?ug }} . OPTIONAL {{ <{person_iri}> ub:mastersDegreeFrom ?ms }} . OPTIONAL {{ <{person_iri}> ub:doctoralDegreeFrom ?dr }} }}"
+        )
+        rows = self._sparql_select(q)
+        ug_py = ms_py = dr_py = None
+        if rows:
+            ug_iri = rows[0].get("ug")
+            ms_iri = rows[0].get("ms")
+            dr_iri = rows[0].get("dr")
+            if ug_iri:
+                ug_py = self._get_or_create_university(ug_iri)
+            if ms_iri:
+                ms_py = self._get_or_create_university(ms_iri)
+            if dr_iri:
+                dr_py = self._get_or_create_university(dr_iri)
+        return (
+            ug_py or default_uni,
+            ms_py or default_uni,
+            dr_py or default_uni,
+        )
 
-    def _create_student(self, s_owl, dept_py: Department, is_graduate: bool) -> Student:
-        person = self._build_person(s_owl)
-        undergrad_uni = None
-        if is_graduate and s_owl.undergraduateDegreeFrom:
-            undergrad_uni = self._get_or_create_university(
-                s_owl.undergraduateDegreeFrom[0]
+    def _course_from_iri(self, c_iri: str, dept_py: Department) -> Course:
+        cached = self._course_map.get(c_iri)
+        if cached is not None:
+            return cached
+        is_grad = self._is_graduate_course_via_sparql(c_iri)
+        if is_grad:
+            course = GraduateCourse(name=self._local_name(c_iri), department=dept_py)
+            self._course_map[c_iri] = course
+            if course not in dept_py.graduate_courses:
+                dept_py.graduate_courses.append(course)  # type: ignore[arg-type]
+            return course
+        course = Course(name=self._local_name(c_iri), department=dept_py)
+        self._course_map[c_iri] = course
+        if course not in dept_py.undergraduate_courses:
+            dept_py.undergraduate_courses.append(course)
+        return course
+
+    def _build_faculty_of_type(self, type_name: str, ctor, d_iri: str, dept_py: Department, u_py: University) -> List[Professor | Lecturer]:
+        q = self._prefix + f"SELECT ?x WHERE {{ ?x rdf:type ub:{type_name} . ?x ub:worksFor <{d_iri}> }}"
+        roles: List[Professor | Lecturer] = []
+        for row in self._sparql_select(q):
+            x_iri = row["x"]
+            ug_py, ms_py, dr_py = self._degree_universities(x_iri, u_py)
+            person = self._build_person(x_iri)
+            role = ctor(
+                person=person,
+                undergraduate_degree_from=ug_py,
+                masters_degree_from=ms_py,
+                doctoral_degree_from=dr_py,
+                department=dept_py,
             )
+            # Publications
+            pubs_q = self._prefix + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{x_iri}> }}"
+            for prow in self._sparql_select(pubs_q):
+                role.publications.append(self._get_or_create_publication(prow["p"]))
+            # Courses taught
+            teach_q = self._prefix + f"SELECT ?c WHERE {{ <{x_iri}> ub:teacherOf ?c }}"
+            for crow in self._sparql_select(teach_q):
+                course = self._course_from_iri(crow["c"], dept_py)
+                if isinstance(course, GraduateCourse):
+                    role.teaches_graduate_courses.append(course)
+                else:
+                    role.teaches_courses.append(course)
+            roles.append(role)
+            if isinstance(role, Professor):
+                self._prof_map[x_iri] = role
+            if isinstance(role, Lecturer):
+                self._lect_map[x_iri] = role
+        return roles
 
+    def _assign_department_head(self, dept_py: Department, d_iri: str) -> None:
+        q = self._prefix + f"SELECT ?h WHERE {{ ?h rdf:type ub:FullProfessor . ?h ub:headOf <{d_iri}> }}"
+        rows = self._sparql_select(q)
+        if not rows:
+            return
+        head_local = self._local_name(rows[0]["h"])
+        for fp in dept_py.full_professors:
+            if fp.person.first_name == head_local:
+                dept_py.head = fp
+                break
+
+    def _build_student(self, s_iri: str, is_grad: bool, dept_py: Department) -> Student:
+        person = self._build_person(s_iri)
+        ug_py_local = None
+        if is_grad:
+            q = self._prefix + f"SELECT ?ug WHERE {{ <{s_iri}> ub:undergraduateDegreeFrom ?ug }}"
+            rows = self._sparql_select(q)
+            if rows:
+                ug_py_local = self._get_or_create_university(rows[0]["ug"])
         student = Student(
             person=person,
             department=dept_py,
             advisor=None,
-            undergraduate_degree_from=undergrad_uni,
+            undergraduate_degree_from=ug_py_local,
         )
-
-        # Advisor (if present)
-        if s_owl.advisor:
-            # The advisor individual may be any Professor subclass
-            advisor_ind = s_owl.advisor[0]
-            advisor_local = self._local_name(advisor_ind)
-            advisor = self._prof_map.get(advisor_local)
-            if advisor:
+        # Advisor
+        adv_q = self._prefix + f"SELECT ?a WHERE {{ <{s_iri}> ub:advisor ?a }}"
+        adv_rows = self._sparql_select(adv_q)
+        if adv_rows:
+            adv_iri = adv_rows[0]["a"]
+            advisor = self._prof_map.get(adv_iri)
+            if advisor is not None:
                 student.advisor = advisor
                 advisor.advised_students.append(student)
-
-        # Courses taken
-        for c in s_owl.takesCourse:
-            py_c = self._create_or_get_course_for_student(c, dept_py)
-            if isinstance(py_c, GraduateCourse):
-                student.takes_graduate_courses.append(py_c)
+        # Courses
+        take_q = self._prefix + f"SELECT ?c WHERE {{ <{s_iri}> ub:takesCourse ?c }}"
+        for crow in self._sparql_select(take_q):
+            course = self._course_from_iri(crow["c"], dept_py)
+            if isinstance(course, GraduateCourse):
+                student.takes_graduate_courses.append(course)
             else:
-                student.takes_courses.append(py_c)
-
-        # Publications authored by the student (treated as co-authored publications)
-        authored = list(
-            self.ontology.search(
-                is_a=self.ontology.Publication, publicationAuthor=s_owl
-            )
-        )
-        for pub in authored:
-            student.co_authored_publications.append(
-                self._get_or_create_publication(pub)
-            )
-
+                student.takes_courses.append(course)
+        # Publications (co-authored)
+        pubs_q = self._prefix + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{s_iri}> }}"
+        for prow in self._sparql_select(pubs_q):
+            student.co_authored_publications.append(self._get_or_create_publication(prow["p"]))
         return student
 
-    def _ensure_department_students(self, dept_owl, dept_py: Department):
-        # Graduate students
-        grads = list(
-            self.ontology.search(is_a=self.ontology.GraduateStudent, memberOf=dept_owl)
-        )
-        # Undergraduates
-        undergrads = list(
-            self.ontology.search(
-                is_a=self.ontology.UndergraduateStudent, memberOf=dept_owl
-            )
-        )
+    def _build_students_for_department(self, dept_py: Department, d_iri: str) -> List[Student]:
+        students: List[Student] = []
+        grad_q = self._prefix + f"SELECT ?s WHERE {{ ?s rdf:type ub:GraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        for row in self._sparql_select(grad_q):
+            s_iri = row["s"]
+            st = self._build_student(s_iri, True, dept_py)
+            students.append(st)
+            self._student_map[self._local_name(s_iri)] = st
+        ugr_q = self._prefix + f"SELECT ?s WHERE {{ ?s rdf:type ub:UndergraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        for row in self._sparql_select(ugr_q):
+            s_iri = row["s"]
+            st = self._build_student(s_iri, False, dept_py)
+            students.append(st)
+            self._student_map[self._local_name(s_iri)] = st
+        return students
 
-        created_students: List[Student] = []
-        for gs in grads:
-            st = self._create_student(gs, dept_py, is_graduate=True)
-            created_students.append(st)
-            self._student_map[self._local_name(gs)] = st
-        for us in undergrads:
-            st = self._create_student(us, dept_py, is_graduate=False)
-            created_students.append(st)
-            self._student_map[self._local_name(us)] = st
+    def _attach_tas(self, dept_py: Department) -> None:
+        q = self._prefix + "SELECT ?ta ?course WHERE { ?ta rdf:type ub:TeachingAssistant . ?ta ub:teachingAssistantOf ?course }"
+        for row in self._sparql_select(q):
+            course_iri = row["course"]
+            course = self._course_map.get(course_iri)
+            if course is not None and course.department is dept_py:
+                st = self._student_map.get(self._local_name(row["ta"]))
+                if st is not None:
+                    _ = TeachingAssistant(graduate_student=st, course_assistant_for=course)
 
-        dept_py.students = created_students
-
-        # Teaching assistants linked to courses of this department
-        tas = list(self.ontology.search(is_a=self.ontology.TeachingAssistant))
-        for ta in tas:
-            if not ta.teachingAssistantOf:
-                continue
-            course_ind = ta.teachingAssistantOf[0]
-            # Only consider if the course belongs to this department
-            py_course = self._course_map.get(course_ind)
-            if py_course and py_course.department is dept_py:
-                st = self._student_map.get(self._local_name(ta))
-                if st:
-                    _ = TeachingAssistant(
-                        graduate_student=st, course_assistant_for=py_course
-                    )
-
-        # Research assistants linked to research groups of this department
-        ras = list(self.ontology.search(is_a=self.ontology.ResearchAssistant))
-        for ra in ras:
-            if not ra.worksFor:
-                continue
-            org = ra.worksFor[0]
-            # Only consider if worksFor is a ResearchGroup under this department
-            belong_groups = [
-                g for g in dept_py.research_groups if self._local_name(org) == g.name
-            ]
-            if belong_groups:
-                st = self._student_map.get(self._local_name(ra))
-                if st:
+    def _attach_ras(self, dept_py: Department) -> None:
+        q = self._prefix + "SELECT ?ra ?org WHERE { ?ra rdf:type ub:ResearchAssistant . ?ra ub:worksFor ?org }"
+        for row in self._sparql_select(q):
+            org_local = self._local_name(row["org"])
+            if any(g.name == org_local for g in dept_py.research_groups):
+                st = self._student_map.get(self._local_name(row["ra"]))
+                if st is not None:
                     _ = ResearchAssistant(graduate_student=st)
 
     def convert(self) -> List[University]:
         """
-        Converts the world into a list of Universities with populated structure.
+        Converts the dataset into a list of Universities with populated structure
+        using SPARQL (endpoint or in-memory rdflib graph). Returns an empty list
+        if neither a graph nor an endpoint is configured.
         """
-        onto = self.ontology
+        return self._convert_via_sparql()
 
-        # Create Python University objects for all OWL University individuals
-        for u in onto.University.instances():
-            self._get_or_create_university(u)
+    def _convert_via_sparql(self) -> List[University]:
+        """
+        Convert by querying a SPARQL endpoint or rdflib graph using SPARQL.
+        This orchestration delegates cohesive tasks to dedicated methods,
+        lowering cyclomatic complexity while preserving behavior.
+        """
+        # 1) Universities
+        uni_rows = self._sparql_select(self._prefix + "SELECT ?u WHERE { ?u rdf:type ub:University }")
+        for row in uni_rows:
+            self._get_or_create_university(row["u"])  # use IRI as key
 
-        # For each University, construct its departments and nested structures
-        for u_owl, u_py in tqdm.tqdm(list(self._uni_map.items())):
-            # Departments that are subOrganizationOf this University
-            dept_owls = list(onto.search(is_a=onto.Department, subOrganizationOf=u_owl))
-            for d in dept_owls:
-                dept_py = self._get_or_create_department(d, u_py)
+        # 2) For each university, process departments and nested structure
+        for u_iri, u_py in tqdm.tqdm(list(self._uni_map.items())):
+            for d_iri in self._departments_for_university(u_iri):
+                dept_py = self._get_or_create_department(d_iri, u_py)
 
-                # Ensure research groups (subOrganizationOf Department)
-                self._ensure_department_research_groups(d, dept_py)
+                # Research groups
+                self._add_research_groups(dept_py, d_iri)
 
-                # Ensure faculty for this department
-                self._ensure_department_faculty(d, dept_py)
+                # Faculty by rank
+                dept_py.full_professors = self._build_faculty_of_type("FullProfessor", FullProfessor, d_iri, dept_py, u_py)
+                dept_py.associate_professors = self._build_faculty_of_type("AssociateProfessor", AssociateProfessor, d_iri, dept_py, u_py)
+                dept_py.assistant_professors = self._build_faculty_of_type("AssistantProfessor", AssistantProfessor, d_iri, dept_py, u_py)
+                dept_py.lecturers = self._build_faculty_of_type("Lecturer", Lecturer, d_iri, dept_py, u_py)
 
-                # Students and their relationships
-                self._ensure_department_students(d, dept_py)
+                # Department head
+                self._assign_department_head(dept_py, d_iri)
 
-                # Courses might already be partially discovered via faculty/student links;
-                # nothing further required here as _get_or_create_course attaches them to the department.
+                # Students
+                dept_py.students = self._build_students_for_department(dept_py, d_iri)
 
-                # Finally, add the department to the University if not present
+                # Teaching and research assistants
+                self._attach_tas(dept_py)
+                self._attach_ras(dept_py)
+
                 if dept_py not in u_py.departments:
                     u_py.departments.append(dept_py)
 
-        # Return all universities (some may have no departments; still valid as degree sources)
         return list(self._uni_map.values())

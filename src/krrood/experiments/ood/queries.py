@@ -40,16 +40,16 @@ def query_2():
     """
     with symbolic_mode():
         graduate_student = let(Student)
-        university = let(University)
-        department = let(Department)
-
         query = an(
             set_of(
-                (graduate_student, university, department),
+                (
+                    graduate_student,
+                    graduate_student.department.university,
+                    graduate_student.department,
+                ),
                 graduate_student.takes_any_graduate_courses,
-                contains(university.departments, department),
-                contains(department.graduate_students, graduate_student),
-                graduate_student.undergraduate_degree_from == university,
+                graduate_student.undergraduate_degree_from
+                == graduate_student.department.university,
             )
         )
     return query
