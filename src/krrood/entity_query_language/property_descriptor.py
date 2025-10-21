@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from dataclasses import Field, dataclass, field
+from dataclasses import Field, dataclass, field, MISSING, fields
 from functools import cached_property
 from typing import (
     Generic,
@@ -15,7 +15,7 @@ from typing import (
     Tuple,
     Dict,
 )
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, ref as weakref_ref
 
 from line_profiler import profile
 
@@ -50,6 +50,33 @@ class Thing(Symbol, metaclass=ThingMeta): ...
 
 
 T = TypeVar("T")
+
+
+class MonitoredSet(set):
+
+    def __init__(self, *args, **kwargs):
+        self.descriptor: PropertyDescriptor = kwargs.pop("descriptor")
+        self._owner_ref = None  # weakref to owner instance
+        super().__init__(*args, **kwargs)
+
+    def bind_owner(self, owner) -> "MonitoredSet":
+        """
+        Bind the owning instance via a weak reference and return self.
+        """
+        # Import locally to avoid top-level dependency if you prefer
+        self._owner_ref = weakref_ref(owner)
+        return self
+
+    @property
+    def owner(self):
+        return self._owner_ref() if self._owner_ref is not None else None
+
+    def add(self, value, inferred: bool = False):
+        super().add(value)
+        # route through descriptor with the concrete owner instance
+        owner = self.owner
+        if owner is not None:
+            self.descriptor.on_add(owner, value, inferred=inferred)
 
 
 @dataclass
@@ -103,7 +130,7 @@ class PropertyDescriptor(Generic[T], Predicate):
             cls,
             self.attr_name,
             field(
-                default_factory=set,
+                default_factory=lambda: MonitoredSet(descriptor=self),
                 init=False,
                 repr=False,
                 hash=False,
@@ -114,6 +141,10 @@ class PropertyDescriptor(Generic[T], Predicate):
 
         self.update_domain_types()
         self.update_range_types()
+
+    def on_add(self, domain_value, val: Symbol, inferred: bool = False) -> None:
+        """Add a value to the property descriptor."""
+        self.add_relation(domain_value, val, inferred=inferred)
 
     def update_domain_types(self) -> None:
         """
@@ -171,7 +202,11 @@ class PropertyDescriptor(Generic[T], Predicate):
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        return getattr(obj, self.attr_name)
+        container = getattr(obj, self.attr_name)
+        # Bind the owner so subsequent `add` calls know the instance
+        if getattr(container, "owner", None) is not obj:
+            container.bind_owner(obj)
+        return container
 
     def __set__(self, obj, value):
         if isinstance(value, PropertyDescriptor):

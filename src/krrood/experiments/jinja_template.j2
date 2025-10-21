@@ -30,7 +30,7 @@ class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     @property
     def inverse(self):
         # Inverse of {{ prop.inverse_of }}
-        return {{ properties[prop.inverse_of].descriptor_name }}(self.range_value, self.domain_value)
+        return {{ properties[prop.inverse_of].descriptor_name }}
     {% endif %}
 
 

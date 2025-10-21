@@ -35,11 +35,11 @@ class DescriptorAwareIntrospector(AttributeIntrospector):
         for public_name in dir(owner_cls):
             if public_name.startswith("_"):
                 continue
-            attr = getattr(owner_cls, public_name)
-            has_descriptor_protocol = hasattr(attr, "__get__") and hasattr(
-                attr, "__set__"
-            )
-            backing_name = getattr(attr, "attr_name", None)
+            property_descriptor = getattr(owner_cls, public_name)
+            has_descriptor_protocol = hasattr(
+                property_descriptor, "__get__"
+            ) and hasattr(property_descriptor, "__set__")
+            backing_name = getattr(property_descriptor, "attr_name", None)
             if not (has_descriptor_protocol and isinstance(backing_name, str)):
                 continue
 
@@ -49,7 +49,11 @@ class DescriptorAwareIntrospector(AttributeIntrospector):
                 continue
 
             discovered.append(
-                DiscoveredAttribute(public_name=public_name, field=backing_field)
+                DiscoveredAttribute(
+                    public_name=public_name,
+                    field=backing_field,
+                    property_descriptor=property_descriptor,
+                )
             )
 
         return discovered

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import os
-import typing
 from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
-from weakref import WeakKeyDictionary
 
+from rustworkx import PyDiGraph
 from typing_extensions import (
     TYPE_CHECKING,
     Any,
@@ -18,9 +17,6 @@ from typing_extensions import (
     ClassVar,
     Set,
 )
-
-
-from rustworkx import PyDiGraph
 
 from .attribute_introspector import DescriptorAwareIntrospector
 from .utils import recursive_subclasses
@@ -203,10 +199,43 @@ class SymbolGraph:
     def wrapped_instances(self) -> List[WrappedInstance]:
         return self._instance_graph.nodes()
 
+    def get_outgoing_neighbors_with_predicate_subclass(
+        self, wrapped_instance: WrappedInstance, predicate_subclass: Type[Predicate]
+    ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        yield from (
+            self._instance_graph.get_node_data(child_idx)
+            for _, child_idx, edge in self._instance_graph.in_edges(
+                wrapped_instance.index
+            )
+            if issubclass(predicate_subclass, type(edge.predicate))
+        )
+
+    def get_incoming_neighbors_with_predicate_type(
+        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
+    ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        yield from (
+            self._instance_graph.get_node_data(parent_idx)
+            for parent_idx, _, edge in self._instance_graph.in_edges(
+                wrapped_instance.index
+            )
+            if isinstance(edge.predicate, predicate_type)
+        )
+
+    def get_incoming_neighbors(
+        self, wrapped_instance: WrappedInstance
+    ) -> Iterable[WrappedInstance]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        yield from (
+            self._instance_graph.get_node_data(parent_idx)
+            for parent_idx, _, _ in self._instance_graph.in_edges(
+                wrapped_instance.index
+            )
+        )
+
     def get_outgoing_neighbors_with_predicate_type(
-        self,
-        wrapped_instance: WrappedInstance,
-        predicate_type: Type[Predicate],
+        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         for _, child_idx, edge in self._instance_graph.out_edges(

@@ -10,7 +10,7 @@ from typing import (
 )
 
 from line_profiler import profile
-from typing_extensions import Callable, Optional, Any, Type, Tuple
+from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
 
 from typing_extensions import ClassVar
 
@@ -37,6 +37,10 @@ from .symbolic import (
     Flatten,
 )
 from .utils import is_iterable, make_list
+from ..class_diagrams.wrapped_field import WrappedField
+
+if TYPE_CHECKING:
+    from .property_descriptor import MonitoredSet
 
 cls_args = {}
 
@@ -161,18 +165,52 @@ class Predicate(Symbol, ABC):
     def symbol_graph(self) -> SymbolGraph:
         return SymbolGraph()
 
-    def _neighbors(self, value: Any) -> Iterable[Any]:
+    def _neighbors(self, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
         """
         Return direct neighbors of the given value to traverse when transitivity is enabled.
         Default is no neighbors (non-transitive or leaf).
+
+        :param value: The value to get neighbors for.
+        :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
+        :return: Iterable of neighbors.
         """
         wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
         if not wrapped_instance:
             return
+        if outgoing:
+            yield from (
+                n.instance
+                for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
+                    wrapped_instance, self.__class__
+                )
+            )
+        else:
+            yield from (
+                n.instance
+                for n in self.symbol_graph.get_incoming_neighbors_with_predicate_type(
+                    wrapped_instance, self.__class__
+                )
+            )
+
+    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[WrappedField]:
+        """
+        Find neighboring symbols connected by super edges.
+
+        This method identifies neighboring symbols that are connected
+        through edge with predicate types that are superclasses of the current predicate.
+
+        :param value: (Symbol): The symbol for which neighboring symbols are
+                evaluated through super predicate type edges.
+
+        :return: A list containing neighboring symbols connected by super type edges.
+        """
+        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(value))
+        if not wrapped_cls:
+            return
         yield from (
-            n.instance
-            for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
-                wrapped_instance, self.__class__
+            property_field
+            for property_field in self.symbol_graph.type_graph.get_fields_of_superclass_property_descriptors(
+                wrapped_cls, self.__class__
             )
         )
 
@@ -190,31 +228,19 @@ class Predicate(Symbol, ABC):
         if self._holds_direct(domain_value, range_value):
             self.add_relation(domain_value, range_value)
             return True
-        elif not self.transitive:
-            return False
-
-        # BFS with cycle protection
-        visited = set()
-        queue = deque()
-
-        start = HashedValue(domain_value)
-        visited.add(start)
-        queue.append(domain_value)
-
-        while queue:
-            current = queue.popleft()
-            for nxt in self._neighbors(current):
-                if self._holds_direct(nxt, range_value):
-                    self.add_relation(domain_value, range_value, inferred=True)
-                    return True
-                key = HashedValue(nxt)
-                if key not in visited:
-                    visited.add(key)
-                    queue.append(nxt)
         return False
 
+    def get_inverse(self, obj) -> MonitoredSet:
+        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
+        inverse_field = (
+            self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
+                wrapped_cls, self.inverse
+            )
+        )
+        return getattr(obj, inverse_field.public_name)
+
     @property
-    def inverse(self) -> Optional[Predicate]:
+    def inverse(self) -> Optional[Type[Predicate]]:
         return None
 
     def add_relation(
@@ -232,8 +258,15 @@ class Predicate(Symbol, ABC):
         range_value = make_list(range_value)
         for rv in range_value:
             self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
+            for property_field in self._get_super_property_descriptors(domain_value):
+                getattr(domain_value, property_field.public_name).add(rv, inferred=True)
             if self.inverse:
-                self.inverse.add_relation(rv, domain_value)
+                self.get_inverse(rv).add(domain_value, inferred=True)
+            if self.transitive:
+                for nxt in self._neighbors(rv):
+                    self.add_relation(domain_value, nxt, inferred=True)
+                for nxt in self._neighbors(domain_value, outgoing=False):
+                    self.add_relation(nxt, rv, inferred=True)
 
     def get_relation(
         self,

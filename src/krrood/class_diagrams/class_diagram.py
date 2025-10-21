@@ -11,13 +11,16 @@ from typing import List, Optional, Dict, Iterable, Union, Any, Tuple
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
-from typing_extensions import Type
+from typing_extensions import Type, TYPE_CHECKING
 
 from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
 from .wrapped_field import WrappedField
+
+if TYPE_CHECKING:
+    from ..entity_query_language.predicate import PropertyDescriptor
 
 
 @dataclass
@@ -91,7 +94,7 @@ class Association(Relation):
         if not wrapped_field:
             raise ValueError(f"Field {field_name} not found in class {source.clazz}")
 
-        target_type = wrapped_field.core_value_type
+        target_type = wrapped_field.type_endpoint
 
         wrapped_target_class = source._class_diagram.get_wrapped_class(target_type)
 
@@ -137,7 +140,12 @@ class WrappedClass:
             introspector = self._class_diagram.introspector
             discovered = introspector.discover(self.clazz)
             for item in discovered:
-                wf = WrappedField(self, item.field, public_name=item.public_name)
+                wf = WrappedField(
+                    self,
+                    item.field,
+                    public_name=item.public_name,
+                    property_descriptor=item.property_descriptor,
+                )
                 # Map under the public attribute name (e.g., "advisor")
                 self._wrapped_field_name_map_[item.public_name] = wf
                 wrapped_fields.append(wf)
@@ -176,6 +184,39 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
+    def get_fields_of_superclass_property_descriptors(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Iterable[WrappedField]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, Association):
+                continue
+            if not assoc.field.property_descriptor:
+                continue
+            other_prop_type = type(assoc.field.property_descriptor)
+            if (
+                issubclass(property_descriptor_cls, other_prop_type)
+                and property_descriptor_cls is not other_prop_type
+            ):
+                yield assoc.field
+
+    def get_the_field_of_property_descriptor_type(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Optional[WrappedField]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, Association):
+                continue
+            if not assoc.field.property_descriptor:
+                continue
+            other_prop_type = type(assoc.field.property_descriptor)
+            if property_descriptor_cls is other_prop_type:
+                return assoc.field
+
     def get_common_role_taker_associations(
         self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
     ) -> Iterable[Tuple[Association, Association]]:
@@ -205,15 +246,38 @@ class ClassDiagram:
             if assoc.field.is_role_taker:
                 yield assoc
 
+    def get_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Iterable[WrappedClass]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        yield from [
+            self._dependency_graph.get_node_data(n)
+            for n, e in self._dependency_graph.adj(wrapped_cls.index).items()
+            if edge_filter_func(e)
+        ]
+
     def get_outgoing_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
         relation_type: Type[Relation],
     ) -> Iterable[WrappedClass]:
         wrapped_cls = self.get_wrapped_class(cls)
-        for _, child_idx, edge in self._dependency_graph.out_edges(wrapped_cls.index):
-            if isinstance(edge, relation_type):
-                yield self._dependency_graph.get_node_data(child_idx)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        find_successors_by_edge = self._dependency_graph.find_successors_by_edge
+        yield from find_successors_by_edge(wrapped_cls.index, edge_filter_func)
+
+    def get_incoming_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Iterable[WrappedClass]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        find_predecessors_by_edge = self._dependency_graph.find_predecessors_by_edge
+        yield from find_predecessors_by_edge(wrapped_cls.index, edge_filter_func)
 
     def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Iterable[Relation]:
         wrapped_cls = self.get_wrapped_class(cls)
@@ -351,7 +415,7 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-                target_type = wrapped_field.core_value_type
+                target_type = wrapped_field.type_endpoint
 
                 wrapped_target_class = self.get_wrapped_class(target_type)
 

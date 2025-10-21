@@ -305,7 +305,7 @@ def load_instances(
             subj_wrapped_field = subj_wrapped_cls._wrapped_field_name_map_.get(
                 field_name
             )
-            req_obj_type = subj_wrapped_field.core_value_type
+            req_obj_type = subj_wrapped_field.type_endpoint
             matched_obj = None
             for obj_role in obj_roles:
                 if issubclass(type(obj_role), req_obj_type):

@@ -29,6 +29,7 @@ from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
+    from ..entity_query_language.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -64,6 +65,11 @@ class WrappedField:
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
     """
 
+    property_descriptor: Optional[PropertyDescriptor] = None
+    """
+    The property descriptor instance that manages the field.
+    """
+
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
@@ -71,14 +77,6 @@ class WrappedField:
 
     def __post_init__(self):
         self.public_name = self.public_name or self.field.name
-
-    @cached_property
-    def core_value_type(self):
-        return (
-            self.contained_type
-            if self.is_container or self.is_optional
-            else self.resolved_type
-        )
 
     def __hash__(self):
         return hash((self.clazz.clazz, self.field))
@@ -105,7 +103,6 @@ class WrappedField:
 
     @cached_property
     def is_builtin_type(self) -> bool:
-
         return self.type_endpoint in [int, float, str, bool, datetime, NoneType]
 
     @cached_property

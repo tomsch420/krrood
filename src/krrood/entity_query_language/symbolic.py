@@ -1406,12 +1406,12 @@ class Attribute(DomainMapping):
     @cached_property
     def _type_(self):
         if self._child_wrapped_cls_:
-            return self._wrapped_field_.core_value_type
+            return self._wrapped_field_.type_endpoint
         else:
             return WrappedField(
                 WrappedClass(self._child_type_),
                 [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
-            ).core_value_type
+            ).type_endpoint
 
     @cached_property
     def _wrapped_field_(self):
