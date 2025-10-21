@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
+from SPARQLWrapper import SPARQLWrapper, JSON
 
 import tqdm
 
@@ -52,7 +53,7 @@ class _SparqlClient:
             return rows
 
         if self.endpoint is not None:
-            from SPARQLWrapper import SPARQLWrapper, JSON  # type: ignore
+            # type: ignore
 
             sparql = SPARQLWrapper(self.endpoint)
             sparql.setQuery(query)
@@ -138,7 +139,9 @@ class DatasetConverter:
 
     def __post_init__(self) -> None:
         """Initialize internal SPARQL client based on provided configuration."""
-        self._client = _SparqlClient(graph=self.sparql_graph, endpoint=self.sparql_endpoint)
+        self._client = _SparqlClient(
+            graph=self.sparql_graph, endpoint=self.sparql_endpoint
+        )
 
     @property
     def _prefix(self) -> str:
@@ -221,10 +224,14 @@ class DatasetConverter:
         )
         for row in self._sparql_select(q):
             dept_py.research_groups.append(
-                ResearchGroup(name=self._local_name(row["g"]), lead=None, department=dept_py)
+                ResearchGroup(
+                    name=self._local_name(row["g"]), lead=None, department=dept_py
+                )
             )
 
-    def _degree_universities(self, person_iri: str, default_uni: University) -> tuple[University, University, University]:
+    def _degree_universities(
+        self, person_iri: str, default_uni: University
+    ) -> tuple[University, University, University]:
         """Resolve the person's degree universities, falling back to a default when absent."""
         q = (
             self._prefix
@@ -266,9 +273,14 @@ class DatasetConverter:
             dept_py.undergraduate_courses.append(course)
         return course
 
-    def _build_faculty_of_type(self, type_name: str, ctor, d_iri: str, dept_py: Department, u_py: University) -> List[Professor | Lecturer]:
+    def _build_faculty_of_type(
+        self, type_name: str, ctor, d_iri: str, dept_py: Department, u_py: University
+    ) -> List[Professor | Lecturer]:
         """Create all faculty of the given type for a department and return them."""
-        q = self._prefix + f"SELECT ?x WHERE {{ ?x rdf:type ub:{type_name} . ?x ub:worksFor <{d_iri}> }}"
+        q = (
+            self._prefix
+            + f"SELECT ?x WHERE {{ ?x rdf:type ub:{type_name} . ?x ub:worksFor <{d_iri}> }}"
+        )
         roles: List[Professor | Lecturer] = []
         for row in self._sparql_select(q):
             x_iri = row["x"]
@@ -282,7 +294,10 @@ class DatasetConverter:
                 department=dept_py,
             )
             # Publications
-            pubs_q = self._prefix + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{x_iri}> }}"
+            pubs_q = (
+                self._prefix
+                + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{x_iri}> }}"
+            )
             for prow in self._sparql_select(pubs_q):
                 role.publications.append(self._get_or_create_publication(prow["p"]))
             # Courses taught
@@ -302,7 +317,10 @@ class DatasetConverter:
 
     def _assign_department_head(self, dept_py: Department, d_iri: str) -> None:
         """Assign the department head when a FullProfessor with headOf is present."""
-        q = self._prefix + f"SELECT ?h WHERE {{ ?h rdf:type ub:FullProfessor . ?h ub:headOf <{d_iri}> }}"
+        q = (
+            self._prefix
+            + f"SELECT ?h WHERE {{ ?h rdf:type ub:FullProfessor . ?h ub:headOf <{d_iri}> }}"
+        )
         rows = self._sparql_select(q)
         if not rows:
             return
@@ -317,7 +335,10 @@ class DatasetConverter:
         person = self._build_person(s_iri)
         ug_py_local = None
         if is_grad:
-            q = self._prefix + f"SELECT ?ug WHERE {{ <{s_iri}> ub:undergraduateDegreeFrom ?ug }}"
+            q = (
+                self._prefix
+                + f"SELECT ?ug WHERE {{ <{s_iri}> ub:undergraduateDegreeFrom ?ug }}"
+            )
             rows = self._sparql_select(q)
             if rows:
                 ug_py_local = self._get_or_create_university(rows[0]["ug"])
@@ -345,21 +366,34 @@ class DatasetConverter:
             else:
                 student.takes_courses.append(course)
         # Publications (co-authored)
-        pubs_q = self._prefix + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{s_iri}> }}"
+        pubs_q = (
+            self._prefix
+            + f"SELECT ?p WHERE {{ ?p rdf:type ub:Publication . ?p ub:publicationAuthor <{s_iri}> }}"
+        )
         for prow in self._sparql_select(pubs_q):
-            student.co_authored_publications.append(self._get_or_create_publication(prow["p"]))
+            student.co_authored_publications.append(
+                self._get_or_create_publication(prow["p"])
+            )
         return student
 
-    def _build_students_for_department(self, dept_py: Department, d_iri: str) -> List[Student]:
+    def _build_students_for_department(
+        self, dept_py: Department, d_iri: str
+    ) -> List[Student]:
         """Create all students for the department identified by the given IRI."""
         students: List[Student] = []
-        grad_q = self._prefix + f"SELECT ?s WHERE {{ ?s rdf:type ub:GraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        grad_q = (
+            self._prefix
+            + f"SELECT ?s WHERE {{ ?s rdf:type ub:GraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        )
         for row in self._sparql_select(grad_q):
             s_iri = row["s"]
             st = self._build_student(s_iri, True, dept_py)
             students.append(st)
             self._student_map[self._local_name(s_iri)] = st
-        ugr_q = self._prefix + f"SELECT ?s WHERE {{ ?s rdf:type ub:UndergraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        ugr_q = (
+            self._prefix
+            + f"SELECT ?s WHERE {{ ?s rdf:type ub:UndergraduateStudent . ?s ub:memberOf <{d_iri}> }}"
+        )
         for row in self._sparql_select(ugr_q):
             s_iri = row["s"]
             st = self._build_student(s_iri, False, dept_py)
@@ -369,18 +403,26 @@ class DatasetConverter:
 
     def _attach_tas(self, dept_py: Department) -> None:
         """Create TeachingAssistant roles for department students assisting its courses."""
-        q = self._prefix + "SELECT ?ta ?course WHERE { ?ta rdf:type ub:TeachingAssistant . ?ta ub:teachingAssistantOf ?course }"
+        q = (
+            self._prefix
+            + "SELECT ?ta ?course WHERE { ?ta rdf:type ub:TeachingAssistant . ?ta ub:teachingAssistantOf ?course }"
+        )
         for row in self._sparql_select(q):
             course_iri = row["course"]
             course = self._course_map.get(course_iri)
             if course is not None and course.department is dept_py:
                 st = self._student_map.get(self._local_name(row["ta"]))
                 if st is not None:
-                    _ = TeachingAssistant(graduate_student=st, course_assistant_for=course)
+                    _ = TeachingAssistant(
+                        graduate_student=st, course_assistant_for=course
+                    )
 
     def _attach_ras(self, dept_py: Department) -> None:
         """Create ResearchAssistant roles for department students working in its research groups."""
-        q = self._prefix + "SELECT ?ra ?org WHERE { ?ra rdf:type ub:ResearchAssistant . ?ra ub:worksFor ?org }"
+        q = (
+            self._prefix
+            + "SELECT ?ra ?org WHERE { ?ra rdf:type ub:ResearchAssistant . ?ra ub:worksFor ?org }"
+        )
         for row in self._sparql_select(q):
             org_local = self._local_name(row["org"])
             if any(g.name == org_local for g in dept_py.research_groups):
@@ -403,7 +445,9 @@ class DatasetConverter:
         lowering cyclomatic complexity while preserving behavior.
         """
         # 1) Universities
-        uni_rows = self._sparql_select(self._prefix + "SELECT ?u WHERE { ?u rdf:type ub:University }")
+        uni_rows = self._sparql_select(
+            self._prefix + "SELECT ?u WHERE { ?u rdf:type ub:University }"
+        )
         for row in uni_rows:
             self._get_or_create_university(row["u"])  # use IRI as key
 
@@ -416,10 +460,18 @@ class DatasetConverter:
                 self._add_research_groups(dept_py, d_iri)
 
                 # Faculty by rank
-                dept_py.full_professors = self._build_faculty_of_type("FullProfessor", FullProfessor, d_iri, dept_py, u_py)
-                dept_py.associate_professors = self._build_faculty_of_type("AssociateProfessor", AssociateProfessor, d_iri, dept_py, u_py)
-                dept_py.assistant_professors = self._build_faculty_of_type("AssistantProfessor", AssistantProfessor, d_iri, dept_py, u_py)
-                dept_py.lecturers = self._build_faculty_of_type("Lecturer", Lecturer, d_iri, dept_py, u_py)
+                dept_py.full_professors = self._build_faculty_of_type(
+                    "FullProfessor", FullProfessor, d_iri, dept_py, u_py
+                )
+                dept_py.associate_professors = self._build_faculty_of_type(
+                    "AssociateProfessor", AssociateProfessor, d_iri, dept_py, u_py
+                )
+                dept_py.assistant_professors = self._build_faculty_of_type(
+                    "AssistantProfessor", AssistantProfessor, d_iri, dept_py, u_py
+                )
+                dept_py.lecturers = self._build_faculty_of_type(
+                    "Lecturer", Lecturer, d_iri, dept_py, u_py
+                )
 
                 # Department head
                 self._assign_department_head(dept_py, d_iri)

@@ -50,8 +50,8 @@ for answer_file, query in zip(
     krrood.experiments.lubm_sparql_queries.sparql_queries,
 ):
 
-    answer_file = os.path.join(path_to_answers, answer_file)
-    with open(answer_file, "r") as f:
+    answer_file_full_path = os.path.join(path_to_answers, answer_file)
+    with open(answer_file_full_path, "r") as f:
         lines = f.readlines()
         row_count = len([line for line in lines if line.strip()])
 

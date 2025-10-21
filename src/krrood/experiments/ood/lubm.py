@@ -123,7 +123,7 @@ class Course(Symbol):
     """Represents an undergraduate course."""
 
     name: str
-    department: Optional[Department] = field(default=None, repr=False)
+    department: Optional[Department] = field(default=None, repr=False)  # TODO remove
 
 
 @dataclass
@@ -161,15 +161,23 @@ class FacultyMember(Symbol):
     """
 
     person: Person
-    undergraduate_degree_from: "University" = field(repr=False)
-    masters_degree_from: "University" = field(repr=False)
-    doctoral_degree_from: "University" = field(repr=False)
-    publications: List[Publication] = field(default_factory=list, repr=False)
-    teaches_courses: List[Course] = field(default_factory=list, repr=False)
+    undergraduate_degree_from: "University" = field(repr=False)  # TODO move to person
+    masters_degree_from: "University" = field(repr=False)  # TODO move to person
+    doctoral_degree_from: "University" = field(repr=False)  # TODO move to person
+    publications: List[Publication] = field(
+        default_factory=list, repr=False
+    )  # TODO move to author
+    teaches_courses: List[Course] = field(default_factory=list, repr=False)  # move to
     teaches_graduate_courses: List[GraduateCourse] = field(
         default_factory=list, repr=False
     )
     department: Optional["Department"] = field(default=None, repr=False)
+
+
+@dataclass
+class Author(Symbol):
+    person: Person
+    publications: List[Publication] = field(default_factory=list)
 
 
 @dataclass

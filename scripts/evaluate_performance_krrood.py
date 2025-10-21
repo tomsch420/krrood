@@ -2,7 +2,6 @@ import os
 import time
 
 import numpy as np
-import owlready2
 import tqdm
 
 from krrood.entity_query_language.entity import entity, let, the
@@ -69,15 +68,16 @@ def evaluate_eql():
 
     query_times = {}
     for index, query in enumerate(tqdm.tqdm(queries)):
-        current_query_time = []
-        for i in range(10):
+        current_query_times = []
+        for i in range(1):
             result, elapsed_time = evaluate_query(query)
-            current_query_time.append(elapsed_time)
-        query_times[f"query_{index}"] = current_query_time
-
+            current_query_times.append(elapsed_time)
+        query_times[f"query_{index+1}"] = current_query_times
+        print("query", index + 1, "returned", len(result), "results")
+    print(query_times)
     print(
         "Average Query times",
-        *{k: np.mean(v) for k, v in query_times.items()},
+        *{k: np.mean(v) for k, v in query_times.items()}.items(),
         sep="\n",
     )
 

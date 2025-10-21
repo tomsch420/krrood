@@ -24,7 +24,6 @@ def query_1(specific_graduate_course):
         query = an(
             entity(
                 graduate_student,
-                graduate_student.takes_any_graduate_courses,
                 contains(
                     graduate_student.takes_graduate_courses, specific_graduate_course
                 ),
@@ -76,12 +75,10 @@ def query_4(specific_university):
     """
     with symbolic_mode():
         professor = let(Professor)
-        department = let(Department)
         query = an(
             set_of(
                 (professor, professor.person.last_name),
-                contains(department.all_professors, professor),
-                department.university == specific_university,
+                professor.department.university == specific_university,
             )
         )
     return query
@@ -144,12 +141,10 @@ def query_8(specific_university):
     """
     with symbolic_mode():
         student = let(Student)
-        department = let(Department, domain=specific_university.departments)
         query = an(
             set_of(
-                (student, department, student.person.first_name),
-                student.department == department,
-                department.university == specific_university,
+                (student, student.department, student.person.first_name),
+                student.department.university == specific_university,
             )
         )
     return query
@@ -161,14 +156,12 @@ def query_9():
     """
     with symbolic_mode():
         student = let(Student)
-        professor = let(Professor)
         course = let(Course)
         query = an(
             set_of(
-                (student, professor, course),
+                (student, student.advisor, course),
                 student.takes_any_graduate_courses,
-                student.advisor == professor,
-                contains(professor.teaches_graduate_courses, course),
+                contains(student.advisor.teaches_graduate_courses, course),
                 contains(student.takes_graduate_courses, course),
             )
         )
@@ -206,7 +199,7 @@ def query_12(specific_university: University):
     """
     with symbolic_mode():
         head = let(Professor)
-        department = let(Department)
+        department = let(Department, domain=specific_university.departments)
         query = an(
             set_of(
                 (head, department),
