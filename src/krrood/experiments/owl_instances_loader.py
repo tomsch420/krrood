@@ -14,7 +14,8 @@ from ..class_diagrams.class_diagram import Association
 
 # Import PropertyDescriptor to correctly detect descriptor class attributes
 from ..entity_query_language.property_descriptor import PropertyDescriptor
-from .lubm_with_predicates import *
+
+# from .lubm_with_predicates import *
 from ..entity_query_language.symbol_graph import SymbolGraph
 from ..ormatic.utils import classes_of_module
 

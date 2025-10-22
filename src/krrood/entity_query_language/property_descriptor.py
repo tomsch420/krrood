@@ -231,10 +231,7 @@ class PropertyDescriptor(Generic[T], Predicate):
                 domain_value=domain_value,
                 range_value=range_value,
             )
-        # Otherwise, look through sub-properties of this property.
-        return self._check_relation_holds_for_subclasses_of_property(
-            domain_value=domain_value, range_value=range_value
-        )
+        return False
 
     @profile
     def _check_relation_holds_for_subclasses_of_property(

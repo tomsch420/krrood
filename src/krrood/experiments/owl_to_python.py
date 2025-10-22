@@ -1,7 +1,8 @@
 import os
 import re
 from collections import defaultdict
-from typing import Dict, List, Callable, Optional, Any
+from copy import copy
+from typing import Dict, List, Callable, Optional, Any, Tuple
 
 import rdflib
 from jinja2 import Environment, FileSystemLoader
@@ -511,11 +512,11 @@ class OwlToPythonConverter:
                     base_dd.remove(cls_name)
                     base["declared_domains"] = base_dd
                 for rng_name in sorted(rng_names):
-                    spec_key = f"{prop_name}__{rng_name}"
+                    spec_key = prop_name + "{" + rng_name + "}"
                     if spec_key in properties_copy or spec_key in specialized_props:
                         continue
                     spec = {
-                        "name": spec_key,
+                        "name": prop_name,
                         "uri": base.get("uri", ""),
                         "type": "ObjectProperty",
                         "domains": [cls_name],
@@ -765,6 +766,48 @@ class OwlToPythonConverter:
                                 declared.remove(super_prop)
                     declared.append(prop_name)
             cls_info["declared_properties"] = declared
+
+        # find implicit sub types by checking if the class properties match and have ranges that are subtypes
+        # of of the other class property
+        for cls_name, cls_info in classes_copy.items():
+            for prop_name in cls_info.get("declared_properties", []):
+                prop_info = properties_copy.get(prop_name)
+                for other_cls_name, other_cls_info in classes_copy.items():
+                    if other_cls_name == cls_name:
+                        continue
+                    for other_prop_name in other_cls_info.get(
+                        "declared_properties", []
+                    ):
+                        if other_prop_name.split("{")[0] != prop_name.split("{")[0]:
+                            continue
+                        other_prop_info = properties_copy.get(other_prop_name)
+                        other_prop_range = other_prop_info["object_range_hint"]
+                        prop_range = prop_info["object_range_hint"]
+                        parent_name = None
+                        child_name = None
+                        if prop_range in ancestors_map[other_prop_range]:
+                            parent_name = cls_name
+                            child_name = other_cls_name
+                        elif other_prop_range in ancestors_map[prop_range]:
+                            parent_name = other_cls_name
+                            child_name = cls_name
+                        if not parent_name:
+                            continue
+                        child_info = classes_copy[child_name]
+                        parent_info = classes_copy[parent_name]
+                        if ontology_base_class_name in child_info["superclasses"]:
+                            child_info["superclasses"].remove(ontology_base_class_name)
+                        if ontology_base_class_name in child_info["base_classes"]:
+                            child_info["base_classes"].remove(ontology_base_class_name)
+                        if parent_name not in child_info["superclasses"]:
+                            child_info["superclasses"].append(parent_name)
+                            child_info["base_classes"].append(parent_name)
+                        for rt in copy(child_info["role_taker"]):
+                            if rt in parent_info["role_taker"]:
+                                child_info["role_taker"].remove(rt)
+                        for prop in copy(child_info["declared_properties"]):
+                            if prop in parent_info["declared_properties"]:
+                                child_info["declared_properties"].remove(prop)
 
         # Start with base-class-only topological order
         classes_order = self._topological_order(classes_copy, dep_key="base_classes")

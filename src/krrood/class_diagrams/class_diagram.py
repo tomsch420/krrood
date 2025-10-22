@@ -6,8 +6,9 @@ from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
-from functools import cached_property
-from typing import List, Optional, Dict, Iterable, Union, Any, Tuple
+from functools import cached_property, lru_cache
+from types import NoneType
+from typing import List, Optional, Dict, Iterable, Union, Any, Tuple, Set
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
@@ -56,7 +57,7 @@ class Inheritance(Relation):
         return f"isSuperClassOf"
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Association(Relation):
     """
     Represents a general association relationship between two classes.
@@ -184,12 +185,14 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
+    @lru_cache(maxsize=None)
     def get_fields_of_superclass_property_descriptors(
         self,
         wrapped_cls: Union[Type, WrappedClass],
         property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Iterable[WrappedField]:
+    ) -> Tuple[WrappedField, ...]:
         wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        association_fields = []
         for assoc in self.get_out_edges(wrapped_cls):
             if not isinstance(assoc, Association):
                 continue
@@ -200,8 +203,10 @@ class ClassDiagram:
                 issubclass(property_descriptor_cls, other_prop_type)
                 and property_descriptor_cls is not other_prop_type
             ):
-                yield assoc.field
+                association_fields.append(assoc.field)
+        return tuple(association_fields)
 
+    @lru_cache(maxsize=None)
     def get_the_field_of_property_descriptor_type(
         self,
         wrapped_cls: Union[Type, WrappedClass],
@@ -217,11 +222,13 @@ class ClassDiagram:
             if property_descriptor_cls is other_prop_type:
                 return assoc.field
 
+    @lru_cache(maxsize=None)
     def get_common_role_taker_associations(
         self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
-    ) -> Iterable[Tuple[Association, Association]]:
+    ) -> Tuple[Tuple[Association, Association], ...]:
         cls1 = self.get_wrapped_class(cls1)
         cls2 = self.get_wrapped_class(cls2)
+        common_associations = []
         for assoc1 in self.get_role_taker_associations_of_cls(cls1):
             target_1 = assoc1.target
             for _, _, assoc2 in self._dependency_graph.in_edges(target_1.index):
@@ -230,59 +237,70 @@ class ClassDiagram:
                 if assoc2.source.clazz != cls2.clazz:
                     continue
                 if assoc2.field.is_role_taker:
-                    yield assoc1, assoc2
+                    common_associations.append((assoc1, assoc2))
                     break
+        return tuple(common_associations)
 
+    @lru_cache(maxsize=None)
     def get_role_taker_associations_of_cls(
         self, cls: Union[Type, WrappedClass]
-    ) -> Iterable[Association]:
+    ) -> Tuple[Association, ...]:
         """
         :return: Association objects representing the role takers of the given class, a role taker is
         a field that is a one-to-one relationship and is not optional.
         """
+        associations = []
         for assoc in self.get_out_edges(cls):
             if not isinstance(assoc, Association):
                 continue
             if assoc.field.is_role_taker:
-                yield assoc
+                associations.append(assoc)
+        return tuple(associations)
 
+    @lru_cache(maxsize=None)
     def get_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
         relation_type: Type[Relation],
-    ) -> Iterable[WrappedClass]:
+    ) -> Tuple[WrappedClass, ...]:
         wrapped_cls = self.get_wrapped_class(cls)
         edge_filter_func = lambda edge: isinstance(edge, relation_type)
-        yield from [
+        filtered_neighbors = [
             self._dependency_graph.get_node_data(n)
             for n, e in self._dependency_graph.adj(wrapped_cls.index).items()
             if edge_filter_func(e)
         ]
+        return tuple(filtered_neighbors)
 
+    @lru_cache(maxsize=None)
     def get_outgoing_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
         relation_type: Type[Relation],
-    ) -> Iterable[WrappedClass]:
+    ) -> Tuple[WrappedClass, ...]:
         wrapped_cls = self.get_wrapped_class(cls)
         edge_filter_func = lambda edge: isinstance(edge, relation_type)
         find_successors_by_edge = self._dependency_graph.find_successors_by_edge
-        yield from find_successors_by_edge(wrapped_cls.index, edge_filter_func)
+        return tuple(find_successors_by_edge(wrapped_cls.index, edge_filter_func))
 
+    @lru_cache(maxsize=None)
     def get_incoming_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
         relation_type: Type[Relation],
-    ) -> Iterable[WrappedClass]:
+    ) -> Tuple[WrappedClass, ...]:
         wrapped_cls = self.get_wrapped_class(cls)
         edge_filter_func = lambda edge: isinstance(edge, relation_type)
         find_predecessors_by_edge = self._dependency_graph.find_predecessors_by_edge
-        yield from find_predecessors_by_edge(wrapped_cls.index, edge_filter_func)
+        return tuple(find_predecessors_by_edge(wrapped_cls.index, edge_filter_func))
 
-    def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Iterable[Relation]:
+    @lru_cache(maxsize=None)
+    def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Tuple[Relation, ...]:
         wrapped_cls = self.get_wrapped_class(cls)
-        for _, _, edge in self._dependency_graph.out_edges(wrapped_cls.index):
-            yield edge
+        out_edges = [
+            edge for _, _, edge in self._dependency_graph.out_edges(wrapped_cls.index)
+        ]
+        return tuple(out_edges)
 
     def to_subdiagram_without_inherited_associations(
         self,
@@ -515,3 +533,9 @@ class ClassDiagram:
 
     def clear(self):
         self._dependency_graph.clear()
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        return self is other

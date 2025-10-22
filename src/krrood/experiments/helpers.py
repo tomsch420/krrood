@@ -7,7 +7,11 @@ from krrood.entity_query_language.symbolic import ResultQuantifier
 from owlrl import DeductiveClosure, OWLRL_Semantics
 from rdflib import Graph
 
-from .owl_instances_loader import load_instances, load_multi_file_instances
+from .owl_instances_loader import (
+    load_instances,
+    load_multi_file_instances,
+    OwlInstancesRegistry,
+)
 from .owl_to_python import OwlToPythonConverter
 
 
@@ -75,7 +79,7 @@ def evaluate_eql(
     return counts, results
 
 
-def load_instances_for_lubm_with_predicates():
+def load_instances_for_lubm_with_predicates() -> OwlInstancesRegistry:
     """Load instances from the given path and add them to the given model module."""
     from . import lubm_with_predicates
 
@@ -84,7 +88,8 @@ def load_instances_for_lubm_with_predicates():
     )
     files = [f.name for f in folder_path.iterdir() if f.is_file()]
     files.sort(key=lambda x: int(x.split("_")[1].split(".")[0]))
-    load_multi_file_instances(
+    registry = load_multi_file_instances(
         [os.path.join(folder_path, file) for file in files],
         model_module=lubm_with_predicates,
     )
+    return registry

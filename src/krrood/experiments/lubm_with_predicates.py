@@ -174,18 +174,6 @@ class Employee(UnivBenchOntology):
 
 
 @dataclass(eq=False)
-class GraduateStudent(UnivBenchOntology):
-    """graduate student"""
-    # Role taker
-    person: Person
-    # is taking
-    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourse)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
 class Organization(UnivBenchOntology):
     """organization"""
     # is affiliated with
@@ -240,18 +228,6 @@ class Publication(UnivBenchOntology):
     publication_date: Optional[str] = field(kw_only=True, default=None)
     # is about
     publication_research: Set[Research] = field(default_factory=PublicationResearch)
-
-    def __hash__(self):
-        return hash(id(self))
-
-
-@dataclass(eq=False)
-class ResearchAssistant(UnivBenchOntology):
-    """university research assistant"""
-    # Role taker
-    person: Person
-    # Works For
-    works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
 
     def __hash__(self):
         return hash(id(self))
@@ -365,6 +341,16 @@ class Faculty(Employee):
 
 
 @dataclass(eq=False)
+class GraduateStudent(Student):
+    """graduate student"""
+    # is taking
+    takes_course: Set[GraduateCourse] = field(default_factory=TakesCourse)
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
 class Institute(Organization):
     """institute"""
     ...
@@ -395,6 +381,16 @@ class Program(Organization):
 class Research(Work):
     """research work"""
     ...
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+@dataclass(eq=False)
+class ResearchAssistant(Employee):
+    """university research assistant"""
+    # Works For
+    works_for: Set[ResearchGroup] = field(default_factory=WorksFor)
 
     def __hash__(self):
         return hash(id(self))

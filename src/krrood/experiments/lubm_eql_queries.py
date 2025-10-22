@@ -206,7 +206,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
 
 if __name__ == "__main__":
-    load_instances_for_lubm_with_predicates()
+    registry = load_instances_for_lubm_with_predicates()
     start_time = time.time()
     counts, results = evaluate_eql(get_eql_queries())
     end_time = time.time()
