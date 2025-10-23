@@ -71,11 +71,11 @@ class MonitoredSet(set):
     def owner(self):
         return self._owner_ref() if self._owner_ref is not None else None
 
-    def add(self, value, inferred: bool = False):
+    def add(self, value, inferred: bool = False, call_on_add: bool = True):
         super().add(value)
         # route through descriptor with the concrete owner instance
         owner = self.owner
-        if owner is not None:
+        if owner is not None and call_on_add:
             self.descriptor.on_add(owner, value, inferred=inferred)
 
 
@@ -212,7 +212,21 @@ class PropertyDescriptor(Generic[T], Predicate):
         if isinstance(value, PropertyDescriptor):
             return
         setattr(obj, self.attr_name, value)
-        self.add_relation(obj, value)
+        self.add_relation(obj, value, set_attr=False)
+
+    def add_relation(
+        self,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+        inferred: bool = False,
+        set_attr: bool = True,
+    ) -> None:
+        """Add a relation to the property descriptor."""
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        super().add_relation(domain_value, range_value, inferred=inferred)
+        if set_attr:
+            getattr(domain_value, self.attr_name).add(range_value, call_on_add=False)
 
     @profile
     def _holds_direct(
