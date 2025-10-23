@@ -18,5 +18,5 @@ def test_visualize_symbol_graph():
     #     spacing_y=10,
     # )
     symbol_graph.to_dot("symbol_graph.svg", format="svg", graph_type="type")
-    assert len(symbol_graph._type_graph.wrapped_classes) == 66
-    os.remove("symbol_graph.svg")
+    assert len(symbol_graph._type_graph.wrapped_classes) == 67
+    # os.remove("symbol_graph.svg")

@@ -332,7 +332,19 @@ class OwlToPythonConverter:
         if not ontology_base_class_name.endswith("Ontology"):
             ontology_base_class_name = ontology_base_class_name + "Ontology"
 
+        role_cls_name = f"{ontology_base_class_name}Role"
+        classes_copy[role_cls_name] = {
+            "name": role_cls_name,
+            "superclasses": [
+                f"Role[T]",
+                ontology_base_class_name,
+            ],
+            "label": "Role class which represents a role that a persistent identifier can take on in a certain context",
+        }
+
         for info in classes_copy.values():
+            if info.get("role_taker"):
+                info["superclasses"].append(role_cls_name)
             info["base_classes"] = [
                 b for b in info.get("superclasses", []) if b != "Thing"
             ]
@@ -799,6 +811,16 @@ class OwlToPythonConverter:
                             child_info["superclasses"].remove(ontology_base_class_name)
                         if ontology_base_class_name in child_info["base_classes"]:
                             child_info["base_classes"].remove(ontology_base_class_name)
+                        if (
+                            role_cls_name in parent_info["superclasses"]
+                            and role_cls_name in child_info["superclasses"]
+                        ):
+                            child_info["superclasses"].remove(role_cls_name)
+                        if (
+                            role_cls_name in parent_info["base_classes"]
+                            and role_cls_name in child_info["base_classes"]
+                        ):
+                            child_info["base_classes"].remove(role_cls_name)
                         if parent_name not in child_info["superclasses"]:
                             child_info["superclasses"].append(parent_name)
                             child_info["base_classes"].append(parent_name)
@@ -831,6 +853,13 @@ class OwlToPythonConverter:
             if inv and inv in property_classes:
                 prior = index_map.get(inv, 10**9) < index_map.get(name, 10**9)
             info["inverse_target_is_prior"] = prior
+
+        for info in classes_copy.values():
+            if role_cls_name in info["base_classes"]:
+                info["base_classes"].remove(role_cls_name)
+                info["base_classes"].append(
+                    f"{role_cls_name}[{info['role_taker'][0]['cls_name']}]"
+                )
 
         template_dir = os.path.dirname(__file__)
         env = Environment(

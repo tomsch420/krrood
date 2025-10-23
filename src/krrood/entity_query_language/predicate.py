@@ -192,7 +192,7 @@ class Predicate(Symbol, ABC):
                 )
             )
 
-    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[WrappedField]:
+    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[MonitoredSet]:
         """
         Find neighboring symbols connected by super edges.
 
@@ -208,11 +208,23 @@ class Predicate(Symbol, ABC):
         if not wrapped_cls:
             return
         yield from (
-            property_field
+            getattr(value, property_field.public_name)
             for property_field in self.symbol_graph.type_graph.get_fields_of_superclass_property_descriptors(
                 wrapped_cls, self.__class__
             )
         )
+        role_taker_property_fields = (
+            self.symbol_graph.type_graph.get_role_taker_superclass_properties(
+                wrapped_cls, self.__class__
+            )
+        )
+        if not role_taker_property_fields:
+            return
+        for role_taker_field in role_taker_property_fields.fields:
+            yield getattr(
+                getattr(value, role_taker_property_fields.role_taker.public_name),
+                role_taker_field.public_name,
+            )
 
     @profile
     def __call__(
@@ -258,8 +270,8 @@ class Predicate(Symbol, ABC):
         range_value = make_list(range_value)
         for rv in range_value:
             self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
-            for property_field in self._get_super_property_descriptors(domain_value):
-                getattr(domain_value, property_field.public_name).add(rv, inferred=True)
+            for property_value in self._get_super_property_descriptors(domain_value):
+                property_value.add(rv, inferred=True)
             if self.inverse:
                 self.get_inverse(rv).add(domain_value, inferred=True)
             if self.transitive:

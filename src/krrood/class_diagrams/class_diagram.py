@@ -4,6 +4,7 @@ import dataclasses
 import logging
 from abc import ABC
 from collections import defaultdict
+from copy import copy
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
 from functools import cached_property, lru_cache
@@ -18,6 +19,7 @@ from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
+from .utils import Role, get_generic_type_param
 from .wrapped_field import WrappedField
 
 if TYPE_CHECKING:
@@ -80,33 +82,15 @@ class Association(Relation):
     def __str__(self):
         return f"has-{self.field.public_name}"
 
-    @classmethod
-    def from_source_cls_and_field_name(
-        cls, source: WrappedClass, field_name: str
-    ) -> Association:
-        """
-        Create an Association relation from a source class and field name.
 
-        :param source: The source WrappedClass
-        :param field_name: The name of the field in the source class that creates the association
-        :return: An Association instance if the field exists and is associated with a target class, else None
-        """
-        wrapped_field = source._wrapped_field_name_map_.get(field_name)
-        if not wrapped_field:
-            raise ValueError(f"Field {field_name} not found in class {source.clazz}")
+@dataclass(eq=False)
+class HasRoleTaker(Association):
+    """
+    This is an association between a role and a role taker where the role class contains a role taker field.
+    """
 
-        target_type = wrapped_field.type_endpoint
-
-        wrapped_target_class = source._class_diagram.get_wrapped_class(target_type)
-
-        if not wrapped_target_class:
-            return None
-
-        return cls(
-            field=wrapped_field,
-            source=source,
-            target=wrapped_target_class,
-        )
+    def __str__(self):
+        return f"role-taker({self.field.public_name})"
 
 
 class ParseError(TypeError):
@@ -164,6 +148,12 @@ class WrappedClass:
 
 
 @dataclass
+class RoleTakerPropertyFields:
+    role_taker: WrappedField
+    fields: Tuple[WrappedField, ...]
+
+
+@dataclass
 class ClassDiagram:
 
     classes: InitVar[List[Type]]
@@ -184,6 +174,23 @@ class ClassDiagram:
         for clazz in classes:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
+
+    @lru_cache(maxsize=None)
+    def get_role_taker_superclass_properties(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Optional[RoleTakerPropertyFields]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, HasRoleTaker):
+                continue
+            role_taker = assoc.target
+            role_taker_fields = self.get_fields_of_superclass_property_descriptors(
+                role_taker, property_descriptor_cls
+            )
+            return RoleTakerPropertyFields(assoc.field, role_taker_fields)
+        return None
 
     @lru_cache(maxsize=None)
     def get_fields_of_superclass_property_descriptors(
@@ -313,7 +320,7 @@ class ClassDiagram:
         Inheritance edges are preserved.
         """
         # Rebuild a fresh diagram from the same classes to avoid mutating this instance
-        result = ClassDiagram(classes=[wc.clazz for wc in self.wrapped_classes])
+        result = copy(self)
 
         # Convenience locals
         g = result._dependency_graph
@@ -440,7 +447,13 @@ class ClassDiagram:
                 if not wrapped_target_class:
                     continue
 
-                relation = Association(
+                association_type = Association
+                if wrapped_field.is_role_taker and issubclass(clazz.clazz, Role):
+                    role_taker_type = get_generic_type_param(clazz.clazz, Role)[0]
+                    if role_taker_type is target_type:
+                        association_type = HasRoleTaker
+
+                relation = association_type(
                     field=wrapped_field,
                     source=clazz,
                     target=wrapped_target_class,

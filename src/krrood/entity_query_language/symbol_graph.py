@@ -283,9 +283,9 @@ class SymbolGraph:
 
         if graph_type == "type":
             if without_inherited_associations:
-                graph = (
-                    self._type_graph.to_subdiagram_without_inherited_associations()._dependency_graph
-                )
+                graph = self._type_graph.to_subdiagram_without_inherited_associations(
+                    True
+                )._dependency_graph
             else:
                 graph = self._type_graph._dependency_graph
         else:

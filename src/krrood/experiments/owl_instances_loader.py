@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union
 import rdflib
 from rdflib import RDF, RDFS, URIRef, Literal
 
-from .utils import get_generic_type_param
+from ..class_diagrams.utils import get_generic_type_param
 from ..class_diagrams.class_diagram import Association
 
 # Import PropertyDescriptor to correctly detect descriptor class attributes
