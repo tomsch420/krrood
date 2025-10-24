@@ -11,7 +11,7 @@ parts:
         - file: eql/writing_queries
         - file: eql/result_quantifiers
         - file: eql/logical_operators
-        - file: eql/comperators
+        - file: eql/comparators
         - file: eql/cache
 #        - file: eql/example_with_joining_multiple_sources
 #        - file: eql/example_with_nested_queries
