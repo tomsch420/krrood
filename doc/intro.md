@@ -67,3 +67,15 @@ pip install krrood
 
 If you are new to KRROOD, start with the EQL introduction, then add ORMatic as soon as you want SQL-backed persistence. 
 The examples are designed to be incremental and self-contained.
+
+
+## To Cite:
+
+```bib
+@software{bassiouny2025krrood,
+author = {Bassiouny, Abdelrhman AND Schierenbeck, Tom},
+title = {Knowledge Representation & Reasoning Through Object-Oriented Design},
+url = {https://github.com/code-iai/krrood},
+version = {1.0.0},
+}
+```
