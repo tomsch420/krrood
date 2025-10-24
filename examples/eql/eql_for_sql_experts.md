@@ -146,7 +146,7 @@ WHERE body.name IN ('Container1', 'Handle1');
 EQL
 
 ```{code-cell} ipython3
-names = {"Container1", "Handle1"}
+names = ["Container1", "Handle1"]
 with symbolic_mode():
     body = let(Body, domain=world.bodies)
     in_results_generator = an(entity(body, in_(body.name, names)))
