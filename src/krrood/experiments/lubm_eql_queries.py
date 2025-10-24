@@ -89,8 +89,15 @@ def get_eql_queries() -> List[ResultQuantifier]:
     # 4
     with symbolic_mode():
         q4 = a(
-            x := Professor(),
-            flatten(x.works_for).uri == "http://www.Department0.University0.edu",
+            set_of(
+                (
+                    x := Professor(),
+                    name := x.name,
+                    email := x.person.email_address,
+                    telephone := x.person.telephone,
+                ),
+                flatten(x.works_for).uri == "http://www.Department0.University0.edu",
+            )
         )
 
     # 5
