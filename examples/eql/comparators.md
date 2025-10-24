@@ -1,9 +1,22 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Comparators
 
 EQL features a bunch of comparators built into the language: `==`, `!=`, `<`, `<=`, `>`, `>=`, and membership via `in`/`contains`.
 They are optimized and can be negated and composed with logical operators.
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 from typing_extensions import List
 
@@ -42,7 +55,7 @@ world = World(
 
 Use Python’s comparison operators inside `symbolic_mode`. EQL overloads these on symbolic variables to produce comparator nodes.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     b = let(Body, domain=world.bodies)
     query = an(entity(b, b.name == "Container1"))
@@ -52,7 +65,7 @@ print(*query.evaluate(), sep="\n")
 
 Inequality `!=` works similarly:
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     b = let(Body, domain=world.bodies)
     query = an(entity(b, b.name != "Container1"))
@@ -63,7 +76,7 @@ print(*query.evaluate(), sep="\n")
 
 You can compare attributes between two variables as well:
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     left = let(Body, domain=world.bodies)
     right = let(Body, domain=world.bodies)
@@ -78,7 +91,7 @@ print(*query.evaluate(), sep="\n")
 
 These work for numeric and comparable attributes.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     b = let(Body, domain=world.bodies)
     heavy = an(entity(b, b.weight >= 10))
@@ -89,7 +102,7 @@ print(*heavy.evaluate(), sep="\n")
 
 Chaining with logical operators (implicit AND when multiple conditions are given):
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     b = let(Body, domain=world.bodies)
     query = an(
@@ -110,8 +123,7 @@ Membership has to be checked using EQL operators `in_(item, container)` or `cont
 Writing `item in literal_list` will be evaluated immediately by Python and not produce a symbolic comparator.
 
 
-```python
-
+```{code-cell} ipython3
 with symbolic_mode():
     b = let(Body, domain=world.bodies)
     query = an(entity(b, in_(b.name, {"Container1", "Handle1"})))

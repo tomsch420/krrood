@@ -1,15 +1,14 @@
 ---
-jupyter:
-  jupytext:
-    text_representation:
-      extension: .md
-      format_name: markdown
-      format_version: '1.3'
-      jupytext_version: 1.18.1
-  kernelspec:
-    display_name: Python 3
-    language: python
-    name: python3
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 ---
 
 # Writing Queries
@@ -27,7 +26,7 @@ This means that you can design your classes without worrying about querying the 
 
 Here is a query that does work due to the symbolic mode:
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 
 from typing_extensions import List
@@ -60,7 +59,7 @@ print(*query.evaluate(), sep="\n")
 
 This query doesn't work due to the lack of symbolic mode:
 
-```python
+```{code-cell} ipython3
 try:
     query = an(
         entity(

@@ -1,3 +1,17 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
+
 # Using Cached Symbols
 
 EQL provides a cache for all symbol classes.
@@ -9,7 +23,7 @@ When you have a lot of instances of a type but your query requires only a few of
 Provide a domain in such cases.
 ```
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 
 from typing_extensions import List

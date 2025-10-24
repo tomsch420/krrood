@@ -1,15 +1,14 @@
 ---
-jupyter:
-  jupytext:
-    text_representation:
-      extension: .md
-      format_name: markdown
-      format_version: '1.3'
-      jupytext_version: 1.18.1
-  kernelspec:
-    display_name: Python 3
-    language: python
-    name: python3
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 ---
 
 # Introduction
@@ -24,7 +23,7 @@ An important feature of EQL is that you do not need to do operations like JOIN i
 EQL tries to mirror your intent in a query statement with as little boilerplate code as possible.
 For example, attribute access with and equal check to another value is just as you expect:
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 
 from typing_extensions import List
@@ -50,9 +49,7 @@ with symbolic_mode():
     query = an(entity(body, contains(body.name, "2"),
                       body.name.startswith("Body"))
                )
-results = list(query.evaluate())
-assert len(results) == 1
-assert results[0].name == "Body2"
+print(*query.evaluate(), sep="\n")
 ```
 
 where this creates a body variable that gets its values from world.bodies, and filters them to have their att "name"

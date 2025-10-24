@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # Result Quantifiers
 
 In EQL, there are two result quantifiers: `the` and `an`.
@@ -8,7 +21,7 @@ In EQL, there are two result quantifiers: `the` and `an`.
 
 Let's start with an example of a working query that requires exactly one result.
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 
 from typing_extensions import List
@@ -38,7 +51,7 @@ print(query.evaluate())
 
 If there are multiple results, we get an informative exception.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     query = the(entity(body := let(Body, domain=world.bodies)))
 
@@ -50,7 +63,7 @@ except MultipleSolutionFound as e:
 
 We can also get all results using `an`.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     query = an(entity(body := let(Body)))
 

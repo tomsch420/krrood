@@ -1,23 +1,21 @@
 ---
-jupyter:
-  jupytext:
-    text_representation:
-      extension: .md
-      format_name: markdown
-      format_version: '1.3'
-      jupytext_version: 1.18.1
-  kernelspec:
-    display_name: Python 3
-    language: python
-    name: python3
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 ---
-
 # Logical Operators
 
 EQL supports a bunch of logical operators, namely `and`, `or`, `else if`, `for_all` and `not`.
 When you want to use these, you have to rely on the operators imported from EQL.entity, since the python operators cannot be overloaded to the extent that EQL requires.
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass
 
 from typing_extensions import List
@@ -43,7 +41,7 @@ world = World(1, [Body("Container1"), Body("Container2"),
 This way of writing `and`, `or` is exactly like constructing a tree which allows for the user to write in the same
 structure as how the computation is done internally. Take note that whenever conditions are used in a query without an explicit logical operator, `and` is assumed.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     body = let(type_=Body, domain=world.bodies)
     query = an(entity(body,
@@ -57,7 +55,7 @@ print(*query.evaluate(), sep="\n")
 Negation is important and tricky. EQL tries to optimize the query when negation is used, which greatly lowers wait time
 to first response. This is done by avoiding evaluating all possibilities to evaluation the negation.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     query = an(entity(body := let(type_=Body, domain=world.bodies),
                       not_(or_(body.name.startswith("C"), body.name.endswith("1")),
@@ -69,7 +67,7 @@ print(*query.evaluate(), sep="\n")
 
 Take note that queries involving negations atre actually transformed into a simplified one under the hood.
 
-```python
+```{code-cell} ipython3
 print(type(query._child_._child_))
 print(query._child_._child_.left._invert_)
 print(query._child_._child_.right._invert_)
@@ -83,8 +81,7 @@ In other words: same variables → `ElseIf`; different variables → `Or` (Union
 
 An example for a query that gets optimized to `ElseIf` is
 
-```python
-
+```{code-cell} ipython3
 with symbolic_mode():
     query_elseif = an(
         entity(
@@ -102,7 +99,7 @@ print(type(query_elseif._child_._child_))
 
 And here is one where an actual union is performed.
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     body = let(type_=Body, domain=world.bodies)
     other = let(type_=Body, domain=world.bodies)
