@@ -10,9 +10,9 @@ parts:
       sections:
         - file: eql/writing_queries
         - file: eql/result_quantifiers
+        - file: eql/logical_operators
+        - file: eql/comperators
         - file: eql/cache
-#        - file: eql/example_with_and_or
-#        - file: eql/example_with_not
 #        - file: eql/example_with_joining_multiple_sources
 #        - file: eql/example_with_nested_queries
 #        - file: eql/example_with_rule_inference
