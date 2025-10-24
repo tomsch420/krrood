@@ -54,7 +54,5 @@ with symbolic_mode():
         )
     )
 
-results = list(query.evaluate())
-assert len(results) == 1
-assert results[0].name == "Body2"
+print(*query.evaluate(), sep="\n")
 ```

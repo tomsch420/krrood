@@ -1,3 +1,16 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
 # EQL for SQL Experts
 
 If you are fluent in SQL, this guide will help you become productive with the Entity Query Language (EQL) quickly.
@@ -8,6 +21,7 @@ conditions over Python objects, and EQL finds matching assignments for you.
 This guide maps familiar SQL ideas (SELECT, WHERE, JOIN, EXISTS/IN, boolean logic, uniqueness) to EQL constructs.
 
 <!-- #region -->
+
 ## TL;DR: SQL → EQL Mental Model
 
 - **FROM aliasing**
@@ -20,7 +34,8 @@ This guide maps familiar SQL ideas (SELECT, WHERE, JOIN, EXISTS/IN, boolean logi
   `set_of((var1, var2, ...), ...conditions)` — Return a tuple of variables.
 
 - **WHERE predicates**
-  Logical operators like `and_(...)`, `or_(...)`, `not_(...)`, comparators  `contains`/`in_` like and Python methods (e.g., `.startswith`).
+  Logical operators like `and_(...)`, `or_(...)`, `not_(...)`, comparators  `contains`/`in_` like and Python methods (
+  e.g., `.startswith`).
 
 - **JOIN (INNER)**
   Express relationships between placeholders/attributes (equality). EQL implies joins automatically.
@@ -35,7 +50,7 @@ This guide maps familiar SQL ideas (SELECT, WHERE, JOIN, EXISTS/IN, boolean logi
 
 Let's define a data model for some minimal examples.
 
-```python
+```{code-cell} ipython3
 from dataclasses import dataclass, field
 
 from typing_extensions import List
@@ -91,9 +106,10 @@ WHERE body.name = 'Body2';
 
 can be translated to EQL as
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
-    body = let(name="body", type_=Body, domain=world.bodies)
+    query = an(entity(b := let(Body, domain=world.bodies), b.name == "Body2"))
+print(*query.evaluate(), sep="\n")
 ```
 
 ## LIKE and string predicates
@@ -109,13 +125,12 @@ WHERE body.name LIKE 'Body%'
 
 EQL
 
-```python
-body = let(Body, domain=world.bodies)
+```{code-cell} ipython3
 with symbolic_mode():
-    results_generator = an(entity(body,
-                                  and_(body.name.startswith("Body"),
-                                       body.name.endswith("2"))
+    body = let(Body, domain=world.bodies)
+    query = an(entity(body, and_(body.name.startswith("Body"), body.name.endswith("2"))
                                   ))
+print(*query.evaluate(), sep="\n")
 ```
 
 ## IN and EXISTS
@@ -127,20 +142,21 @@ SELECT body.*
 FROM bodies AS body
 WHERE body.name IN ('Container1', 'Handle1');
 ```
+
 EQL
 
-```python
-
+```{code-cell} ipython3
+names = {"Container1", "Handle1"}
 with symbolic_mode():
     body = let(Body, domain=world.bodies)
-    names = {"Container1", "Handle1"}
-    in_results_generator = an(entity(body, in_(body.name, names))).evaluate()
-    contains_results_generator = an(entity(body, contains(names, body.name))).evaluate()
+    in_results_generator = an(entity(body, in_(body.name, names)))
+    contains_results_generator = an(entity(body, contains(names, body.name)))
+print(*in_results_generator.evaluate(), sep="\n")
+print(*contains_results_generator.evaluate(), sep="\n")
 ```
 
 EXISTS in SQL is naturally expressed by just introducing a placeholder and relating it in conditions. If the
 relationships can be satisfied, it “exists.”
-
 
 ## Implicit JOINs via relationships
 
@@ -152,15 +168,15 @@ SQL (conceptually)
 ```sql
 SELECT parent_container.*, prismatic_connection.*, drawer_body.*, fixed_connection.*, handle.*
 FROM bodies AS parent_container
-JOIN prismatic AS prismatic_connection ON parent_container.id = prismatic_connection.parent_id
-JOIN bodies AS drawer_body ON drawer_body.id = prismatic_connection.child_id
-JOIN fixed AS fixed_connection ON drawer_body.id = fixed_connection.parent_id
-JOIN bodies AS handle ON handle.id = fixed_connection.child_id;
+         JOIN prismatic AS prismatic_connection ON parent_container.id = prismatic_connection.parent_id
+         JOIN bodies AS drawer_body ON drawer_body.id = prismatic_connection.child_id
+         JOIN fixed AS fixed_connection ON drawer_body.id = fixed_connection.parent_id
+         JOIN bodies AS handle ON handle.id = fixed_connection.child_id;
 ```
 
 EQL
 
-```python
+```{code-cell} ipython3
 with symbolic_mode():
     parent_container = let(Body, domain=world.bodies)
     prismatic_connection = let(Prismatic, domain=world.connections)
@@ -169,12 +185,13 @@ with symbolic_mode():
     handle = let(Body, domain=world.bodies)
 
     # SELECT (parent_container, prismatic_connection, drawer_body, fixed_connection, handle) WHERE relationships hold
-    results_generator = an(set_of((parent_container, prismatic_connection, drawer_body, fixed_connection, handle),
+    query = an(set_of((parent_container, prismatic_connection, drawer_body, fixed_connection, handle),
                                   and_(parent_container == prismatic_connection.parent,
                                        drawer_body == prismatic_connection.child,
                                        drawer_body == fixed_connection.parent,
                                        handle == fixed_connection.child)
                                   ))
+print(*query.evaluate(), sep="\n")                          
 ```
 
 Notice how equality constraints play the role of JOIN conditions. The set_of(...) returns a tuple-like result where you
