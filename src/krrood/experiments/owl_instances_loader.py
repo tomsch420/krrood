@@ -245,7 +245,9 @@ def load_instances(
             # assumes role takers are not themselves roles (In general this is not true)
             if role_taker_field.public_name in kwargs:
                 continue
-            kwargs[role_taker_field.public_name] = role_taker_association.target.clazz()
+            role_taker = role_taker_association.target.clazz()
+            role_taker.uri = str(s)
+            kwargs[role_taker_field.public_name] = role_taker
         registry.get_or_create_for(s, py_cls, **kwargs)
 
     # Helper to ensure object instance exists by looking up its type dynamically
@@ -401,26 +403,5 @@ def load_instances(
                     continue
 
         raise ValueError(f"Could not assign {obj} to {subj} ({p})")
-
-        # Try inverse assignment if direct field does not exist on subject
-        if base_desc is not None and obj is not None:
-            # Find inverse_of on the base descriptor class (attribute may be missing)
-            inverse = getattr(base_desc, "inverse_of", None)
-            if inverse is not None:
-                obj_cls = type(obj)
-                inv_field = field_by_descriptor.get(obj_cls, {}).get(inverse)
-                if inv_field and hasattr(obj, inv_field):
-                    lst = getattr(obj, inv_field, None)
-                    if isinstance(lst, list):
-                        lst.append(subj)
-                        continue
-        # Fallback: if both sides have a list field with the same snake name, try assign on subject
-        if (
-            field_name
-            and hasattr(subj, field_name)
-            and isinstance(getattr(subj, field_name), set)
-            and obj is not None
-        ):
-            getattr(subj, field_name).add(obj)
 
     return registry

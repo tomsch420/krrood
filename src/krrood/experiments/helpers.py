@@ -1,4 +1,5 @@
 import os
+import time
 from os.path import dirname
 from pathlib import Path
 from typing import List, Any, Tuple
@@ -68,15 +69,18 @@ def evaluate_sparql(rdf_graph: Graph, sparql_queries: List[str]):
 
 def evaluate_eql(
     eql_queries: List[ResultQuantifier],
-) -> Tuple[List[int], List[List[Any]]]:
+) -> Tuple[List[int], List[List[Any]], List[float]]:
     """Load instances and evaluate 14 EQL queries, returning counts per query."""
     counts: List[int] = []
     results: List[List[Any]] = []
+    times: List[float] = []
     for i, q in enumerate(eql_queries):
+        start_time = time.time()
         result = list(q.evaluate())
+        times.append(time.time() - start_time)
         counts.append(len(result))
         results.append(result)
-    return counts, results
+    return counts, results, times
 
 
 def load_instances_for_lubm_with_predicates() -> OwlInstancesRegistry:

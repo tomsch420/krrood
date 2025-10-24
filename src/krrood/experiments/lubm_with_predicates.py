@@ -128,7 +128,7 @@ class HeadOf(WorksFor):
 
 
 # Generated classes
-@dataclass(eq=False)
+@dataclass
 class UnivBenchOntology(Thing):
     """Base class for Univ-bench Ontology"""
     # name
@@ -147,7 +147,7 @@ class UnivBenchOntology(Thing):
 T = TypeVar('T', bound=UnivBenchOntology)
 
 
-@dataclass(eq=False)
+@dataclass
 class Organization(UnivBenchOntology):
     """organization"""
     # is affiliated with
@@ -165,7 +165,7 @@ class Organization(UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Person(UnivBenchOntology):
     """person"""
     # is being advised by
@@ -193,7 +193,7 @@ class Person(UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Publication(UnivBenchOntology):
     """publication"""
     # was written by
@@ -207,7 +207,7 @@ class Publication(UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Schedule(UnivBenchOntology):
     """schedule"""
     # lists as a course
@@ -217,7 +217,7 @@ class Schedule(UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class UnivBenchOntologyRole(Role[T], UnivBenchOntology):
     """Role class which represents a role that a persistent identifier can take on in a certain context"""
     ...
@@ -226,7 +226,7 @@ class UnivBenchOntologyRole(Role[T], UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Work(UnivBenchOntology):
     """Work"""
     ...
@@ -235,7 +235,7 @@ class Work(UnivBenchOntology):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Article(Publication):
     """article"""
     ...
@@ -244,7 +244,7 @@ class Article(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Book(Publication):
     """book"""
     ...
@@ -253,7 +253,7 @@ class Book(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class College(Organization):
     """school"""
     ...
@@ -262,7 +262,7 @@ class College(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Course(Work):
     """teaching course"""
     ...
@@ -271,7 +271,7 @@ class Course(Work):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Department(Organization):
     """university department"""
     ...
@@ -280,7 +280,7 @@ class Department(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Director(UnivBenchOntologyRole[Person]):
     """director"""
     # Role taker
@@ -292,7 +292,7 @@ class Director(UnivBenchOntologyRole[Person]):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Employee(UnivBenchOntologyRole[Person]):
     """Employee"""
     # Role taker
@@ -304,7 +304,7 @@ class Employee(UnivBenchOntologyRole[Person]):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Institute(Organization):
     """institute"""
     ...
@@ -313,7 +313,7 @@ class Institute(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Manual(Publication):
     """manual"""
     ...
@@ -322,7 +322,7 @@ class Manual(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Program(Organization):
     """program"""
     ...
@@ -331,7 +331,7 @@ class Program(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Research(Work):
     """research work"""
     ...
@@ -340,7 +340,7 @@ class Research(Work):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class ResearchGroup(Organization):
     """research group"""
     # has as a research project
@@ -350,7 +350,7 @@ class ResearchGroup(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Software(Publication):
     """software program"""
     # is documented in
@@ -362,7 +362,7 @@ class Software(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Specification(Publication):
     """published specification"""
     ...
@@ -371,7 +371,7 @@ class Specification(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Student(UnivBenchOntologyRole[Person]):
     """student"""
     # Role taker
@@ -383,7 +383,7 @@ class Student(UnivBenchOntologyRole[Person]):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class TeachingAssistant(UnivBenchOntologyRole[Person]):
     """university teaching assistant"""
     # Role taker
@@ -395,7 +395,7 @@ class TeachingAssistant(UnivBenchOntologyRole[Person]):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class University(Organization):
     """university"""
     # has as an alumnus
@@ -405,7 +405,7 @@ class University(Organization):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class UnofficialPublication(Publication):
     """unnoficial publication"""
     ...
@@ -414,7 +414,7 @@ class UnofficialPublication(Publication):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class AdministrativeStaff(Employee):
     """administrative staff worker"""
     ...
@@ -423,7 +423,7 @@ class AdministrativeStaff(Employee):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class ConferencePaper(Article):
     """conference paper"""
     ...
@@ -432,7 +432,7 @@ class ConferencePaper(Article):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Faculty(Employee):
     """faculty member"""
     # teaches
@@ -442,7 +442,7 @@ class Faculty(Employee):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class GraduateCourse(Course):
     """Graduate Level Courses"""
     ...
@@ -451,7 +451,7 @@ class GraduateCourse(Course):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class GraduateStudent(Student):
     """graduate student"""
     # is taking
@@ -461,7 +461,7 @@ class GraduateStudent(Student):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class JournalArticle(Article):
     """journal article"""
     ...
@@ -470,7 +470,7 @@ class JournalArticle(Article):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class ResearchAssistant(Employee):
     """university research assistant"""
     # Works For
@@ -480,7 +480,7 @@ class ResearchAssistant(Employee):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class TechnicalReport(Article):
     """technical report"""
     ...
@@ -489,7 +489,7 @@ class TechnicalReport(Article):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class UndergraduateStudent(Student):
     """undergraduate student"""
     ...
@@ -498,7 +498,7 @@ class UndergraduateStudent(Student):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class ClericalStaff(AdministrativeStaff):
     """clerical staff worker"""
     ...
@@ -507,7 +507,7 @@ class ClericalStaff(AdministrativeStaff):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Lecturer(Faculty):
     """lecturer"""
     ...
@@ -516,7 +516,7 @@ class Lecturer(Faculty):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class PostDoc(Faculty):
     """post doctorate"""
     ...
@@ -525,7 +525,7 @@ class PostDoc(Faculty):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Professor(Faculty):
     """professor"""
     # is tenured:
@@ -535,7 +535,7 @@ class Professor(Faculty):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class SystemsStaff(AdministrativeStaff):
     """systems staff worker"""
     ...
@@ -544,7 +544,7 @@ class SystemsStaff(AdministrativeStaff):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class AssistantProfessor(Professor):
     """assistant professor"""
     ...
@@ -553,7 +553,7 @@ class AssistantProfessor(Professor):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class AssociateProfessor(Professor):
     """associate professor"""
     ...
@@ -562,7 +562,7 @@ class AssociateProfessor(Professor):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Chair(Professor, UnivBenchOntologyRole[Person]):
     """chair"""
     # Role taker
@@ -573,7 +573,7 @@ class Chair(Professor, UnivBenchOntologyRole[Person]):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class Dean(Professor):
     """dean"""
     # is the head of
@@ -583,7 +583,7 @@ class Dean(Professor):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class FullProfessor(Professor):
     """full professor"""
     ...
@@ -592,7 +592,7 @@ class FullProfessor(Professor):
         return hash(id(self))
 
 
-@dataclass(eq=False)
+@dataclass
 class VisitingProfessor(Professor):
     """visiting professor"""
     ...

@@ -10,10 +10,11 @@ from krrood.entity_query_language.entity import (
     contains,
     set_of,
     the,
+    exists,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.entity_query_language.symbolic import ResultQuantifier
+from krrood.entity_query_language.symbolic import ResultQuantifier, Exists
 
 from krrood.experiments import lubm_with_predicates
 from krrood.experiments.helpers import (
@@ -76,14 +77,10 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
     # 3
     with symbolic_mode():
-        assistant_professor = the(
-            AssistantProfessor(
-                uri="http://www.Department0.University0.edu/AssistantProfessor0"
-            )
-        )
         q3 = a(
             x := Publication(),
-            contains(x.publication_author, assistant_professor.person),
+            flatten(x.publication_author).uri
+            == "http://www.Department0.University0.edu/AssistantProfessor0",
         )
 
     # 4
@@ -132,7 +129,6 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
     # 8
     with symbolic_mode():
-        university = the(University(uri="http://www.University0.edu"))
         q8 = a(
             set_of(
                 (
@@ -141,10 +137,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
                     z := x.person.email_address,
                 ),
                 HasType(y, Department),
-                contains(
-                    y.sub_organization_of,
-                    university,
-                ),
+                flatten(y.sub_organization_of).uri == "http://www.University0.edu",
             )
         )
     # u = list(
@@ -173,7 +166,9 @@ def get_eql_queries() -> List[ResultQuantifier]:
                     z := flatten(x.takes_course),
                 ),
                 HasType(y, Faculty),
-                contains(y.teacher_of, z),
+                contains(
+                    y.teacher_of, z
+                ),  # will benefit from symbol graph optimization
             )
         )
 
@@ -181,23 +176,15 @@ def get_eql_queries() -> List[ResultQuantifier]:
     with symbolic_mode():
         q10 = a(
             x := Student(),
-            contains(
-                x.takes_course,
-                the(
-                    GraduateCourse(
-                        uri="http://www.Department0.University0.edu/GraduateCourse0"
-                    )
-                ),
-            ),
+            flatten(x.takes_course).uri
+            == "http://www.Department0.University0.edu/GraduateCourse0",
         )
 
     # 11
     with symbolic_mode():
         q11 = a(
             x := ResearchGroup(),
-            contains(
-                x.sub_organization_of, the(University(uri="http://www.University0.edu"))
-            ),
+            flatten(x.sub_organization_of).uri == "http://www.University0.edu",
         )
 
     # 12
@@ -206,10 +193,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
             set_of(
                 (x := Chair(), y := flatten(x.works_for)),
                 HasType(y, Department),
-                contains(
-                    y.sub_organization_of,
-                    the(University(uri="http://www.University0.edu")),
-                ),
+                flatten(y.sub_organization_of).uri == "http://www.University0.edu",
             )  # writing contains like this implies that the user knows that this is a set of objects.
             # A more declarative way would be to write SubOrganizationOf(y, the(University(name="University0"))).
         )
@@ -217,7 +201,7 @@ def get_eql_queries() -> List[ResultQuantifier]:
     # 13
     with symbolic_mode():
         q13 = a(
-            x := the(University(uri="http://www.University0.edu")).has_alumnus,
+            x := flatten(the(University(uri="http://www.University0.edu")).has_alumnus),
         )
 
     # 14
@@ -231,9 +215,9 @@ def get_eql_queries() -> List[ResultQuantifier]:
 if __name__ == "__main__":
     registry = load_instances_for_lubm_with_predicates()
     start_time = time.time()
-    counts, results = evaluate_eql(get_eql_queries())
+    counts, results, times = evaluate_eql(get_eql_queries())
     end_time = time.time()
     for i, n in enumerate(counts, 1):
-        print(f"{i}:{n}")
+        print(f"{i}:{n} ({times[i - 1]} sec)")
         print({type(r) for r in results[i - 1]})
     print(f"Time elapsed: {end_time - start_time} seconds")

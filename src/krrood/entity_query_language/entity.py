@@ -27,9 +27,10 @@ from .symbolic import (
     Flatten,
     Concatenate,
     ForAll,
+    Exists,
 )
 from .symbol_graph import symbols_registry
-from .predicate import Predicate
+from .predicate import Predicate, predicate
 
 T = TypeVar("T")  # Define type variable "T"
 
@@ -107,7 +108,11 @@ def select_one_or_select_many_or_infer(
     if isinstance(entity_, (Entity, SetOf)):
         q = quantifier(entity_)
     elif isinstance(entity_, ResultQuantifier) and not properties:
-        q = entity_
+        if isinstance(entity_, quantifier):
+            q = entity_
+        else:
+            entity_._child_._parent_ = None
+            q = quantifier(entity_._child_)
     elif isinstance(entity_, CanBehaveLikeAVariable):
         q = quantifier(entity(entity_, *properties))
     elif isinstance(entity_, (list, tuple)):
@@ -304,7 +309,7 @@ def for_all(
     condition: Union[SymbolicExpression, bool, Predicate],
 ):
     """
-    A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for every
+    A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **every**
      value of the universal_variable.
 
     :param universal_variable: The universal on variable that the condition must satisfy for all its values.
@@ -312,3 +317,18 @@ def for_all(
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
     return ForAll(universal_variable, condition)
+
+
+def exists(
+    universal_variable: Union[CanBehaveLikeAVariable[T], T],
+    condition: Union[SymbolicExpression, bool, Predicate],
+):
+    """
+    A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **any**
+     value of the universal_variable.
+
+    :param universal_variable: The universal on variable that the condition must satisfy for any of its values.
+    :condition: A SymbolicExpression or bool representing a condition that must be satisfied.
+    :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
+    """
+    return Exists(universal_variable, condition)

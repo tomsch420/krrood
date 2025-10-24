@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import copy
 
-
+from line_profiler import profile
 from typing_extensions import Type
 
 from .hashed_data import HashedIterable
@@ -29,6 +29,7 @@ class CacheCount:
     :ivar values: Mapping from counter name to its integer value.
     :vartype values: Dict[str, int]
     """
+
     values: Dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
 
     def update(self, name: str) -> None:
@@ -51,6 +52,7 @@ class CacheTime:
     :ivar values: Mapping from timer name to accumulated seconds.
     :vartype values: Dict[str, float]
     """
+
     values: Dict[str, float] = field(default_factory=lambda: defaultdict(lambda: 0.0))
 
     def add(self, name: str, seconds: float) -> None:
@@ -75,6 +77,7 @@ cache_update_time = CacheTime()
 
 # Runtime switch to enable/disable caching paths
 _caching_enabled = contextvars.ContextVar("caching_enabled", default=True)
+
 
 def enable_caching() -> None:
     """
@@ -133,6 +136,7 @@ class SeenSet:
     :ivar all_seen: Becomes True when an empty assignment is added, meaning any
                     assignment is considered seen.
     """
+
     seen: List[Any] = field(default_factory=list, init=False)
     all_seen: bool = field(default=False, init=False)
 
@@ -147,6 +151,7 @@ class SeenSet:
             if not assignment:
                 self.all_seen = True
 
+    @profile
     def check(self, assignment):
         """
         Check if an assignment (dict) is covered by seen entries.
@@ -158,8 +163,10 @@ class SeenSet:
             self.seen.append(assignment)
             return False
         for constraint in self.seen:
-            if all(assignment[k] == v if k in assignment else False for k, v in constraint.items()):
-                return True
+            return all(
+                assignment[k] == v if k in assignment else False
+                for k, v in constraint.items()
+            )
         return False
 
     def clear(self):
@@ -167,8 +174,7 @@ class SeenSet:
         self.all_seen = False
 
 
-class CacheDict(UserDict):
-    ...
+class CacheDict(UserDict): ...
 
 
 @dataclass
@@ -185,6 +191,7 @@ class IndexedCache:
     :ivar enter_count: Diagnostic counter for retrieval entries.
     :ivar search_count: Diagnostic counter for wildcard searches.
     """
+
     _keys: List[Hashable] = field(default_factory=list)
     seen_set: SeenSet = field(default_factory=SeenSet, init=False)
     cache: CacheDict = field(default_factory=CacheDict, init=False)
@@ -205,7 +212,6 @@ class IndexedCache:
         self.cache.clear()
         self.seen_set.clear()
 
-    
     def insert(self, assignment: Dict, output: Any, index: bool = True) -> None:
         """
         Insert an output under the given partial assignment.
@@ -245,6 +251,7 @@ class IndexedCache:
             else:
                 cache[v] = output
 
+    @profile
     def check(self, assignment: Dict) -> bool:
         """
         Check if seen entries cover an assignment (dict).
@@ -260,8 +267,14 @@ class IndexedCache:
     def __getitem__(self, key: Any):
         return self.flat_cache[key]
 
-    
-    def retrieve(self, assignment: Optional[Dict] = None, cache=None, key_idx=0, result: Dict = None, from_index: bool = True) -> Iterable:
+    def retrieve(
+        self,
+        assignment: Optional[Dict] = None,
+        cache=None,
+        key_idx=0,
+        result: Dict = None,
+        from_index: bool = True,
+    ) -> Iterable:
         """
         Retrieve leaf results matching a (possibly partial) assignment.
 
@@ -321,7 +334,9 @@ class IndexedCache:
                 for cache_key, cache_val in cache.items():
                     local_result = copy(result)
                     local_result[key] = cache_key
-                    yield from self._yield_result(assignment, cache_val, key_idx, local_result)
+                    yield from self._yield_result(
+                        assignment, cache_val, key_idx, local_result
+                    )
         else:
             # Reached the leaf (value or next dict) specifically specified by assignment
             yield result, cache
@@ -331,7 +346,9 @@ class IndexedCache:
         self.seen_set.clear()
         self.flat_cache.clear()
 
-    def _yield_result(self, assignment: Dict, cache_val: Any, key_idx: int, result: Dict[int, Any]):
+    def _yield_result(
+        self, assignment: Dict, cache_val: Any, key_idx: int, result: Dict[int, Any]
+    ):
         """
         Internal helper to descend into cache and yield concrete results.
 
@@ -348,10 +365,13 @@ class IndexedCache:
             yield result, cache_val
 
 
-def yield_class_values_from_cache(cache: Dict[Type, IndexedCache], clazz: Type,
-                                  assignment: Optional[Dict] = None,
-                                  from_index: bool = True,
-                                  cache_keys: Optional[List] = None) -> Iterable:
+def yield_class_values_from_cache(
+    cache: Dict[Type, IndexedCache],
+    clazz: Type,
+    assignment: Optional[Dict] = None,
+    from_index: bool = True,
+    cache_keys: Optional[List] = None,
+) -> Iterable:
     if from_index and assignment and ((clazz not in cache) or (not cache[clazz].keys)):
         cache[clazz].keys = list(assignment.keys())
     if not cache_keys:
@@ -360,13 +380,17 @@ def yield_class_values_from_cache(cache: Dict[Type, IndexedCache], clazz: Type,
         yield from cache[t].retrieve(assignment, from_index=from_index)
 
 
-def get_cache_keys_for_class_(cache: Dict[Type, IndexedCache], clazz: Type) -> List[Type]:
+def get_cache_keys_for_class_(
+    cache: Dict[Type, IndexedCache], clazz: Type
+) -> List[Type]:
     """
     Get the cache keys for the given class which are its subclasses and itself.
     """
     cache_keys = []
     if isinstance(clazz, type):
-        cache_keys = [t for t in cache.keys() if isinstance(t, type) and issubclass(t, clazz)]
+        cache_keys = [
+            t for t in cache.keys() if isinstance(t, type) and issubclass(t, clazz)
+        ]
     elif clazz in cache:
         cache_keys = [clazz]
     return cache_keys

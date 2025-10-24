@@ -1024,7 +1024,7 @@ class Variable(CanBehaveLikeAVariable[T]):
                 yield from self._evaluate_kwargs_expression_(sources)
             else:
                 # If no kwargs expression, or is currently being evaluated then yield from the domain directly,
-                # if ht kwargs is being evaluated, it will want to take the domain from here and constrain it further.
+                # if the kwargs is being evaluated, it will want to take the domain from here and constrain it further.
                 yield from self
         elif not self._is_inferred_ and not self._predicate_type_:
             self._update_domain_and_kwargs_expression_()
@@ -1559,6 +1559,10 @@ class BinaryOperator(SymbolicExpression, ABC):
             for v in combined_vars.filter(lambda v: not isinstance(v.value, Literal))
         ]
 
+    def _reset_only_my_cache_(self) -> None:
+        super()._reset_only_my_cache_()
+        self._cache_.clear()
+
     def yield_final_output_from_cache(
         self, variables_sources, cache: Optional[IndexedCache] = None
     ) -> Iterable[Dict[int, HashedValue]]:
@@ -1721,6 +1725,47 @@ class ForAll(BinaryOperator):
 
 
 @dataclass(eq=False)
+class Exists(BinaryOperator):
+
+    @property
+    def _name_(self) -> str:
+        return self.__class__.__name__
+
+    @property
+    def variable(self):
+        return self.left
+
+    @variable.setter
+    def variable(self, value):
+        self.left = value
+
+    @property
+    def condition(self):
+        return self.right
+
+    @condition.setter
+    def condition(self, value):
+        self.right = value
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Iterable[Dict[int, HashedValue]]:
+        sources = sources or {}
+
+        for var_val in self.variable._evaluate__(sources):
+            ctx = {**sources, **var_val}
+
+            # Evaluate the condition under this particular universal value
+            for condition_val in self.condition._evaluate__(ctx):
+                if self.condition._is_false_:
+                    continue
+                yield condition_val
+                break
+
+
+@dataclass(eq=False)
 class Comparator(BinaryOperator):
     """
     A symbolic equality check that can be used to compare symbolic variables.
@@ -1780,6 +1825,11 @@ class Comparator(BinaryOperator):
             return self.operation_name_map[self.operation]
         return self.operation.__name__
 
+    def _reset_only_my_cache_(self) -> None:
+        super()._reset_only_my_cache_()
+        self._cache_.clear()
+
+    @profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1890,8 +1940,11 @@ class AND(LogicalOperator):
     A symbolic AND operation that can be used to combine multiple symbolic expressions.
     """
 
-    seen_left_values: SeenSet = field(default_factory=SeenSet, init=False)
+    def _reset_only_my_cache_(self) -> None:
+        super()._reset_only_my_cache_()
+        self.right_cache.clear()
 
+    @profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,

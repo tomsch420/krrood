@@ -38,7 +38,7 @@ class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
 # Generated classes
 {% for cls_name in classes_order %}
 {% set cls = classes[cls_name] %}
-@dataclass(eq=False)
+@dataclass
 class {{ cls.name }}({% if cls.name == ontology_base_class_name %}Thing{% elif cls.base_classes %}{{ ', '.join(cls.base_classes) }}{% else %}{{ ontology_base_class_name }}{% endif %}):
     {% if cls.label or cls.comment %}
     """{{ cls.label if cls.label else '' }}{% if cls.label and cls.comment %}\n\n{% endif %}{{ cls.comment if cls.comment else '' }}"""
