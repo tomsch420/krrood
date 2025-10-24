@@ -285,6 +285,8 @@ def load_instances(
             if snake in [f.name for f in fields(subj_cls)]:
                 field_name = snake
 
+        role_taker_vals = symbol_graph.get_role_takers_of_instance(subj)
+
         if isinstance(o, Literal):
             if field_name and hasattr(subj, field_name):
                 # Coerce to field annotated type
@@ -294,6 +296,11 @@ def load_instances(
                     ftypes = {}
                 coerced = _coerce_literal(o, ftypes.get(field_name))
                 setattr(subj, field_name, coerced)
+            else:
+                for role_taker_val in role_taker_vals:
+                    if hasattr(role_taker_val, snake):
+                        setattr(role_taker_val, snake, o)
+                        break
             # else: ignore literals not present in model
             continue
 
@@ -330,8 +337,6 @@ def load_instances(
             if isinstance(lst, set) and obj is not None:
                 lst.add(obj)
                 continue
-
-        role_taker_vals = symbol_graph.get_role_takers_of_instance(subj)
 
         assigned: bool = False
         for role_taker_val in role_taker_vals:

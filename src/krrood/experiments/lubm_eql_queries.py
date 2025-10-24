@@ -140,6 +140,21 @@ def get_eql_queries() -> List[ResultQuantifier]:
                 ),
             )
         )
+    # u = list(
+    #     filter(
+    #         lambda x: x.uri == "http://www.University0.edu",
+    #         registry._by_class[University],
+    #     )
+    # )[0]
+    # students = (
+    #     registry._by_class[UndergraduateStudent] + registry._by_class[GraduateStudent]
+    # )
+    # equivalent_pyton_query = [
+    #     (student, m, student.person.email_address)
+    #     for student in students
+    #     for m in student.person.member_of
+    #     if isinstance(m, Department) and (u in m.sub_organization_of)
+    # ]
 
     # 9
     with symbolic_mode():

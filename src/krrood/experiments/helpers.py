@@ -72,7 +72,7 @@ def evaluate_eql(
     """Load instances and evaluate 14 EQL queries, returning counts per query."""
     counts: List[int] = []
     results: List[List[Any]] = []
-    for q in eql_queries:
+    for i, q in enumerate(eql_queries):
         result = list(q.evaluate())
         counts.append(len(result))
         results.append(result)
