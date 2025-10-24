@@ -106,18 +106,18 @@ def get_eql_queries() -> List[ResultQuantifier]:
 
     # 7
     with symbolic_mode():
-        assistant_professor = the(
-            AssistantProfessor(
-                uri="http://www.Department0.University0.edu/AssistantProfessor0"
+        associate_professor = the(
+            AssociateProfessor(
+                uri="http://www.Department0.University0.edu/AssociateProfessor0"
             )
         )
         q7 = a(
             set_of(
                 (
                     x := Student(),
-                    y := assistant_professor.teacher_of,
+                    y := flatten(x.takes_course),
                 ),
-                contains(y, flatten(x.takes_course)),
+                contains(associate_professor.teacher_of, y),
                 # can be optimized by walking from student.takes_course to teacher_of to AssociateProfessor
                 # in the SymbolGraph
             )
