@@ -225,26 +225,27 @@ def load_instances(
         kwargs = {}
         if existing_roles:
             for er in existing_roles:
-                for (
+                (
                     assoc1,
                     assoc2,
-                ) in symbol_graph.type_graph.get_common_role_taker_associations(
+                ) = symbol_graph.type_graph.get_common_role_taker_associations(
                     type(er), py_cls
-                ):
+                )
+                if assoc1 and assoc2:
                     if assoc2.field.public_name in kwargs:
                         continue
                     kwargs[assoc2.field.public_name] = getattr(
                         er, assoc1.field.public_name
                     )
-        role_taker_associations = (
+        role_taker_association = (
             symbol_graph.type_graph.get_role_taker_associations_of_cls(py_cls)
         )
-        for role_taker_assoc in role_taker_associations:
-            role_taker_field = role_taker_assoc.field
+        if role_taker_association:
+            role_taker_field = role_taker_association.field
             # assumes role takers are not themselves roles (In general this is not true)
             if role_taker_field.public_name in kwargs:
                 continue
-            kwargs[role_taker_field.public_name] = role_taker_assoc.target.clazz()
+            kwargs[role_taker_field.public_name] = role_taker_association.target.clazz()
         registry.get_or_create_for(s, py_cls, **kwargs)
 
     # Helper to ensure object instance exists by looking up its type dynamically
@@ -285,7 +286,7 @@ def load_instances(
             if snake in [f.name for f in fields(subj_cls)]:
                 field_name = snake
 
-        role_taker_vals = symbol_graph.get_role_takers_of_instance(subj)
+        role_taker_val = symbol_graph.get_role_takers_of_instance(subj)
 
         if isinstance(o, Literal):
             if field_name and hasattr(subj, field_name):
@@ -296,11 +297,8 @@ def load_instances(
                     ftypes = {}
                 coerced = _coerce_literal(o, ftypes.get(field_name))
                 setattr(subj, field_name, coerced)
-            else:
-                for role_taker_val in role_taker_vals:
-                    if hasattr(role_taker_val, snake):
-                        setattr(role_taker_val, snake, o)
-                        break
+            elif role_taker_val and hasattr(role_taker_val, snake):
+                setattr(role_taker_val, snake, o)
             # else: ignore literals not present in model
             continue
 
@@ -320,16 +318,16 @@ def load_instances(
                     matched_obj = obj_role
                     break
             if not matched_obj:
-                for (
-                    role_taker_assoc
-                ) in symbol_graph.type_graph.get_role_taker_associations_of_cls(
-                    type(obj_roles[0])
-                ):
+                role_taker_assoc = (
+                    symbol_graph.type_graph.get_role_taker_associations_of_cls(
+                        type(obj_roles[0])
+                    )
+                )
+                if role_taker_assoc:
                     if role_taker_assoc.target.clazz is req_obj_type:
                         matched_obj = getattr(
                             obj_roles[0], role_taker_assoc.field.public_name
                         )
-                        break
             if not matched_obj:
                 raise ValueError(f"Could not assign {obj} to {subj} ({p})")
             obj = matched_obj
@@ -338,16 +336,11 @@ def load_instances(
                 lst.add(obj)
                 continue
 
-        assigned: bool = False
-        for role_taker_val in role_taker_vals:
-            if hasattr(role_taker_val, snake):
-                lst = getattr(role_taker_val, snake)
-                if isinstance(lst, set) and obj is not None:
-                    lst.add(obj)
-                    assigned = True
-                    break
-        if assigned:
-            continue
+        if role_taker_val and hasattr(role_taker_val, snake):
+            lst = getattr(role_taker_val, snake)
+            if isinstance(lst, set) and obj is not None:
+                lst.add(obj)
+                continue
 
         base_desc = descriptor_base_for(snake)
 
@@ -390,9 +383,10 @@ def load_instances(
             if new_role is None:
                 type_graph = symbol_graph.type_graph
                 kwargs = {}
-                for assoc1, assoc2 in type_graph.get_common_role_taker_associations(
+                assoc1, assoc2 = type_graph.get_common_role_taker_associations(
                     subj_cls, new_role_class
-                ):
+                )
+                if assoc1 and assoc2:
                     kwargs[assoc2.field.public_name] = getattr(
                         subj, assoc1.field.public_name
                     )

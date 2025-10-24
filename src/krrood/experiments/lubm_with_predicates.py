@@ -36,10 +36,7 @@ class DegreeFrom(PropertyDescriptor):
 @dataclass
 class HasAlumnus(PropertyDescriptor):
     """has as an alumnus"""
-    @property
-    def inverse(self):
-        # Inverse of degreeFrom
-        return DegreeFrom
+    inverse_of = DegreeFrom
 
 
 @dataclass
@@ -55,10 +52,7 @@ class Member(PropertyDescriptor):
 @dataclass
 class MemberOf(PropertyDescriptor):
     """member of"""
-    @property
-    def inverse(self):
-        # Inverse of member
-        return Member
+    inverse_of = Member
 
 
 @dataclass

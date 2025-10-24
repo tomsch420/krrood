@@ -106,7 +106,7 @@ class SymbolGraph:
             self._relation_index = {}
             self.__class__._initialized = True
 
-    def get_role_takers_of_instance(self, instance: Any) -> Iterable[Any]:
+    def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
         :param instance: The instance to get the role takers for.
         :return: Role takers of the given instance. A role taker is a field that represents
@@ -115,10 +115,12 @@ class SymbolGraph:
         wrapped_instance = self.get_wrapped_instance(instance)
         if not wrapped_instance:
             raise ValueError(f"Instance {instance} not found in graph.")
-        for role_taker_assoc in self.type_graph.get_role_taker_associations_of_cls(
+        role_taker_assoc = self.type_graph.get_role_taker_associations_of_cls(
             type(wrapped_instance.instance)
-        ):
-            yield getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
+        )
+        if not role_taker_assoc:
+            return None
+        return getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
 
     @property
     def type_graph(self) -> ClassDiagram:

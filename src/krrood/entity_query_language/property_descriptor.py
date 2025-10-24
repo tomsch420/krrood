@@ -100,6 +100,7 @@ class PropertyDescriptor(Generic[T], Predicate):
     _subprops_cache: ClassVar[WeakKeyDictionary] = WeakKeyDictionary()
 
     def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
         cls.domain_types = set()
         cls.range_types = set()
 

@@ -28,10 +28,7 @@ class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
     {% endif %}
     {# Only emit a typed inverse if the target descriptor is already defined earlier #}
     {% if prop.inverse_of and prop.inverse_target_is_prior %}
-    @property
-    def inverse(self):
-        # Inverse of {{ prop.inverse_of }}
-        return {{ properties[prop.inverse_of].descriptor_name }}
+    inverse_of = {{ properties[prop.inverse_of].descriptor_name }}
     {% endif %}
 
 

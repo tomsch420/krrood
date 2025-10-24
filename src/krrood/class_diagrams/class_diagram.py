@@ -232,37 +232,34 @@ class ClassDiagram:
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(
         self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
-    ) -> Tuple[Tuple[Association, Association], ...]:
+    ) -> Tuple[Optional[HasRoleTaker], Optional[HasRoleTaker]]:
         cls1 = self.get_wrapped_class(cls1)
         cls2 = self.get_wrapped_class(cls2)
-        common_associations = []
-        for assoc1 in self.get_role_taker_associations_of_cls(cls1):
-            target_1 = assoc1.target
-            for _, _, assoc2 in self._dependency_graph.in_edges(target_1.index):
-                if not isinstance(assoc2, Association):
-                    continue
-                if assoc2.source.clazz != cls2.clazz:
-                    continue
-                if assoc2.field.is_role_taker:
-                    common_associations.append((assoc1, assoc2))
-                    break
-        return tuple(common_associations)
+        assoc1 = self.get_role_taker_associations_of_cls(cls1)
+        if not assoc1:
+            return None, None
+        target_1 = assoc1.target
+        for _, _, assoc2 in self._dependency_graph.in_edges(target_1.index):
+            if not isinstance(assoc2, HasRoleTaker):
+                continue
+            if assoc2.source.clazz != cls2.clazz:
+                continue
+            if assoc2.field.is_role_taker:
+                return assoc1, assoc2
+        return None, None
 
     @lru_cache(maxsize=None)
     def get_role_taker_associations_of_cls(
         self, cls: Union[Type, WrappedClass]
-    ) -> Tuple[Association, ...]:
+    ) -> Optional[HasRoleTaker]:
         """
         :return: Association objects representing the role takers of the given class, a role taker is
         a field that is a one-to-one relationship and is not optional.
         """
-        associations = []
         for assoc in self.get_out_edges(cls):
-            if not isinstance(assoc, Association):
-                continue
-            if assoc.field.is_role_taker:
-                associations.append(assoc)
-        return tuple(associations)
+            if isinstance(assoc, HasRoleTaker) and assoc.field.is_role_taker:
+                return assoc
+        return None
 
     @lru_cache(maxsize=None)
     def get_neighbors_with_relation_type(

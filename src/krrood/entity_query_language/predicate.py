@@ -246,14 +246,25 @@ class Predicate(Symbol, ABC):
         wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
         inverse_field = (
             self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
-                wrapped_cls, self.inverse
+                wrapped_cls, self.inverse_of
             )
         )
+        if not inverse_field:
+            # try to get it from role taker if there is one.
+            role_taker = self.symbol_graph.get_role_takers_of_instance(obj)
+            role_taker_wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(
+                type(role_taker)
+            )
+            if role_taker:
+                inverse_field = self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
+                    role_taker_wrapped_cls, self.inverse_of
+                )
+                return getattr(role_taker, inverse_field.public_name)
+        if not inverse_field:
+            raise ValueError(
+                f"cannot find a field for the inverse {self.inverse_of} defined for {wrapped_cls}"
+            )
         return getattr(obj, inverse_field.public_name)
-
-    @property
-    def inverse(self) -> Optional[Type[Predicate]]:
-        return None
 
     def add_relation(
         self,
@@ -272,8 +283,10 @@ class Predicate(Symbol, ABC):
             self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
             for property_value in self._get_super_property_descriptors(domain_value):
                 property_value.add(rv, inferred=True)
-            if self.inverse:
-                self.get_inverse(rv).add(domain_value, inferred=True)
+            if self.inverse_of:
+                inverse = self.get_inverse(rv)
+                if domain_value not in inverse:
+                    self.get_inverse(rv).add(domain_value, inferred=True)
             if self.transitive:
                 for nxt in self._neighbors(rv):
                     self.add_relation(domain_value, nxt, inferred=True)
