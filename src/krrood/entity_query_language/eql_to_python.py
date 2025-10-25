@@ -32,6 +32,46 @@ import builtins
 import keyword
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union, Set
 
+
+class CodegenError(Exception):
+    """
+    Raised when the EQL-to-Python code generation encounters an unrecoverable
+    situation. The current compiler strives to avoid raising this exception by
+    falling back to generic code paths, but it exists to make the interface
+    harder to misuse and future-proof against unsupported constructs.
+    """
+    pass
+
+
+@dataclass(frozen=True)
+class PrecomputeFilter:
+    """
+    Describes a simple equality filter for precomputation.
+
+    :ivar path: Attribute path starting from a variable (e.g., ("person", "uri")).
+    :ivar value: Constant value to compare to for early pruning.
+    """
+
+    path: Tuple[str, ...]
+    value: object
+
+
+@dataclass
+class PrecomputeEntry:
+    """
+    Holds planned precomputations for an independent variable.
+
+    :ivar var: The variable for which to precompute data.
+    :ivar attr_paths: A set of attribute paths whose items should be materialized
+                      into membership sets for faster "in" checks.
+    :ivar filters: A list of literal equality filters to prune the variable's domain
+                   during precomputation.
+    """
+
+    var: 'Variable'
+    attr_paths: Set[Tuple[str, ...]] = field(default_factory=set)
+    filters: List[PrecomputeFilter] = field(default_factory=list)
+
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .predicate import Predicate, HasType, Symbol
 from .symbolic import (
@@ -328,23 +368,26 @@ class _Codegen:
 
     def _plan_precomputations(self, cond, selected: List[CanBehaveLikeAVariable]):
         """
-        Analyze condition tree and plan precomputations for independent variables.
-        Returns a dict: var_id -> { 'var': var, 'attr_paths': set(tuple[str,...]), 'filters': List[(attr_path, const, node_id)] }
-        Note: We do not mark conditions as consumed here; that happens when we actually emit
-        precomputations that can replace them.
+        Analyze the condition tree and plan precomputations for independent variables.
+
+        Returns a mapping from variable identity to a PrecomputeEntry with:
+        - attr_paths to materialize into membership sets
+        - literal equality filters to prune the variable's domain during precompute
+
+        We deliberately avoid any side effects here other than marking conditions
+        as consumed when they are fully subsumed by the precomputation plan.
         """
-        plan: Dict[int, Dict[str, object]] = {}
+        plan: Dict[int, PrecomputeEntry] = {}
         visited: Set[int] = set()
 
-        def ensure_entry(v: Variable):
+        def ensure_entry(v: Variable) -> PrecomputeEntry:
             vid = id(v)
             if vid not in plan:
-                plan[vid] = {"var": v, "attr_paths": set(), "filters": []}
-                # Harvest literal filters from variable constructor kwargs (e.g., uri)
+                plan[vid] = PrecomputeEntry(var=v)
                 try:
                     for k, val in (getattr(v, "_kwargs_", {}) or {}).items():
                         if not isinstance(val, CanBehaveLikeAVariable):
-                            plan[vid]["filters"].append(((k,), val))
+                            plan[vid].filters.append(PrecomputeFilter((k,), val))
                 except Exception:
                     pass
             return plan[vid]
@@ -358,91 +401,43 @@ class _Codegen:
             visited.add(nid)
             if isinstance(node, Comparator):
                 op = node._name_
-                # contains(left, right) => precompute union set for left if left is attr path of independent var
                 if op == "contains":
                     res = self._extract_var_and_attr_path(node.left) if isinstance(node.left, CanBehaveLikeAVariable) else None
                     if res is not None:
                         var, path = res
                         if self._is_independent_symbol_var(var, selected):
                             entry = ensure_entry(var)
-                            entry["attr_paths"].add(path)
-                            # Also gather equality filters in the left subtree that constrain this variable
-                            def gather_filters(n):
-                                if n is None:
-                                    return
-                                nid2 = id(n)
-                                if nid2 in visited:
-                                    # do not reuse the outer visited set here; use local stack recursion without visited
-                                    pass
-                                # only check Comparator nodes
-                                if isinstance(n, Comparator) and n._name_ == "==":
-                                    lres = self._extract_var_and_attr_path(n.left) if isinstance(n.left, CanBehaveLikeAVariable) else None
-                                    rres = self._extract_var_and_attr_path(n.right) if isinstance(n.right, CanBehaveLikeAVariable) else None
-                                    # left attr of target var equals literal
-                                    var_cls = getattr(var, "_type_", None)
-                                    if isinstance(n.right, Literal):
-                                        right_is_lit = True
-                                        right_value = n.right._domain_source_.domain[0]
-                                    else:
-                                        right_is_lit = not isinstance(n.right, CanBehaveLikeAVariable)
-                                        right_value = n.right
-                                    if isinstance(n.left, Literal):
-                                        left_is_lit = True
-                                        left_value = n.left._domain_source_.domain[0]
-                                    else:
-                                        left_is_lit = not isinstance(n.left, CanBehaveLikeAVariable)
-                                        left_value = n.left
-                                    if lres is not None and getattr(lres[0], "_type_", None) is var_cls and right_is_lit:
-                                        entry["filters"].append((lres[1], right_value))
-                                        self._consumed_conditions.add(id(n))
-                                        return
-                                    # right attr of target var equals literal
-                                    if rres is not None and getattr(rres[0], "_type_", None) is var_cls and left_is_lit:
-                                        entry["filters"].append((rres[1], left_value))
-                                        self._consumed_conditions.add(id(n))
-                                        return
-                                # Recurse generically
-                                for ch in getattr(n, "_children_", []) or []:
-                                    gather_filters(ch)
-                                if hasattr(n, "_child_"):
-                                    gather_filters(getattr(n, "_child_"))
-                            gather_filters(node.left)
-                    # Always traverse right to catch expressions there
+                            entry.attr_paths.add(path)
+                            self._gather_literal_filters_for_var(node.left, var, entry)
                     visit(node.right)
                     return
-                # Equality filter on independent var attribute to literal constant
                 if op == "==":
                     left_res = self._extract_var_and_attr_path(node.left) if isinstance(node.left, CanBehaveLikeAVariable) else None
-                    # Treat Literal variables as constants too
                     right_is_lit = not isinstance(node.right, CanBehaveLikeAVariable) or isinstance(node.right, Literal)
                     right_val = node.right._domain_source_.domain[0] if isinstance(node.right, Literal) else node.right
                     if left_res is None and isinstance(node.right, CanBehaveLikeAVariable):
-                        # maybe reversed
                         right_res = self._extract_var_and_attr_path(node.right)
                         left_is_lit = not isinstance(node.left, CanBehaveLikeAVariable)
                         if right_res is not None and left_is_lit:
                             left_val = node.left
                             var, path = right_res
                             if self._is_independent_symbol_var(var, selected):
-                                ensure_entry(var)["filters"].append((path, left_val))
+                                ensure_entry(var).filters.append(PrecomputeFilter(path, left_val))
                                 self._consumed_conditions.add(nid)
                             return
                     if left_res is not None and right_is_lit:
                         var, path = left_res
                         if self._is_independent_symbol_var(var, selected):
-                            ensure_entry(var)["filters"].append((path, right_val))
+                            ensure_entry(var).filters.append(PrecomputeFilter(path, right_val))
                             self._consumed_conditions.add(nid)
                         return
-                # generic recurse both sides
                 visit(node.left)
                 visit(node.right)
                 return
-            # Predicates or nested structures may hold children
             for ch in getattr(node, "_children_", []) or []:
                 visit(ch)
             if hasattr(node, "_child_"):
                 visit(getattr(node, "_child_"))
-            # Variables may have expression kwargs
             if isinstance(node, Variable):
                 for val in getattr(node, "_kwargs_", {}).values():
                     if isinstance(val, CanBehaveLikeAVariable):
@@ -451,95 +446,146 @@ class _Codegen:
         visit(cond)
         return plan
 
-    def _emit_precomputations(self, plan) -> None:
-        """
-        Emit Python code for precomputations according to plan.
-        Populates self._precomputed_sets mapping for later use.
-        """
+    def _gather_literal_filters_for_var(self, subtree, target_var: 'Variable', entry: PrecomputeEntry) -> None:
+        """Collect literal equality filters under subtree for the given variable."""
+        def walk(n):
+            if n is None:
+                return
+            if isinstance(n, Comparator) and n._name_ == "==":
+                lres = self._extract_var_and_attr_path(n.left) if isinstance(n.left, CanBehaveLikeAVariable) else None
+                rres = self._extract_var_and_attr_path(n.right) if isinstance(n.right, CanBehaveLikeAVariable) else None
+                var_cls = getattr(target_var, "_type_", None)
+                if isinstance(n.right, Literal):
+                    right_is_lit = True
+                    right_val = n.right._domain_source_.domain[0]
+                else:
+                    right_is_lit = not isinstance(n.right, CanBehaveLikeAVariable)
+                    right_val = n.right
+                if isinstance(n.left, Literal):
+                    left_is_lit = True
+                    left_val = n.left._domain_source_.domain[0]
+                else:
+                    left_is_lit = not isinstance(n.left, CanBehaveLikeAVariable)
+                    left_val = n.left
+                if lres is not None and getattr(lres[0], "_type_", None) is var_cls and right_is_lit:
+                    entry.filters.append(PrecomputeFilter(lres[1], right_val))
+                    self._consumed_conditions.add(id(n))
+                    return
+                if rres is not None and getattr(rres[0], "_type_", None) is var_cls and left_is_lit:
+                    entry.filters.append(PrecomputeFilter(rres[1], left_val))
+                    self._consumed_conditions.add(id(n))
+                    return
+            for ch in getattr(n, "_children_", []) or []:
+                walk(ch)
+            if hasattr(n, "_child_"):
+                walk(getattr(n, "_child_"))
+        walk(subtree)
+
+    def _emit_precomputations(self, plan: Dict[int, PrecomputeEntry]) -> None:
+        """Emit Python code for precomputations according to the plan."""
         for entry in plan.values():
-            var: Variable = entry["var"]
-            attr_paths: Set[Tuple[str, ...]] = entry["attr_paths"]
-            filters: List[Tuple[Tuple[str, ...], object]] = entry["filters"]
-            if not attr_paths:
-                # Nothing to materialize for membership; skip
+            var: Variable = entry.var
+            if not entry.attr_paths:
                 continue
             cls = getattr(var, "_type_", None)
             if not (isinstance(cls, type) and issubclass(cls, Symbol)):
                 continue
-            # We'll iterate once over domain and build sets for each attr_path
-            # Allocate set variables
-            set_names: Dict[Tuple[str, ...], str] = {}
-            for path in attr_paths:
-                set_name = self.env.new_tmp("pre_set")
-                self.env.add(f"{set_name} = set()")
-                set_names[path] = set_name
-                self._precomputed_sets[(id(var), path)] = set_name
-            # Loop over instances (do not bind this variable in env.names)
-            base_raw = (getattr(var, "_name__", None) or var.__class__.__name__).replace(".", "_")
-            base = self.env._to_snake(base_raw)
-            var_tmp = self.env.new_tmp(base)
-            self.env.add(f"for {var_tmp} in _iterate_instances({cls.__name__}):")
-            self.env.indent += 1
-            # Apply filters (deduplicated)
-            unique_filters: List[Tuple[Tuple[str, ...], object]] = []
-            _seen_filter_keys: Set[Tuple[Tuple[str, ...], object]] = set()
-            for path, const_val in filters:
-                # Deduplicate identical filters (same path and value)
-                try:
-                    key = (path, const_val)
-                    hash(key)
-                except Exception:
-                    # Fallback to repr for unhashable values
-                    key = (path, repr(const_val))  # type: ignore[assignment]
-                if key in _seen_filter_keys:
-                    continue
-                _seen_filter_keys.add(key)  # type: ignore[arg-type]
-                unique_filters.append((path, const_val))
-            for path, const_val in unique_filters:
-                # Build attribute access expression
-                attr_expr = var_tmp
-                for a in path:
-                    attr_expr = f"{attr_expr}.{a}"
-                const_repr = repr(const_val)
-                self.env.add(f"if ({attr_expr}) != ({const_repr}):")
-                self.env.indent += 1
-                self.env.add("continue")
-                self.env.indent -= 1
-            # For each attr path, add items to corresponding set
+            set_names = self._allocate_precompute_sets(var, entry.attr_paths)
+            var_tmp = self._begin_domain_loop(var, cls)
+            unique_filters = self._dedupe_precompute_filters(entry.filters)
+            self._emit_filter_checks(var_tmp, unique_filters)
             for path, set_name in set_names.items():
-                items_expr = var_tmp
-                for a in path:
-                    items_expr = f"{items_expr}.{a}"
-                tmp_iter = self.env.new_tmp("_iter")
-                item_tmp = self.env.new_tmp("item")
-                self.env.add(f"{tmp_iter} = {items_expr}")
-                self.env.add(f"{tmp_iter} = {tmp_iter} if hasattr({tmp_iter}, '__iter__') and not isinstance({tmp_iter}, (str, bytes)) else [{tmp_iter}]")
-                self.env.add(f"for {item_tmp} in {tmp_iter}:")
-                self.env.indent += 1
-                self.env.add(f"{set_name}.add({item_tmp})")
-                self.env.indent -= 1
+                self._emit_collect_items_into_set(var_tmp, path, set_name)
             self.env.indent -= 1
 
+    def _allocate_precompute_sets(self, var: 'Variable', paths: Set[Tuple[str, ...]]) -> Dict[Tuple[str, ...], str]:
+        """Allocate set variables for each attribute path and register them."""
+        set_names: Dict[Tuple[str, ...], str] = {}
+        for path in paths:
+            set_name = self.env.new_tmp("pre_set")
+            self.env.add(f"{set_name} = set()")
+            set_names[path] = set_name
+            self._precomputed_sets[(id(var), path)] = set_name
+        return set_names
+
+    def _begin_domain_loop(self, var: 'Variable', cls: type) -> str:
+        """Begin a loop over all instances of the variable's class and return loop var name."""
+        base_raw = (getattr(var, "_name__", None) or var.__class__.__name__).replace(".", "_")
+        base = self.env._to_snake(base_raw)
+        var_tmp = self.env.new_tmp(base)
+        self.env.add(f"for {var_tmp} in _iterate_instances({cls.__name__}):")
+        self.env.indent += 1
+        return var_tmp
+
+    def _dedupe_precompute_filters(self, filters: List[PrecomputeFilter]) -> List[PrecomputeFilter]:
+        """Remove duplicate filters while preserving order."""
+        unique: List[PrecomputeFilter] = []
+        seen: Set[Tuple[Tuple[str, ...], object]] = set()
+        for f in filters:
+            try:
+                key = (f.path, f.value)
+                hash(key)
+            except Exception:
+                key = (f.path, repr(f.value))  # type: ignore[assignment]
+            if key in seen:
+                continue
+            seen.add(key)  # type: ignore[arg-type]
+            unique.append(f)
+        return unique
+
+    def _emit_filter_checks(self, var_tmp: str, filters: List[PrecomputeFilter]) -> None:
+        """Emit early-continue checks for precompute filters."""
+        for f in filters:
+            attr_expr = var_tmp
+            for a in f.path:
+                attr_expr = f"{attr_expr}.{a}"
+            const_repr = repr(f.value)
+            self.env.add(f"if ({attr_expr}) != ({const_repr}):")
+            self.env.indent += 1
+            self.env.add("continue")
+            self.env.indent -= 1
+
+    def _emit_collect_items_into_set(self, var_tmp: str, path: Tuple[str, ...], set_name: str) -> None:
+        """Emit a loop that collects items from the given attribute path into the set."""
+        items_expr = var_tmp
+        for a in path:
+            items_expr = f"{items_expr}.{a}"
+        tmp_iter = self.env.new_tmp("_iter")
+        item_tmp = self.env.new_tmp("item")
+        self.env.add(f"{tmp_iter} = {items_expr}")
+        self.env.add(f"{tmp_iter} = {tmp_iter} if hasattr({tmp_iter}, '__iter__') and not isinstance({tmp_iter}, (str, bytes)) else [{tmp_iter}]")
+        self.env.add(f"for {item_tmp} in {tmp_iter}:")
+        self.env.indent += 1
+        self.env.add(f"{set_name}.add({item_tmp})")
+        self.env.indent -= 1
+
     def _emit_body(self, descriptor: QueryObjectDescriptor) -> None:
-        # Emit nested loops and conditions, then a yield for the selected variables
+        """
+        Emit loops, conditions, and the final yield for the given descriptor.
+        """
         selected = descriptor.selected_variables
-        # Plan and emit precomputations for independent variables used only in conditions
-        plan = self._plan_precomputations(descriptor._child_, selected)
-        self._emit_precomputations(plan)
-        # Create outer loops only for base entity Variables of the selected expressions
-        for var in self._selected_base_variables(selected):
-            self._bind(var)
-        # Bind selected variables expressions inside the loops
-        for sv in selected:
-            self._bind(sv)
-        # Emit conditions
+        self._emit_plan_and_precompute(descriptor, selected)
+        self._emit_bind_selected(selected)
         if descriptor._child_ is not None:
             self._emit_condition(descriptor._child_)
-        # Emit yield
+        self._emit_yield(descriptor, selected)
+
+    def _emit_plan_and_precompute(self, descriptor: QueryObjectDescriptor, selected: List[CanBehaveLikeAVariable]) -> None:
+        """Plan and emit precomputations, and create outer loops for base variables."""
+        plan = self._plan_precomputations(descriptor._child_, selected)
+        self._emit_precomputations(plan)
+        for var in self._selected_base_variables(selected):
+            self._bind(var)
+
+    def _emit_bind_selected(self, selected: List[CanBehaveLikeAVariable]) -> None:
+        """Bind selected expressions inside existing loops."""
+        for sv in selected:
+            self._bind(sv)
+
+    def _emit_yield(self, descriptor: QueryObjectDescriptor, selected: List[CanBehaveLikeAVariable]) -> None:
+        """Emit the appropriate yield depending on descriptor type."""
         if isinstance(descriptor, SetOf):
             items = ", ".join(self.env.names[id(v)] for v in selected)
-            # Guard against falsy DomainMapping values (e.g., None attributes),
-            # matching DomainMapping semantics which would not yield in that case.
             dm_names = [self.env.names[id(v)] for v in selected if isinstance(v, DomainMapping)]
             if dm_names:
                 cond = " and ".join(dm_names)
@@ -583,155 +629,181 @@ class _Codegen:
         return roots
 
     def _bind(self, expr: CanBehaveLikeAVariable, suggested: Optional[str] = None) -> str:
-        # Return a Python variable name bound to expr value in current scope,
-        # emitting necessary loops/assignments if not already bound.
+        """Bind an expression to a Python variable name in the current scope."""
         node_id = id(expr)
         if node_id in self.env.names:
             return self.env.names[node_id]
         if isinstance(expr, Variable):
-            name = self.env.bind_name_for(expr, getattr(expr, "_name__", None))
-            cls = expr._type_
-            # Iterate only over Symbol subclasses which are stored in the cache.
-            if isinstance(cls, type) and issubclass(cls, Symbol):
-                self.env.add(f"for {name} in _iterate_instances({cls.__name__}):")
-                self.env.indent += 1
-                return name
-            # Non-Symbol variables are typically Literals or user-provided domains; do not use cache iteration.
-            # Try to bind a constant from their domain. If multiple values are present, iterate those values directly.
-            try:
-                dom = getattr(expr, "_domain_source_", None)
-                if dom is not None and hasattr(dom, "domain"):
-                    # Materialize current domain values; unwrap HashedValue if needed.
-                    raw_vals = list(dom.domain)
-                    vals = [getattr(v, "value", v) for v in raw_vals]
-                    if len(vals) == 1:
-                        self.env.add(f"{name} = {repr(vals[0])}")
-                        return name
-                    elif len(vals) > 1:
-                        lst = ", ".join(repr(v) for v in vals)
-                        self.env.add(f"for {name} in [{lst}]:")
-                        self.env.indent += 1
-                        return name
-            except Exception:
-                pass
-            # Fallback to a direct assignment to the repr of the variable (best-effort constant binding)
-            self.env.add(f"{name} = {repr(getattr(expr, '_name__', name))}")
-            return name
+            return self._bind_variable(expr)
         if isinstance(expr, ResultQuantifier):
-            # Bind the selected variable(s) of the quantifier and emit its conditions
-            descriptor = expr._child_
-            # Bind base variables for the descriptor's selected variables
-            for var in self._selected_base_variables(descriptor.selected_variables):
-                self._bind(var)
-            # Ensure selected variables are bound too (for attributes later)
-            for sv in descriptor.selected_variables:
-                self._bind(sv)
-            # Emit the quantifier's conditions so subsequent code is guarded accordingly
-            if descriptor._child_ is not None:
-                self._emit_condition(descriptor._child_)
-            # Return the name of the first selected variable (the value of the quantifier)
-            if descriptor.selected_variables:
-                return self.env.names[id(descriptor.selected_variables[0])]
-            # Fallback name if no selected variable exists
-            name = self.env.new_tmp("val")
-            self.env.add(f"{name} = None")
-            return name
+            return self._bind_result_quantifier(expr)
         if isinstance(expr, Attribute):
-            parent_name = self._bind(expr._child_, None)
-            name = self.env.bind_name_for(expr, f"{parent_name}_{expr._attr_name_}")
-            self.env.add(f"{name} = {parent_name}.{expr._attr_name_}")
-            return name
+            return self._bind_attribute(expr)
         if isinstance(expr, Flatten):
-            parent_name = self._bind(expr._child_, None)
-            name = self.env.bind_name_for(expr, self.env.new_tmp("flat"))
-            # flatten iterates over the parent value regardless of iterability; mimic Flatten semantics
-            tmp_iter = self.env.new_tmp("_iter")
-            self.env.add(f"{tmp_iter} = {parent_name}")
-            self.env.add(f"{tmp_iter} = {tmp_iter} if hasattr({tmp_iter}, '__iter__') and not isinstance({tmp_iter}, (str, bytes)) else [{tmp_iter}]")
-            self.env.add(f"for {name} in {tmp_iter}:")
+            return self._bind_flatten(expr)
+        if isinstance(expr, DomainMapping):
+            return self._bind_domain_mapping(expr)
+        return self._bind_constant(expr)
+
+    def _bind_variable(self, expr: 'Variable') -> str:
+        """Bind a Variable, emitting outer iteration when needed."""
+        name = self.env.bind_name_for(expr, getattr(expr, "_name__", None))
+        cls = expr._type_
+        if isinstance(cls, type) and issubclass(cls, Symbol):
+            self.env.add(f"for {name} in _iterate_instances({cls.__name__}):")
             self.env.indent += 1
             return name
-        if isinstance(expr, DomainMapping):
-            # Generic DomainMapping fallback: bind child first and then apply at runtime
-            parent_name = self._bind(expr._child_, None)
-            # For unknown domain mappings, evaluate directly by attribute access if possible
-            name = self.env.bind_name_for(expr, self.env.new_tmp("map"))
-            self.env.add(f"{name} = {parent_name}")
-            return name
-        # Literal or already-evaluated constant
+        # Non-Symbol: try to bind from domain or iterate constants
+        try:
+            dom = getattr(expr, "_domain_source_", None)
+            if dom is not None and hasattr(dom, "domain"):
+                raw_vals = list(dom.domain)
+                vals = [getattr(v, "value", v) for v in raw_vals]
+                if len(vals) == 1:
+                    self.env.add(f"{name} = {repr(vals[0])}")
+                    return name
+                if len(vals) > 1:
+                    lst = ", ".join(repr(v) for v in vals)
+                    self.env.add(f"for {name} in [{lst}]:")
+                    self.env.indent += 1
+                    return name
+        except Exception:
+            pass
+        self.env.add(f"{name} = {repr(getattr(expr, '_name__', name))}")
+        return name
+
+    def _bind_result_quantifier(self, expr: 'ResultQuantifier') -> str:
+        """Bind a ResultQuantifier by binding its selected variables and conditions."""
+        descriptor = expr._child_
+        for var in self._selected_base_variables(descriptor.selected_variables):
+            self._bind(var)
+        for sv in descriptor.selected_variables:
+            self._bind(sv)
+        if descriptor._child_ is not None:
+            self._emit_condition(descriptor._child_)
+        if descriptor.selected_variables:
+            return self.env.names[id(descriptor.selected_variables[0])]
+        name = self.env.new_tmp("val")
+        self.env.add(f"{name} = None")
+        return name
+
+    def _bind_attribute(self, expr: 'Attribute') -> str:
+        """Bind an Attribute by binding its parent and assigning the access."""
+        parent_name = self._bind(expr._child_, None)
+        name = self.env.bind_name_for(expr, f"{parent_name}_{expr._attr_name_}")
+        self.env.add(f"{name} = {parent_name}.{expr._attr_name_}")
+        return name
+
+    def _bind_flatten(self, expr: 'Flatten') -> str:
+        """Bind a Flatten by emitting a for-loop over the parent value."""
+        parent_name = self._bind(expr._child_, None)
+        name = self.env.bind_name_for(expr, self.env.new_tmp("flat"))
+        tmp_iter = self.env.new_tmp("_iter")
+        self.env.add(f"{tmp_iter} = {parent_name}")
+        self.env.add(f"{tmp_iter} = {tmp_iter} if hasattr({tmp_iter}, '__iter__') and not isinstance({tmp_iter}, (str, bytes)) else [{tmp_iter}]")
+        self.env.add(f"for {name} in {tmp_iter}:")
+        self.env.indent += 1
+        return name
+
+    def _bind_domain_mapping(self, expr: 'DomainMapping') -> str:
+        """Bind a DomainMapping by binding its child and assigning the value."""
+        parent_name = self._bind(expr._child_, None)
+        name = self.env.bind_name_for(expr, self.env.new_tmp("map"))
+        self.env.add(f"{name} = {parent_name}")
+        return name
+
+    def _bind_constant(self, expr: object) -> str:
+        """Bind a literal or constant expression via direct assignment."""
         name = self.env.bind_name_for(expr, self.env.new_tmp("val"))
         self.env.add(f"{name} = {repr(expr)}")
         return name
 
     def _emit_condition(self, cond) -> None:
-        # Handle condition emission with awareness of precomputed caches
-        from .symbolic import AND, OR, ElseIf, Union, Exists, ForAll, Not
-        if cond is None:
-            return
-        # Skip conditions consumed during precomputation (e.g., uri == const used to filter domain)
-        if id(cond) in self._consumed_conditions:
+        """Emit Python conditions for a condition node, delegating to helpers."""
+        if cond is None or id(cond) in self._consumed_conditions:
             return
         if cond.__class__.__name__ == 'AND':
-            for ch in cond._children_:
-                self._emit_condition(ch)
+            self._emit_condition_and(cond)
             return
         if isinstance(cond, Comparator):
-            nid = id(cond)
-            if nid in self._consumed_conditions:
-                return
-            op = cond._name_
-            # Optimize contains(left, right) when left is an attribute path of a precomputed independent var
-            if op == "contains":
-                res = self._extract_var_and_attr_path(cond.left) if isinstance(cond.left, CanBehaveLikeAVariable) else None
-                if res is not None:
-                    var, path = res
-                    key = (id(var), path)
-                    if key in self._precomputed_sets:
-                        _, right_expr = self._compile_value(cond.right)
-                        set_name = self._precomputed_sets[key]
-                        self.env.add(f"if ({right_expr}) in {set_name}:")
-                        self.env.indent += 1
-                        return
-            # Fallback generic comparator emission
-            _, left_expr = self._compile_value(cond.left)
-            _, right_expr = self._compile_value(cond.right)
-            if op == "contains":
-                expr = f"({right_expr}) in ({left_expr})"
-            else:
-                expr = f"({left_expr}) {op} ({right_expr})"
-            self.env.add(f"if {expr}:")
-            self.env.indent += 1
+            self._emit_condition_comparator(cond)
             return
-        # Predicates are represented as Variables of predicate classes during graph construction
-        if isinstance(cond, CanBehaveLikeAVariable) and isinstance(getattr(cond, "_type_", None), type) and issubclass(cond._type_, Predicate):
-            # Fast path for HasType
-            kwargs = cond._kwargs_
-            if issubclass(cond._type_, HasType) and 'variable' in kwargs and 'types_' in kwargs:
-                _, var_expr = self._compile_value(kwargs['variable'])
-                type_cls = kwargs['types_']
-                self.env.add(f"if isinstance({var_expr}, {type_cls.__name__}):")
-                self.env.indent += 1
-                return
-            # Fallback: construct the predicate class and call it
-            bound_pairs = []
-            for k, v in cond._kwargs_.items():
-                _, ve = self._compile_value(v)
-                bound_pairs.append(f"{k}={ve}")
-            call_expr = f"{cond._type_.__name__}({', '.join(bound_pairs)})()"
-            self.env.add(f"if {call_expr}:")
-            self.env.indent += 1
+        if self._is_predicate_node(cond):
+            self._emit_condition_predicate(cond)
             return
-        # For nested QueryObjectDescriptor or quantifiers in conditions, evaluate truthiness
         if isinstance(cond, QueryObjectDescriptor):
-            inner_fn = self.env.new_tmp("_inner_any")
-            self.env.add(f"def {inner_fn}():")
-            self.env.indent += 1
-            self._emit_body(cond)
-            self.env.indent -= 1
-            self.env.add(f"if any({inner_fn}()):")
+            self._emit_condition_descriptor(cond)
+            return
+        self._emit_condition_truthy(cond)
+
+    def _emit_condition_and(self, cond) -> None:
+        """Emit a chain of conditions for an AND node."""
+        for ch in cond._children_:
+            self._emit_condition(ch)
+
+    def _emit_condition_comparator(self, cond: 'Comparator') -> None:
+        """Emit a comparator condition with contains optimization when possible."""
+        if id(cond) in self._consumed_conditions:
+            return
+        op = cond._name_
+        if op == "contains" and self._emit_contains_optimized(cond):
+            return
+        _, left_expr = self._compile_value(cond.left)
+        _, right_expr = self._compile_value(cond.right)
+        expr = f"({right_expr}) in ({left_expr})" if op == "contains" else f"({left_expr}) {op} ({right_expr})"
+        self.env.add(f"if {expr}:")
+        self.env.indent += 1
+
+    def _emit_contains_optimized(self, cond: 'Comparator') -> bool:
+        """Try to emit an optimized contains using a precomputed membership set."""
+        if not isinstance(cond.left, CanBehaveLikeAVariable):
+            return False
+        res = self._extract_var_and_attr_path(cond.left)
+        if res is None:
+            return False
+        var, path = res
+        key = (id(var), path)
+        if key not in self._precomputed_sets:
+            return False
+        _, right_expr = self._compile_value(cond.right)
+        set_name = self._precomputed_sets[key]
+        self.env.add(f"if ({right_expr}) in {set_name}:")
+        self.env.indent += 1
+        return True
+
+    def _is_predicate_node(self, node) -> bool:
+        """Return True if node is a predicate Variable."""
+        return isinstance(node, CanBehaveLikeAVariable) and isinstance(getattr(node, "_type_", None), type) and issubclass(node._type_, Predicate)
+
+    def _emit_condition_predicate(self, cond) -> None:
+        """Emit predicate evaluation, using isinstance fast path for HasType."""
+        kwargs = cond._kwargs_
+        if issubclass(cond._type_, HasType) and 'variable' in kwargs and 'types_' in kwargs:
+            _, var_expr = self._compile_value(kwargs['variable'])
+            type_cls = kwargs['types_']
+            self.env.add(f"if isinstance({var_expr}, {type_cls.__name__}):")
             self.env.indent += 1
             return
-        # Unknown: evaluate truthiness of compiled value directly
+        bound_pairs = []
+        for k, v in cond._kwargs_.items():
+            _, ve = self._compile_value(v)
+            bound_pairs.append(f"{k}={ve}")
+        call_expr = f"{cond._type_.__name__}({', '.join(bound_pairs)})()"
+        self.env.add(f"if {call_expr}:")
+        self.env.indent += 1
+
+    def _emit_condition_descriptor(self, cond: 'QueryObjectDescriptor') -> None:
+        """Emit an any() check for a nested descriptor condition."""
+        inner_fn = self.env.new_tmp("_inner_any")
+        self.env.add(f"def {inner_fn}():")
+        self.env.indent += 1
+        self._emit_body(cond)
+        self.env.indent -= 1
+        self.env.add(f"if any({inner_fn}()):")
+        self.env.indent += 1
+
+    def _emit_condition_truthy(self, cond) -> None:
+        """Fallback: evaluate truthiness of a compiled value."""
         _, expr = self._compile_value(cond)
         self.env.add(f"if {expr}:")
         self.env.indent += 1

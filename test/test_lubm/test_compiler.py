@@ -27,7 +27,6 @@ def test_compiled_queries_results_match_eql():
         compiled = compile_to_python(q)
         if num == 7:
             src = compiled.source
-            print(src)
             assert "in pre_set_" in src, "q7 should use precomputed membership set"
             assert (
                 "in (associate_professor_teacher_of)" not in src
