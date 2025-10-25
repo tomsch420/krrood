@@ -40,7 +40,9 @@ def test_compiled_queries_results_match_eql():
                     student_loop
                 ), "AssociateProfessor iteration must be outside and before the Student loop"
             uri = "http://www.Department0.University0.edu/AssociateProfessor0"
-            assert src.count(uri) == 1, "q7 must emit the AssociateProfessor URI filter only once in precompute"
+            assert (
+                src.count(uri) == 1
+            ), "q7 must emit the AssociateProfessor URI filter only once in precompute"
         compiled_results = list(compiled.function())
         end = time.time()
         total_compiled_time += end - start
