@@ -1,5 +1,4 @@
-import os
-import pickle
+import itertools
 import time
 from typing import List
 
@@ -10,12 +9,11 @@ from krrood.entity_query_language.entity import (
     contains,
     set_of,
     the,
-    exists,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.entity_query_language.symbolic import ResultQuantifier, Exists
-
+from krrood.entity_query_language.symbolic import ResultQuantifier
+from krrood.entity_query_language.eql_to_python import compile_to_python
 from krrood.experiments import lubm_with_predicates
 from krrood.experiments.helpers import (
     evaluate_eql,
@@ -23,31 +21,18 @@ from krrood.experiments.helpers import (
 )
 from krrood.experiments.lubm_with_predicates import (
     GraduateStudent,
-    GraduateCourse,
     Person,
     Publication,
     Professor,
-    AssistantProfessor,
     AssociateProfessor,
     Department,
     University,
     Student,
-    Course,
     Faculty,
     ResearchGroup,
     Chair,
     UndergraduateStudent,
-    MemberOf,
-    SubOrganizationOf,
-    UndergraduateDegreeFrom,
-    PublicationAuthor,
-    TeacherOf,
-    WorksFor,
-    Advisor,
-    HasAlumnus,
-    TakesCourse,
 )
-from krrood.experiments.owl_instances_loader import load_instances
 from krrood.ormatic.utils import classes_of_module
 
 
@@ -140,21 +125,6 @@ def get_eql_queries() -> List[ResultQuantifier]:
                 flatten(y.sub_organization_of).uri == "http://www.University0.edu",
             )
         )
-    # u = list(
-    #     filter(
-    #         lambda x: x.uri == "http://www.University0.edu",
-    #         registry._by_class[University],
-    #     )
-    # )[0]
-    # students = (
-    #     registry._by_class[UndergraduateStudent] + registry._by_class[GraduateStudent]
-    # )
-    # equivalent_pyton_query = [
-    #     (student, m, student.person.email_address)
-    #     for student in students
-    #     for m in student.person.member_of
-    #     if isinstance(m, Department) and (u in m.sub_organization_of)
-    # ]
 
     # 9
     with symbolic_mode():
@@ -212,8 +182,43 @@ def get_eql_queries() -> List[ResultQuantifier]:
     return eql_queries
 
 
+def get_python_queries():
+    """
+    Legacy hand-written Python for q8. Kept for comparison.
+    """
+    students_data = (
+        data for cls_, data in registry._by_class.items() if issubclass(cls_, Student)
+    )
+    flat_students_data = itertools.chain.from_iterable(students_data)
+    q8 = (
+        (student, m, student.person.email_address)
+        for student in flat_students_data
+        for m in student.person.member_of
+        for u in m.sub_organization_of
+        if isinstance(m, Department) and (u.uri == "http://www.University0.edu")
+    )
+    return [q8]
+
+
+def get_compiled_python_queries():
+    """
+    Compile EQL queries to Python and return their generator functions.
+    Currently returns only q8's compiled generator for comparison purposes.
+    """
+    q8 = get_eql_queries()[7]
+    compiled = compile_to_python(q8)
+    return [compiled.function()] 
+
+
 if __name__ == "__main__":
     registry = load_instances_for_lubm_with_predicates()
+    python_start_time = time.time()
+    count = None
+    for pq in get_python_queries():
+        count = len(list(pq))
+    python_end_time = time.time()
+    print(f"Python Count: {count}")
+    print(f"Python Time elapsed: {python_end_time - python_start_time} seconds")
     start_time = time.time()
     counts, results, times = evaluate_eql(get_eql_queries())
     end_time = time.time()

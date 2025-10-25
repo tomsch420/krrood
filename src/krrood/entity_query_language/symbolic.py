@@ -1481,6 +1481,7 @@ class Flatten(DomainMapping):
         if not isinstance(self._child_, SymbolicExpression):
             self._child_ = Literal(self._child_)
         super().__post_init__()
+        self._path_ = self._child_._path_
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         inner = value.value
