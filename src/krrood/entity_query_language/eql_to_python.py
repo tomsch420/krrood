@@ -480,8 +480,22 @@ class _Codegen:
             var_tmp = self.env.new_tmp(base)
             self.env.add(f"for {var_tmp} in _iterate_instances({cls.__name__}):")
             self.env.indent += 1
-            # Apply filters
+            # Apply filters (deduplicated)
+            unique_filters: List[Tuple[Tuple[str, ...], object]] = []
+            _seen_filter_keys: Set[Tuple[Tuple[str, ...], object]] = set()
             for path, const_val in filters:
+                # Deduplicate identical filters (same path and value)
+                try:
+                    key = (path, const_val)
+                    hash(key)
+                except Exception:
+                    # Fallback to repr for unhashable values
+                    key = (path, repr(const_val))  # type: ignore[assignment]
+                if key in _seen_filter_keys:
+                    continue
+                _seen_filter_keys.add(key)  # type: ignore[arg-type]
+                unique_filters.append((path, const_val))
+            for path, const_val in unique_filters:
                 # Build attribute access expression
                 attr_expr = var_tmp
                 for a in path:

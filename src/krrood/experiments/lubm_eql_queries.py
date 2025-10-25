@@ -107,8 +107,6 @@ def get_eql_queries() -> List[ResultQuantifier]:
                     y := flatten(x.takes_course),
                 ),
                 contains(associate_professor.teacher_of, y),
-                # can be optimized by walking from student.takes_course to teacher_of to AssociateProfessor
-                # in the SymbolGraph
             )
         )
 
@@ -207,7 +205,7 @@ def get_compiled_python_queries():
     """
     q8 = get_eql_queries()[7]
     compiled = compile_to_python(q8)
-    return [compiled.function()] 
+    return [compiled.function()]
 
 
 if __name__ == "__main__":

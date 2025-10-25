@@ -23,16 +23,25 @@ def test_compiled_queries_results_match_eql():
     for i, q in enumerate(eql_queries):
         num = i + 1
         print(f"Compiling query {num}")
+        start = time.time()
         compiled = compile_to_python(q)
         if num == 7:
             src = compiled.source
+            print(src)
             assert "in pre_set_" in src, "q7 should use precomputed membership set"
-            assert "in (associate_professor_teacher_of)" not in src, "q7 should not check membership against associate_professor.teacher_of directly"
-            ap_loop = "for associate_professor in _iterate_instances(AssociateProfessor)"
+            assert (
+                "in (associate_professor_teacher_of)" not in src
+            ), "q7 should not check membership against associate_professor.teacher_of directly"
+            ap_loop = (
+                "for associate_professor in _iterate_instances(AssociateProfessor)"
+            )
             student_loop = "for student in _iterate_instances(Student)"
             if ap_loop in src and student_loop in src:
-                assert src.find(ap_loop) < src.find(student_loop), "AssociateProfessor iteration must be outside and before the Student loop"
-        start = time.time()
+                assert src.find(ap_loop) < src.find(
+                    student_loop
+                ), "AssociateProfessor iteration must be outside and before the Student loop"
+            uri = "http://www.Department0.University0.edu/AssociateProfessor0"
+            assert src.count(uri) == 1, "q7 must emit the AssociateProfessor URI filter only once in precompute"
         compiled_results = list(compiled.function())
         end = time.time()
         total_compiled_time += end - start
