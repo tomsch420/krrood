@@ -79,12 +79,20 @@ class WrappedField:
     def resolved_type(self):
         try:
             result = get_type_hints(self.clazz.clazz)[self.field.name]
+            return result
         except NameError as e:
-            found_clazz = manually_search_for_class_name(e.name)
-            module = importlib.import_module(found_clazz.__module__)
-            locals()[e.name] = getattr(module, e.name)
+            # First try to find the class in the class diagram
+            potential_matching_classes = [
+                cls.clazz
+                for cls in self.clazz._class_diagram.wrapped_classes
+                if cls.clazz.__name__ == e.name
+            ]
+            if len(potential_matching_classes) > 0:
+                locals()[e.name] = potential_matching_classes[0]
+            else:
+                raise e
             result = get_type_hints(self.clazz.clazz, localns=locals())[self.field.name]
-        return result
+            return result
 
     @cached_property
     def is_builtin_type(self) -> bool:
@@ -159,64 +167,3 @@ class WrappedField:
             return self.contained_type
         else:
             return self.resolved_type
-
-
-@lru_cache(maxsize=None)
-def manually_search_for_class_name(target_class_name: str) -> Type:
-    """
-    Searches for a class with the specified name in the current module's `globals()` dictionary
-    and all loaded modules present in `sys.modules`. This function attempts to find and resolve
-    the first class that matches the given name. If multiple classes are found with the same
-    name, a warning is logged, and the first one is returned. If no matching class is found,
-    an exception is raised.
-
-    :param target_class_name: Name of the class to search for.
-    :return: The resolved class with the matching name.
-
-    :raises ValueError: Raised when no class with the specified name can be found.
-    """
-    found_classes = search_class_in_globals(target_class_name)
-    found_classes += search_class_in_sys_modules(target_class_name)
-
-    if len(found_classes) == 0:
-        raise TypeResolutionError(target_class_name)
-    elif len(found_classes) == 1:
-        resolved_class = found_classes[0]
-    else:
-        logging.warning(
-            f"Found multiple classes with name {target_class_name}. Found classes: {found_classes} "
-        )
-        resolved_class = found_classes[0]
-
-    return resolved_class
-
-
-def search_class_in_globals(target_class_name: str) -> List[Type]:
-    """
-    Searches for a class with the given name in the current module's globals.
-
-    :param target_class_name: The name of the class to search for.
-    :return: The resolved classes with the matching name.
-    """
-    return [
-        obj
-        for obj in globals().items()
-        if inspect.isclass(obj) and obj.__name__ == target_class_name
-    ]
-
-
-def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
-    """
-    Searches for a class with the given name in all loaded modules (via sys.modules).
-    """
-    found_classes = []
-    for module_name, module in sys.modules.items():
-        if module is None or not hasattr(module, "__dict__"):
-            continue  # Skip built-in modules or modules without a __dict__
-
-        for name, obj in module.__dict__.items():
-            if inspect.isclass(obj) and obj.__name__ == target_class_name:
-                # Avoid duplicates if a class is imported into multiple namespaces
-                if (obj, f"from module '{module_name}'") not in found_classes:
-                    found_classes.append(obj)
-    return found_classes

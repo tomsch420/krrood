@@ -139,7 +139,7 @@ class Bowl(PhysicalObject):
 
 @dataclass
 class OriginalSimulatedObject(Symbol):
-    concept: PhysicalObject
+    concept: Optional[PhysicalObject]
     placeholder: float = field(default=0)
 
 

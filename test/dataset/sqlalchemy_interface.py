@@ -472,10 +472,12 @@ class OriginalSimulatedObjectDAO(
 
     placeholder: Mapped[builtins.float] = mapped_column(use_existing_column=True)
 
-    concept: Mapped[test.dataset.example_classes.ConceptType] = mapped_column(
-        test.dataset.example_classes.ConceptType,
-        nullable=False,
-        use_existing_column=True,
+    concept: Mapped[typing.Optional[test.dataset.example_classes.ConceptType]] = (
+        mapped_column(
+            test.dataset.example_classes.ConceptType,
+            nullable=True,
+            use_existing_column=True,
+        )
     )
 
     __mapper_args__ = {

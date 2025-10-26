@@ -272,7 +272,7 @@ class WrappedTable:
             and wrapped_field.type_endpoint in self.ormatic.type_mappings
         ):
             logger.info(
-                f"Parsing as custom type {self.ormatic.type_mappings[wrapped_field.resolved_type]}."
+                f"Parsing as custom type {self.ormatic.type_mappings[wrapped_field.type_endpoint]}."
             )
             self.create_custom_type(wrapped_field)
 

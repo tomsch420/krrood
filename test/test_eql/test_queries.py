@@ -694,8 +694,8 @@ def test_not_and_or(handles_and_containers_world):
         h.name not in ["Handle1", "Container1"]
         for h in all_not_handle1_and_not_container1
     ), "All generated items should satisfy query"
-    print(f"\nCache Search Count = {cache_search_count.values}")
-    print(f"\nCache Match Count = {cache_match_count.values}")
+    # print(f"\nCache Search Count = {cache_search_count.values}")
+    # print(f"\nCache Match Count = {cache_match_count.values}")
     # query._render_tree_()
 
 
