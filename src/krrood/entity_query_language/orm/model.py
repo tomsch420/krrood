@@ -8,6 +8,10 @@ from ...ormatic.dao import AlternativeMapping, T
 
 @dataclass
 class SymbolGraphMapping(AlternativeMapping[SymbolGraph]):
+    """
+    Mapping specific for SymbolGraph.
+    Import this class when you want to persist SymbolGraph.
+    """
 
     instances: List[WrappedInstance]
 

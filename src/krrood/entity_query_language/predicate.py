@@ -5,25 +5,21 @@ import typing
 from abc import ABC, abstractmethod
 from collections import deque
 from copy import copy
-from dataclasses import dataclass, field, Field, fields
+from dataclasses import dataclass, field, Field
 from functools import wraps, cached_property
-from typing import (
+from typing_extensions import (
+    Callable,
+    Optional,
+    Any,
+    Type,
+    Tuple,
+    ClassVar,
     Iterable,
     List,
-    Type,
-    dataclass_transform,
-    Optional,
-    Callable,
     TypeVar,
     Generic,
-    ClassVar,
     Set,
-    Any,
 )
-
-from typing_extensions import Callable, Optional, Any, Type, Tuple
-
-from typing_extensions import ClassVar
 
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
@@ -44,7 +40,6 @@ from .symbolic import (
 from .typing_utils import get_range_types
 from .utils import is_iterable, make_list, make_set
 from ..class_diagrams import ClassDiagram
-
 
 symbols_registry: typing.Set[Type] = set()
 cls_args = {}
@@ -191,17 +186,9 @@ class Predicate(Symbol, ABC):
             if getattr(inverse, "inverse_of", None) is None:
                 inverse.inverse_of = cls
 
-    @property
-    @abstractmethod
-    def domain_value(self): ...
-
-    @property
-    @abstractmethod
-    def range_value(self): ...
-
     # New: subclasses implement these two hooks.
     @abstractmethod
-    def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
+    def _holds_direct(self) -> bool:
         """
         Return True if the relation holds directly (non-transitively) between
         the given domain and range values.

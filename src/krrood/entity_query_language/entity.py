@@ -28,7 +28,7 @@ from .symbolic import (
     Concatenate,
     ForAll,
 )
-from .predicate import Predicate, symbols_registry
+from .predicate import Predicate, symbols_registry, Symbol
 
 T = TypeVar("T")  # Define type variable "T"
 
@@ -222,7 +222,7 @@ def let(
     return var
 
 
-def and_(*conditions):
+def and_(*conditions: Union[SymbolicExpression, bool, Predicate]):
     """
     Logical conjunction of conditions.
 
