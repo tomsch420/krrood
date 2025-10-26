@@ -257,6 +257,12 @@ class IndexedCache:
     enter_count: int = field(default=0, init=False)
     search_count: int = field(default=0, init=False)
 
+    # Fast-path helpers
+    _keys_tuple: tuple = field(default_factory=tuple, init=False, repr=False)
+    _key_bitmask_map: Dict[Hashable, int] = field(default_factory=dict, init=False, repr=False)
+    _mask: int = field(default=0, init=False, repr=False)
+    _exact: set = field(default_factory=set, init=False, repr=False)
+
     def __post_init__(self):
         self.keys = self._keys
 
@@ -267,8 +273,16 @@ class IndexedCache:
     @keys.setter
     def keys(self, keys: List[Hashable]):
         self._keys = list(sorted(keys))
+        self._keys_tuple = tuple(self._keys)
+        # Precompute bit positions for each key and overall mask
+        self._key_bitmask_map = {k: 1 << i for i, k in enumerate(self._keys_tuple)}
+        self._mask = 0
+        for k in self._keys_tuple:
+            self._mask |= self._key_bitmask_map[k]
+        # Reset structures
         self.cache.clear()
         self.seen_set.set_keys(self._keys)
+        self._exact.clear()
 
     def insert(self, assignment: Dict, output: Any, index: bool = True) -> None:
         """
@@ -293,6 +307,10 @@ class IndexedCache:
         seen_assignment = dict(assignment)
         self.seen_set.add(seen_assignment)
 
+        # Maintain exact-match set only when all keys are present
+        if all(k in assignment for k in self._keys_tuple):
+            self._exact.add(tuple(assignment[k] for k in self._keys_tuple))
+
         cache = self.cache
         keys = self.keys
         last_idx = len(keys) - 1
@@ -316,14 +334,22 @@ class IndexedCache:
 
         :param assignment: The assignment to check.
         """
-        # If no keys from this cache are present in the assignment, do not short-circuit via coverage.
-        # This preserves correctness by forcing evaluation of the right-hand side when unconstrained.
-        for k in self._keys:
-            if k in assignment:
-                break
-        else:
+        # Bitmask prefilter: if assignment has no overlapping keys with this cache, skip.
+        a_mask = 0
+        for k in assignment.keys():
+            bit = self._key_bitmask_map.get(k)
+            if bit is not None:
+                a_mask |= bit
+        if (a_mask & self._mask) == 0:
             return False
-        # Do not allocate a filtered dict; the coverage index projects by its own key order.
+
+        # Fast exact-key path when all keys are present
+        if all(k in assignment for k in self._keys_tuple):
+            t = tuple(assignment[k] for k in self._keys_tuple)
+            if t in self._exact:
+                return True
+
+        # Fallback to coverage check via SeenSet
         if not self.seen_set.check(assignment):
             return False
         # Double-check there is at least one retrievable match under this assignment.
@@ -334,6 +360,21 @@ class IndexedCache:
 
     def __getitem__(self, key: Any):
         return self.flat_cache[key]
+
+    def exact_contains(self, assignment: Dict) -> bool:
+        """
+        Return True if the assignment contains all cache keys and the exact key tuple
+        exists in the cache. This is an O(1) membership test and does not consult
+        the coverage trie.
+        """
+        if not self._keys_tuple:
+            return False
+        # Require all keys to be present for exact membership
+        for k in self._keys_tuple:
+            if k not in assignment:
+                return False
+        t = tuple(assignment[k] for k in self._keys_tuple)
+        return t in self._exact
 
     def retrieve(
         self,
@@ -413,6 +454,9 @@ class IndexedCache:
         self.cache.clear()
         self.seen_set.clear()
         self.flat_cache.clear()
+        self._exact.clear()
+        self.enter_count = 0
+        self.search_count = 0
 
     def _yield_result(
         self, assignment: Dict, cache_val: Any, key_idx: int, result: Dict[int, Any]

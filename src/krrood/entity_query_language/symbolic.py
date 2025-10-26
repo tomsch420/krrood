@@ -1201,8 +1201,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._yield_when_false_ or not self._is_false_:
             if isinstance(function_output, HashedValue):
                 hv = function_output
-            elif isinstance(function_output, bool):
-                hv = HV_TRUE if function_output else HV_FALSE
             else:
                 hv = HashedValue(function_output)
 
@@ -1842,7 +1840,8 @@ class Comparator(BinaryOperator):
             return
 
         if is_caching_enabled():
-            if self._cache_.check(sources):
+            # Use exact fast-path before coverage check to avoid trie walk when fully bound
+            if self._cache_.exact_contains(sources) or self._cache_.check(sources):
                 yield from self.yield_final_output_from_cache(sources)
                 return
 
@@ -1963,17 +1962,24 @@ class AND(LogicalOperator):
                 if (
                     is_caching_enabled()
                     and not in_symbolic_mode(EQLMode.Rule)
-                    and self.right_cache.cache  # avoid checking empty cache
-                    and self.right_cache.check(left_value)
+                    and self.right_cache.cache
                 ):
-                    _yielded_any = False
-                    for _out in self.yield_final_output_from_cache(
-                        left_value, self.right_cache
-                    ):
-                        _yielded_any = True
-                        yield _out
-                    if _yielded_any:
+                    # Prefer exact fast-path to avoid trie walk when a complete key tuple is present
+                    if self.right_cache.exact_contains(left_value):
+                        for _out in self.yield_final_output_from_cache(
+                            left_value, self.right_cache
+                        ):
+                            yield _out
                         continue
+                    if self.right_cache.check(left_value):
+                        _yielded_any = False
+                        for _out in self.yield_final_output_from_cache(
+                            left_value, self.right_cache
+                        ):
+                            _yielded_any = True
+                            yield _out
+                        if _yielded_any:
+                            continue
 
                 # constrain right values by available sources
                 right_prev = self.right._eval_parent_
