@@ -8,5 +8,3 @@ cd "$SCRIPT_DIR/.." || exit
 
 # Build documentation using jupyter-book
 jb build doc
-
-echo "Documentation built successfully!"
