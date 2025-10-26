@@ -1847,11 +1847,15 @@ class Comparator(BinaryOperator):
 
         first_operand, second_operand = self.get_first_second_operands(sources)
         first_operand._eval_parent_ = self
+        second_operand._eval_parent_ = self
+        operand_value_map = {
+            first_operand._id_: HashedValue(False),
+            second_operand._id_: HashedValue(False),
+        }
         first_values = first_operand._evaluate__(sources)
         for first_value in first_values:
             first_value.update(sources)
-            operand_value_map = {first_operand._id_: first_value[first_operand._id_]}
-            second_operand._eval_parent_ = self
+            operand_value_map[first_operand._id_] = first_value[first_operand._id_]
             second_values = second_operand._evaluate__(first_value)
             for second_value in second_values:
                 operand_value_map[second_operand._id_] = second_value[
