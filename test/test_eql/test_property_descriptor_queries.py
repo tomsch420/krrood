@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
-from krrood.entity_query_language.entity import symbolic_mode, in_, a
+from krrood.entity_query_language.entity import symbolic_mode, in_, a, contains
 from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor
 from krrood.entity_query_language.symbolic import From
 
@@ -28,6 +28,7 @@ class Company(Organization): ...
 @dataclass(unsafe_hash=True)
 class Person(Thing):
     name: str
+    member_of: List[Organization] = field(default_factory=MemberOf)
 
 
 @dataclass(eq=False)
@@ -68,7 +69,8 @@ def test_query_on_descriptor_inheritance():
 
     with symbolic_mode():
         query = a(
-            person := Employee(From(people)), MemberOf(person, Organization("ACME"))
+            person := Employee(From(people)),
+            contains(person.member_of, org1),
         )
     results = list(query.evaluate())
     assert [p.name for p in results] == ["John"]

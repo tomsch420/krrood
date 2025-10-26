@@ -122,7 +122,10 @@ class WrappedClass:
         """
         try:
             wrapped_fields: list[WrappedField] = []
-            introspector = self._class_diagram.introspector
+            if self._class_diagram is None:
+                introspector = DataclassOnlyIntrospector()
+            else:
+                introspector = self._class_diagram.introspector
             discovered = introspector.discover(self.clazz)
             for item in discovered:
                 wf = WrappedField(

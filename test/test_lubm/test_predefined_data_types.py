@@ -19,8 +19,8 @@ def test_age_name_and_tenured_types():
 
     # Check that the generated code includes the correct type hints
     assert "class Person" in code
-    assert "age: Optional[int] = field(default=None, init=False)" in code
-    assert "name: Optional[str] = field(default=None, init=False)" in code
+    assert "age: Optional[int] = field(kw_only=True, default=None)" in code
+    assert "name: Optional[str] = field(kw_only=True, default=None)" in code
 
     assert "class Professor" in code
-    assert "tenured: Optional[bool] = field(default=None, init=False)" in code
+    assert "tenured: Optional[bool] = field(kw_only=True, default=None)" in code

@@ -334,13 +334,13 @@ def load_instances(
                 raise ValueError(f"Could not assign {obj} to {subj} ({p})")
             obj = matched_obj
             lst = getattr(subj, field_name, None)
-            if isinstance(lst, set) and obj is not None:
+            if hasattr(lst, "add") and obj is not None:
                 lst.add(obj)
                 continue
 
         if role_taker_val and hasattr(role_taker_val, snake):
             lst = getattr(role_taker_val, snake)
-            if isinstance(lst, set) and obj is not None:
+            if hasattr(lst, "add") and obj is not None:
                 lst.add(obj)
                 continue
 
@@ -398,7 +398,7 @@ def load_instances(
                 )
             if hasattr(new_role, snake):
                 lst = getattr(new_role, snake)
-                if isinstance(lst, set) and obj is not None:
+                if hasattr(lst, "add") and obj is not None:
                     lst.add(obj)
                     continue
 

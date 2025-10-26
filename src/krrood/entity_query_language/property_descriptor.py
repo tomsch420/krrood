@@ -63,7 +63,6 @@ class MonitoredSet(set):
         """
         Bind the owning instance via a weak reference and return self.
         """
-        # Import locally to avoid top-level dependency if you prefer
         self._owner_ref = weakref_ref(owner)
         return self
 
@@ -212,8 +211,11 @@ class PropertyDescriptor(Generic[T], Predicate):
     def __set__(self, obj, value):
         if isinstance(value, PropertyDescriptor):
             return
-        setattr(obj, self.attr_name, value)
-        self.add_relation(obj, value, set_attr=False)
+        attr = getattr(obj, self.attr_name)
+        attr.clear()
+        for v in make_set(value):
+            attr.add(v, call_on_add=False)
+            self.add_relation(obj, v, set_attr=False)
 
     def add_relation(
         self,
@@ -241,12 +243,16 @@ class PropertyDescriptor(Generic[T], Predicate):
 
         # If the concrete instance has our backing attribute, check it directly.
         if hasattr(domain_value, self.attr_name):
-            return self._check_relation_value(
+            if self._check_relation_value(
                 attr_name=self.attr_name,
                 domain_value=domain_value,
                 range_value=range_value,
-            )
-        return False
+            ):
+                return True
+        # Fallback: check subclass properties declared on the domain type
+        return self._check_relation_holds_for_subclasses_of_property(
+            domain_value=domain_value, range_value=range_value
+        )
 
     @profile
     def _check_relation_holds_for_subclasses_of_property(

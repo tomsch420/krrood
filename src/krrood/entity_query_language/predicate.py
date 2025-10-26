@@ -238,7 +238,7 @@ class Predicate(Symbol, ABC):
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
         if self._holds_direct(domain_value, range_value):
-            self.add_relation(domain_value, range_value)
+            # self.add_relation(domain_value, range_value)
             return True
         return False
 

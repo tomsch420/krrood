@@ -126,52 +126,110 @@ def cache_profile_report() -> Dict[str, Dict[str, float]]:
 
 
 @dataclass
+class TrieNode:
+    """
+    A node in the coverage trie. Each edge is keyed by a (key, value) pair.
+    Terminal nodes indicate a complete stored constraint.
+    """
+
+    children: dict = field(default_factory=dict)
+    terminal: bool = False
+
+
+@dataclass
 class SeenSet:
     """
-    Tracks sets of partial assignments to avoid duplicate processing.
+    Coverage index for previously seen partial assignments.
 
-    Each assignment is a dict of key->value pairs. Missing keys act as wildcards.
-
-    :ivar seen: Collected assignment constraints.
-    :ivar all_seen: Becomes True when an empty assignment is added, meaning any
-                    assignment is considered seen.
+    This replaces the linear scan with a trie-based index using a fixed key order.
+    An assignment A is considered covered if there exists a stored constraint C
+    such that C.items() is a subset of A.items().
     """
 
-    seen: List[Any] = field(default_factory=list, init=False)
+    sorted_keys: tuple = field(default_factory=tuple)
+    root: TrieNode = field(default_factory=TrieNode, init=False)
     all_seen: bool = field(default=False, init=False)
+    _fallback_constraints: list = field(default_factory=list, init=False, repr=False)
 
-    def add(self, assignment):
+    def set_keys(self, keys: Iterable[Hashable]) -> None:
         """
-        Add an assignment (dict of key→value).
-        Missing keys are implicitly wildcards.
-        Example: {"k1": "v1"} means all k2,... are allowed
+        Set or update the fixed key order for the index.
+        Resets the trie since the projection order has changed.
         """
-        if not self.all_seen:
-            self.seen.append(assignment)
-            if not assignment:
-                self.all_seen = True
+        self.sorted_keys = tuple(sorted(keys))
+        self.clear()
+
+    def add(self, assignment: Dict) -> None:
+        """
+        Add a constraint (partial assignment) to the coverage index.
+        """
+        if self.all_seen:
+            return
+        if not assignment:
+            # Empty constraint means everything is covered
+            self.all_seen = True
+            # Only mark terminal when we actually use the trie
+            if self.sorted_keys:
+                self.root.terminal = True
+            return
+        # If we have no key order, fall back to linear storage and subset checks
+        if not self.sorted_keys:
+            self._fallback_constraints.append(dict(assignment))
+            return
+        node = self.root
+        # Insert only pairs present in the constraint, following fixed key order
+        for k in self.sorted_keys:
+            if k not in assignment:
+                continue
+            v = assignment[k]
+            node = node.children.setdefault((k, v), TrieNode())
+        node.terminal = True
 
     @profile
-    def check(self, assignment):
+    def check(self, assignment: Dict) -> bool:
         """
-        Check if an assignment (dict) is covered by seen entries.
+        Return True if any stored constraint is a subset of the given assignment.
+        Mirrors previous semantics: encountering an empty assignment flips all_seen
+        but returns False the first time to allow population.
         """
         if self.all_seen:
             return True
         if not assignment:
+            # First observation of empty assignment should not be considered covered
+            # but should mark the index so subsequent checks short-circuit.
             self.all_seen = True
-            self.seen.append(assignment)
+            if self.sorted_keys:
+                self.root.terminal = True
             return False
-        for constraint in self.seen:
-            return all(
-                assignment[k] == v if k in assignment else False
-                for k, v in constraint.items()
-            )
+
+        # Fallback linear scan when no key order is defined
+        if not self.sorted_keys:
+            for constraint in self._fallback_constraints:
+                if all((k in assignment) and (assignment[k] == v) for k, v in constraint.items()):
+                    return True
+            return False
+
+        node = self.root
+        if node.terminal:
+            return True
+        # Walk down following available keys in assignment; any terminal on the path
+        # implies a stored constraint is a subset of this assignment.
+        for k in self.sorted_keys:
+            v = assignment.get(k, None)
+            if v is None:
+                continue
+            child = node.children.get((k, v))
+            if child is None:
+                continue
+            node = child
+            if node.terminal:
+                return True
         return False
 
     def clear(self):
-        self.seen.clear()
+        self.root = TrieNode()
         self.all_seen = False
+        self._fallback_constraints.clear()
 
 
 class CacheDict(UserDict): ...
@@ -210,7 +268,7 @@ class IndexedCache:
     def keys(self, keys: List[Hashable]):
         self._keys = list(sorted(keys))
         self.cache.clear()
-        self.seen_set.clear()
+        self.seen_set.set_keys(self._keys)
 
     def insert(self, assignment: Dict, output: Any, index: bool = True) -> None:
         """
@@ -258,11 +316,21 @@ class IndexedCache:
 
         :param assignment: The assignment to check.
         """
-        assignment = {k: v for k, v in assignment.items() if k in self.keys}
-        seen = self.seen_set.check(assignment)
-        # if not seen:
-        #     self.seen_set.add(assignment)
-        return seen
+        # If no keys from this cache are present in the assignment, do not short-circuit via coverage.
+        # This preserves correctness by forcing evaluation of the right-hand side when unconstrained.
+        for k in self._keys:
+            if k in assignment:
+                break
+        else:
+            return False
+        # Do not allocate a filtered dict; the coverage index projects by its own key order.
+        if not self.seen_set.check(assignment):
+            return False
+        # Double-check there is at least one retrievable match under this assignment.
+        # This prevents false positives from coverage that would otherwise skip evaluation.
+        for _ in self.retrieve(assignment):
+            return True
+        return False
 
     def __getitem__(self, key: Any):
         return self.flat_cache[key]

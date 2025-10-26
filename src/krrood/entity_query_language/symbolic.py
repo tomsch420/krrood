@@ -638,29 +638,24 @@ class An(ResultQuantifier[T]):
     ) -> Iterable[T]:
         sources = sources or {}
         if self._id_ in sources:
-            if self is self._conditions_root_ or isinstance(
-                self._parent_, LogicalOperator
+            if (
+                isinstance(self._parent_, LogicalOperator)
+                or self is self._conditions_root_
             ):
-                original_me = self._id_expression_map_[self._id_]
-                self._is_false_ = original_me._is_false_
-                if not original_me._is_false_ or yield_when_false:
+                if not self._is_false_ or yield_when_false:
                     yield sources
             else:
                 yield sources
         else:
-            self._yield_when_false_ = yield_when_false
-            any_yielded = False
             self._child_._eval_parent_ = self
             values = self._child_._evaluate__(
-                sources, yield_when_false=self._yield_when_false_
+                sources, yield_when_false=yield_when_false
             )
             for value in values:
-                any_yielded = True
                 self._is_false_ = self._child_._is_false_
-                if self._yield_when_false_ or not self._is_false_:
-                    value.update(sources)
+                if yield_when_false or not self._is_false_:
                     if self._var_:
-                        value.update({self._id_: value[self._var_._id_]})
+                        value[self._id_] = value[self._var_._id_]
                     yield value
 
 
@@ -674,12 +669,9 @@ class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
     _child_: Optional[SymbolicExpression[T]] = field(default=None)
     selected_variables: List[CanBehaveLikeAVariable[T]] = field(default_factory=list)
     warned_vars: typing.Set = field(default_factory=set, init=False)
-    rule_mode: bool = field(default=False, init=False)
 
     def __post_init__(self):
         super().__post_init__()
-        if in_symbolic_mode(EQLMode.Rule):
-            self.rule_mode = True
         for variable in self.selected_variables:
             variable._var_._node_.enclosed = True
 
@@ -713,29 +705,25 @@ class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
         yield_when_false: bool = False,
     ) -> Iterable[Dict[int, HashedValue]]:
         sources = sources or {}
-        self._yield_when_false_ = yield_when_false
         if self._id_ in sources:
-            self._is_false_ = self._id_expression_map_[self._id_]._is_false_
             yield sources
-        self._inform_selected_variables_that_they_should_be_inferred_()
         if self._child_:
             self._child_._eval_parent_ = self
             child_values = self._child_._evaluate__(
-                sources, yield_when_false=self._yield_when_false_
+                sources, yield_when_false=yield_when_false
             )
         else:
-            child_values = [{}]
+            child_values = [sources]
         for v in child_values:
-            v.update(sources)
             if self._child_:
                 self._is_false_ = self._child_._is_false_
-            if self._is_false_ and not self._yield_when_false_:
+            if self._is_false_ and not yield_when_false:
                 continue
             if self._child_:
                 for conclusion in self._child_._conclusion_:
                     v = conclusion._evaluate__(v)
             self._warn_on_unbound_variables_(v, selected_vars)
-            if selected_vars:
+            if any(var._id_ not in v for var in selected_vars):
                 var_val_gen = {var: var._evaluate__(copy(v)) for var in selected_vars}
                 original_v = v
                 for sol in generate_combinations(var_val_gen):
@@ -786,11 +774,6 @@ class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
         if self._child_:
             vars.extend(self._child_._all_variable_instances_)
         return vars
-
-    def _inform_selected_variables_that_they_should_be_inferred_(self):
-        if self.rule_mode and self._child_ and self._child_ is self._conditions_root_:
-            for selected_variable in self.selected_variables:
-                selected_variable._is_inferred_ = True
 
     def __repr__(self):
         return self._name_
@@ -1600,9 +1583,8 @@ class BinaryOperator(SymbolicExpression, ABC):
         if not is_caching_enabled():
             return
         cache = self._cache_ if cache is None else cache
-        cache.insert(
-            {k: v for k, v in values.items() if k in cache.keys}, output=self._is_false_
-        )
+        filtered = {k: v for k, v in values.items() if k in cache.keys}
+        cache.insert(filtered, output=self._is_false_)
 
     @property
     @lru_cache(maxsize=None)
@@ -1971,11 +1953,20 @@ class AND(LogicalOperator):
                     yield left_value
                     continue
 
-                if is_caching_enabled() and self.right_cache.check(left_value):
-                    yield from self.yield_final_output_from_cache(
+                if (
+                    is_caching_enabled()
+                    and not in_symbolic_mode(EQLMode.Rule)
+                    and self.right_cache.cache  # avoid checking empty cache
+                    and self.right_cache.check(left_value)
+                ):
+                    _yielded_any = False
+                    for _out in self.yield_final_output_from_cache(
                         left_value, self.right_cache
-                    )
-                    continue
+                    ):
+                        _yielded_any = True
+                        yield _out
+                    if _yielded_any:
+                        continue
 
                 # constrain right values by available sources
                 right_prev = self.right._eval_parent_

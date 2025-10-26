@@ -793,6 +793,11 @@ class OwlToPythonConverter:
                         if other_prop_name.split("{")[0] != prop_name.split("{")[0]:
                             continue
                         other_prop_info = properties_copy.get(other_prop_name)
+                        if (
+                            other_prop_info["type"] == "DataProperty"
+                            or prop_info["type"] == "DataProperty"
+                        ):
+                            continue
                         other_prop_range = other_prop_info["object_range_hint"]
                         prop_range = prop_info["object_range_hint"]
                         parent_name = None

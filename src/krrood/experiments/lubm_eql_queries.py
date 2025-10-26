@@ -13,7 +13,6 @@ from krrood.entity_query_language.entity import (
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.entity_query_language.symbolic import ResultQuantifier
-from krrood.entity_query_language.eql_to_python import compile_to_python
 from krrood.experiments import lubm_with_predicates
 from krrood.experiments.helpers import (
     evaluate_eql,
@@ -196,16 +195,6 @@ def get_python_queries():
         if isinstance(m, Department) and (u.uri == "http://www.University0.edu")
     )
     return [q8]
-
-
-def get_compiled_python_queries():
-    """
-    Compile EQL queries to Python and return their generator functions.
-    Currently returns only q8's compiled generator for comparison purposes.
-    """
-    q8 = get_eql_queries()[7]
-    compiled = compile_to_python(q8)
-    return [compiled.function()]
 
 
 if __name__ == "__main__":
