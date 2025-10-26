@@ -54,7 +54,7 @@ from .cache_data import (
 )
 from .failures import MultipleSolutionFound, NoSolutionFound
 from .utils import IDGenerator, is_iterable, generate_combinations
-from .hashed_data import HashedValue, HashedIterable, T
+from .hashed_data import HashedValue, HashedIterable, T, HV_TRUE, HV_FALSE
 
 if TYPE_CHECKING:
     from .conclusion import Conclusion
@@ -217,6 +217,7 @@ class SymbolicExpression(Generic[T], ABC):
             value._child_ = self
 
     @property
+    @lru_cache(maxsize=None)
     def _conditions_root_(self) -> SymbolicExpression:
         """
         Get the root of the symbolic expression tree that contains conditions.
@@ -224,7 +225,7 @@ class SymbolicExpression(Generic[T], ABC):
         conditions_root = self._root_
         while conditions_root._child_ is not None:
             conditions_root = conditions_root._child_
-            if isinstance(conditions_root._parent_, Entity):
+            if isinstance(conditions_root._parent_, QueryObjectDescriptor):
                 break
         return conditions_root
 
@@ -991,12 +992,11 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._yield_when_false_ = yield_when_false
         sources = sources or {}
         if self._id_ in sources:
-            if self is self._conditions_root_ or isinstance(
-                self._parent_, LogicalOperator
+            if (
+                isinstance(self._parent_, LogicalOperator)
+                or self is self._conditions_root_
             ):
-                original_me = self._id_expression_map_[self._id_]
-                self._is_false_ = original_me._is_false_
-                if not original_me._is_false_ or self._yield_when_false_:
+                if not self._is_false_ or yield_when_false:
                     yield sources
             else:
                 yield sources
@@ -1077,13 +1077,14 @@ class Variable(CanBehaveLikeAVariable[T]):
         else:
             yield from self._yield_from_cache_or_instantiate_new_values_(sources)
 
+    @profile
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
     ):
-        kwargs_generators = {
-            k: v._evaluate__(sources) for k, v in self._child_vars_.items()
-        }
-        yield from generate_combinations(kwargs_generators)
+        # Use backtracking generator for early pruning instead of full Cartesian product
+        yield from generate_combinations(
+            {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
+        )
 
     @profile
     def _yield_from_cache_or_instantiate_new_values_(
@@ -1124,8 +1125,17 @@ class Variable(CanBehaveLikeAVariable[T]):
                 kwargs, unbound_kwargs, bound_kwargs
             )
         else:
-            instance = self._type_(**{k: hv.value for k, hv in bound_kwargs.items()})
-            yield from self._process_output_and_update_values_(instance, **kwargs)
+            if self._predicate_type_ == PredicateType.SubClassOfPredicate:
+                # Evaluate predicate directly to boolean without further wrapping
+                res_bool = self._type_(
+                    **{k: hv.value for k, hv in bound_kwargs.items()}
+                )()
+                yield from self._process_output_and_update_values_(res_bool, **kwargs)
+            else:
+                instance = self._type_(
+                    **{k: hv.value for k, hv in bound_kwargs.items()}
+                )
+                yield from self._process_output_and_update_values_(instance, **kwargs)
 
     def _bind_unbound_kwargs_and_yield_results_(
         self,
@@ -1184,20 +1194,17 @@ class Variable(CanBehaveLikeAVariable[T]):
         :param kwargs: The keyword arguments of the predicate/variable.
         :return: The results' dictionary.
         """
-        # evaluate the predicate.
-        if self._predicate_type_ == PredicateType.SubClassOfPredicate:
-            function_output = function_output()
-
         # Compute truth considering inversion
         result_truthy = bool(function_output)
         self._is_false_ = result_truthy if self._invert_ else not result_truthy
 
         if self._yield_when_false_ or not self._is_false_:
-            hv = (
-                function_output
-                if isinstance(function_output, HashedValue)
-                else HashedValue(function_output)
-            )
+            if isinstance(function_output, HashedValue):
+                hv = function_output
+            elif isinstance(function_output, bool):
+                hv = HV_TRUE if function_output else HV_FALSE
+            else:
+                hv = HashedValue(function_output)
 
             if not kwargs:
                 yield {self._id_: hv}
