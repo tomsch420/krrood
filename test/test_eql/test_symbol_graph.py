@@ -1,10 +1,18 @@
 import os
 
+import pytest
+
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from ..dataset import semantic_world_like_classes
 from krrood.class_diagrams.utils import classes_of_module
 
+try:
+    import pydot
+except ImportError:
+    pydot = None
 
+
+@pytest.mark.skipif(pydot is None, reason="pydot not installed")
 def test_visualize_symbol_graph():
     SymbolGraph().clear()
     symbol_graph = SymbolGraph.build(classes_of_module(semantic_world_like_classes))
