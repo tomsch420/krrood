@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import copy
 from dataclasses import Field, dataclass, field, MISSING, fields
 from functools import cached_property
-from typing import (
+from typing_extensions import (
     Generic,
     ClassVar,
     Set,
@@ -17,7 +17,6 @@ from typing import (
 )
 from weakref import WeakKeyDictionary, ref as weakref_ref
 
-from line_profiler import profile
 
 from krrood.entity_query_language.predicate import Symbol, T, BinaryPredicate
 from krrood.entity_query_language.typing_utils import get_range_types

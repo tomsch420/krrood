@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List
+from typing_extensions import Dict, Iterable, List
 
 import pytest
 
@@ -28,7 +28,13 @@ class _StubVar:
 
     _id_gen = IDGenerator()
 
-    def __init__(self, name: str, domain: Iterable[int], dep_on: int | None = None, offset: int = 0):
+    def __init__(
+        self,
+        name: str,
+        domain: Iterable[int],
+        dep_on: int | None = None,
+        offset: int = 0,
+    ):
         self._name__ = name
         self._id_ = self._id_gen(self)
         self._domain_values: List[int] = list(domain)
@@ -51,7 +57,9 @@ class _StubVar:
             yield {self._id_: HashedValue(v)}
 
 
-@pytest.mark.skipif(generate_bindings is None, reason="generate_bindings not implemented yet")
+@pytest.mark.skipif(
+    generate_bindings is None, reason="generate_bindings not implemented yet"
+)
 class TestGenerateBindings:
     def test_equivalence_without_dependencies(self):
         # Given three independent child variables
@@ -72,7 +80,9 @@ class TestGenerateBindings:
         def normalize(items):
             # Convert dict of name -> {id: hv} to frozenset of (name, hv.value)
             return {
-                frozenset((name, next(iter(d.values())).value) for name, d in kw.items())
+                frozenset(
+                    (name, next(iter(d.values())).value) for name, d in kw.items()
+                )
                 for kw in items
             }
 

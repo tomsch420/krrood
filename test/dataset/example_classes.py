@@ -4,7 +4,7 @@ import importlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Sequence
+from typing_extensions import Dict, Any, Sequence
 
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import List, Optional, Type

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing_extensions import List
 
 import pytest
 from sqlalchemy import select

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Set
+from typing_extensions import Set
 
 from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor
 from krrood.entity_query_language.attribute_introspector import (

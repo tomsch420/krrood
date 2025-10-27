@@ -5,7 +5,7 @@ import inspect
 import logging
 import threading
 from functools import lru_cache
-from typing import Optional, List
+from typing_extensions import Optional, List
 
 import sqlalchemy.inspection
 import sqlalchemy.orm

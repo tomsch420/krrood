@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from typing import TextIO, TYPE_CHECKING
+from typing_extensions import TextIO, TYPE_CHECKING
 
 import jinja2
 

@@ -1,9 +1,9 @@
-from typing import Type, Iterable, List, Set, Tuple, Union, Optional
+from typing_extensions import Type, Iterable, List, Set, Tuple, Union, Optional
 
 
 def get_range_types(type_hint: Type) -> Iterable[Type]:
-    origin = getattr(type_hint, '__origin__', None)
-    args = getattr(type_hint, '__args__', [])
+    origin = getattr(type_hint, "__origin__", None)
+    args = getattr(type_hint, "__args__", [])
     if not origin:
         yield type_hint
     elif is_container_type(origin):

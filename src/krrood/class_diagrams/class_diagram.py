@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
 from functools import cached_property, lru_cache
 from types import NoneType
-from typing import List, Optional, Dict, Iterable, Union, Any, Tuple, Set
+from typing_extensions import List, Optional, Dict, Iterable, Union, Any, Tuple, Set
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode

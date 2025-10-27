@@ -4,8 +4,6 @@ from collections import UserDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
-from line_profiler import profile
-
 from . import logger
 from .enums import EQLMode, PredicateType
 from .rxnode import RWXNode, ColorLegend
@@ -1082,7 +1080,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         else:
             yield from self._yield_from_cache_or_instantiate_new_values_(sources)
 
-    @profile
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
     ):
@@ -1819,7 +1816,6 @@ class Comparator(BinaryOperator):
         super()._reset_only_my_cache_()
         self._cache_.clear()
 
-    @profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1939,7 +1935,6 @@ class AND(LogicalOperator):
         super()._reset_only_my_cache_()
         self.right_cache.clear()
 
-    @profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,

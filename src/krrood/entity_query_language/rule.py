@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union, TYPE_CHECKING
+from typing_extensions import Union, TYPE_CHECKING
 
 from .hashed_data import T
 from .enums import RDREdge

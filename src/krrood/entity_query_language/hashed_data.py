@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Generic, Optional, Iterable, Dict, Any, Callable, List, Union
+from typing_extensions import (
+    Generic,
+    Optional,
+    Iterable,
+    Dict,
+    Any,
+    Callable,
+    List,
+    Union,
+)
 
 from typing_extensions import TypeVar, ClassVar
 

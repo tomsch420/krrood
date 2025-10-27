@@ -9,7 +9,7 @@ Below is a minimal, self-contained example that mirrors the behavior tested in t
 
 ```python
 from dataclasses import dataclass, field
-from typing import List
+from typing_extensions import List
 
 from krrood.entity_query_language import symbolic_mode, let, concatenate, not_, in_, entity, an, From, symbol
 

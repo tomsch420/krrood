@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
+from typing_extensions import List
 
 from krrood.entity_query_language.entity import symbolic_mode, in_, a, contains
 from krrood.entity_query_language.property_descriptor import Thing, PropertyDescriptor

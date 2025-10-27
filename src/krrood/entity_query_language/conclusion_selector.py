@@ -4,13 +4,19 @@ import typing
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Dict, Optional, Iterable
+from typing_extensions import Dict, Optional, Iterable
 
 from .cache_data import SeenSet, is_caching_enabled
 from .conclusion import Conclusion
 from .hashed_data import HashedIterable, HashedValue
 from .rxnode import ColorLegend
-from .symbolic import LogicalOperator, SymbolicExpression, ElseIf, Union as EQLUnion, Literal
+from .symbolic import (
+    LogicalOperator,
+    SymbolicExpression,
+    ElseIf,
+    Union as EQLUnion,
+    Literal,
+)
 
 
 @dataclass(eq=False)
@@ -21,15 +27,21 @@ class ConclusionSelector(LogicalOperator, ABC):
     Tracks whether certain conclusion-combinations were already produced so
     they are not duplicated across truth branches.
     """
-    concluded_before: Dict[bool, SeenSet] = field(default_factory=lambda: {True: SeenSet(), False: SeenSet()},
-                                                  init=False)
 
-    def update_conclusion(self, output: Dict[int, HashedValue], conclusions: typing.Set[Conclusion]) -> None:
+    concluded_before: Dict[bool, SeenSet] = field(
+        default_factory=lambda: {True: SeenSet(), False: SeenSet()}, init=False
+    )
+
+    def update_conclusion(
+        self, output: Dict[int, HashedValue], conclusions: typing.Set[Conclusion]
+    ) -> None:
         if not conclusions:
             return
         required_vars = HashedIterable()
         for conclusion in conclusions:
-            vars_ = conclusion._unique_variables_.filter(lambda v: not isinstance(v.value, Literal))
+            vars_ = conclusion._unique_variables_.filter(
+                lambda v: not isinstance(v.value, Literal)
+            )
             required_vars.update(vars_)
         required_output = {k: v for k, v in output.items() if k in required_vars}
         if not self.concluded_before[not self._is_false_].check(required_output):
@@ -43,7 +55,7 @@ class ConclusionSelector(LogicalOperator, ABC):
 
     @property
     def _plot_color_(self) -> ColorLegend:
-        return ColorLegend("ConclusionSelector", '#eded18')
+        return ColorLegend("ConclusionSelector", "#eded18")
 
 
 @dataclass(eq=False)
@@ -56,7 +68,9 @@ class ExceptIf(ConclusionSelector):
     """
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(self, child: Optional[SymbolicExpression] = None, when_true: bool = True):
+    def _required_variables_from_child_(
+        self, child: Optional[SymbolicExpression] = None, when_true: bool = True
+    ):
         if not child:
             child = self.left
         required_vars = HashedIterable()
@@ -73,12 +87,18 @@ class ExceptIf(ConclusionSelector):
             if when_false and not self.left._is_false_:
                 for conc in self.left._conclusion_:
                     required_vars.update(conc._unique_variables_)
-        required_vars.update(self._parent_._required_variables_from_child_(self, when_true))
+        required_vars.update(
+            self._parent_._required_variables_from_child_(self, when_true)
+        )
         for conc in self._conclusion_:
             required_vars.update(conc._unique_variables_)
         return required_vars
 
-    def _evaluate__(self, sources: Optional[Dict[int, HashedValue]] = None, yield_when_false: bool = False) -> Iterable[Dict[int, HashedValue]]:
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Iterable[Dict[int, HashedValue]]:
         """
         Evaluate the ExceptIf condition and yield the results.
         """
@@ -88,7 +108,9 @@ class ExceptIf(ConclusionSelector):
         self._yield_when_false_ = yield_when_false
 
         # constrain left values by available sources
-        left_values = self.left._evaluate__(sources, yield_when_false=self._yield_when_false_)
+        left_values = self.left._evaluate__(
+            sources, yield_when_false=self._yield_when_false_
+        )
         for left_value in left_values:
 
             left_value.update(sources)
@@ -101,11 +123,15 @@ class ExceptIf(ConclusionSelector):
                 continue
 
             if is_caching_enabled() and self.right_cache.check(left_value):
-                yield from self.yield_final_output_from_cache(left_value, self.right_cache)
+                yield from self.yield_final_output_from_cache(
+                    left_value, self.right_cache
+                )
                 continue
 
             right_yielded = False
-            for right_value in self.right._evaluate__(left_value, yield_when_false=False):
+            for right_value in self.right._evaluate__(
+                left_value, yield_when_false=False
+            ):
                 right_yielded = True
                 self._conclusion_.update(self.right._conclusion_)
                 output = left_value.copy()
@@ -132,7 +158,11 @@ class Alternative(ElseIf, ConclusionSelector):
         # Let ConclusionSelector.update_conclusion handle deduplication of conclusions.
         return False
 
-    def _evaluate__(self, sources: Optional[Dict[int, HashedValue]] = None, yield_when_false: bool = False) -> Iterable[Dict[int, HashedValue]]:
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Iterable[Dict[int, HashedValue]]:
         outputs = super()._evaluate__(sources, yield_when_false=yield_when_false)
         for output in outputs:
             left_is_true = not self.left._is_false_
@@ -151,7 +181,11 @@ class Next(EQLUnion, ConclusionSelector):
     A Union conclusion selector that always evaluates the left and right branches and combines their results.
     """
 
-    def _evaluate__(self, sources: Optional[Dict[int, HashedValue]] = None, yield_when_false: bool = False) -> Iterable[Dict[int, HashedValue]]:
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Iterable[Dict[int, HashedValue]]:
         outputs = super()._evaluate__(sources, yield_when_false=yield_when_false)
         for output in outputs:
             if self.left_evaluated:

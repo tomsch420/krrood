@@ -5,14 +5,10 @@ from abc import ABC, abstractmethod
 from collections import deque
 from dataclasses import dataclass
 from functools import wraps
-from typing import (
-    Iterable,
-)
 
-from line_profiler import profile
 from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
 
-from typing_extensions import ClassVar
+from typing_extensions import ClassVar, Iterable
 
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode

@@ -6,7 +6,7 @@ Below is a minimal, self-contained example that mirrors the behavior used in tes
 
 ```python
 from dataclasses import dataclass, field
-from typing import List
+from typing_extensions import List
 
 from krrood.entity_query_language import symbolic_mode, let, entity, an, From, the, for_all, symbol
 

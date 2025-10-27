@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Type, Iterable, Tuple, Union
-
-from line_profiler import profile
 
 """
 Utilities for hashing, rendering, and general helpers used by the
@@ -57,14 +54,12 @@ def lazy_iterate_dicts(dict_of_iterables):
         yield dict(zip(dict_of_iterables.keys(), values))
 
 
-@profile
 def generate_combinations(generators_dict):
     """Yield all combinations of generator values as keyword arguments"""
     for combination in itertools.product(*generators_dict.values()):
         yield dict(zip(generators_dict.keys(), combination))
 
 
-@profile
 def generate_bindings(child_vars_items, sources):
     """
     Yield keyword-argument dictionaries for child variables using a depth‑first

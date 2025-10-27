@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import fields as dc_fields
-from typing import List, Type
+from typing_extensions import List, Type
 
 from ..class_diagrams.attribute_introspector import (
     AttributeIntrospector,

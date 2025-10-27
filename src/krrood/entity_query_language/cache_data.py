@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import copy
 
-from line_profiler import profile
 from typing_extensions import Type
 
 from .hashed_data import HashedIterable
@@ -185,7 +184,6 @@ class SeenSet:
             node = node.children.setdefault((k, v), TrieNode())
         node.terminal = True
 
-    @profile
     def check(self, assignment: Dict) -> bool:
         """
         Return True if any stored constraint is a subset of the given assignment.
@@ -205,7 +203,10 @@ class SeenSet:
         # Fallback linear scan when no key order is defined
         if not self.sorted_keys:
             for constraint in self._fallback_constraints:
-                if all((k in assignment) and (assignment[k] == v) for k, v in constraint.items()):
+                if all(
+                    (k in assignment) and (assignment[k] == v)
+                    for k, v in constraint.items()
+                ):
                     return True
             return False
 
@@ -259,7 +260,9 @@ class IndexedCache:
 
     # Fast-path helpers
     _keys_tuple: tuple = field(default_factory=tuple, init=False, repr=False)
-    _key_bitmask_map: Dict[Hashable, int] = field(default_factory=dict, init=False, repr=False)
+    _key_bitmask_map: Dict[Hashable, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _mask: int = field(default=0, init=False, repr=False)
     _exact: set = field(default_factory=set, init=False, repr=False)
 
@@ -327,7 +330,6 @@ class IndexedCache:
             else:
                 cache[v] = output
 
-    @profile
     def check(self, assignment: Dict) -> bool:
         """
         Check if seen entries cover an assignment (dict).
