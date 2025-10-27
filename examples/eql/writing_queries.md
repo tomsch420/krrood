@@ -14,15 +14,31 @@ kernelspec:
 # Writing Queries
 
 EQL can be well-used to answer symbolic questions through querying.
+
+
 Whenever you write a query you have to use the `with symbolic_mode()` context manager.
-This is due to that case that you want to access attributes of variables where the assignments of the variables don't exist yet.
 
-Frameworks like SQLAlchemy don't have this problem but have sever costs at other places.
-SQLAlchemy, for instance, hijacks creation and attribute selection of classes always, and you have to be aware of that when designing your classes.
-This also comes at a cost of performance.
+This context manager is different from plain python in the sense that it doesn't evaluate what you write directly but
+treats your statements as something that will be evaluated later (lazily).
+Queries typically compare attributes of variables where the assignments of the 
+variables don't exist yet, hence an immediate evaluation would cause failures, as demonstrated below.
 
-EQL only hijacks your `getattr` and `__new__` method when you use the `with symbolic_mode()` context manager.
-This means that you can design your classes without worrying about querying the classes which in turn leads to better alignment with the [Single Responsibility Principle](https://realpython.com/solid-principles-python/#single-responsibility-principle-srp).
+```{note}
+The symbolic mode is something that is explicitly entered. Whenever this is not entered you are in the non-symbolic mode
+which just is ordinary python behavior.
+```
+
+Frameworks like SQLAlchemy, as an Object-Relational Mapper (ORM), use metaprogramming techniques 
+(specifically, class and attribute interception/rewriting) to manage database interactions and object state, 
+which introduces performance overhead and requires developer awareness of the framework's internal mechanisms when 
+designing application classes.
+
+EQL's metaprogramming effects are context-bound; it only intercepts class creation (via `__new__`) and attribute 
+access (via `getattr`) when a class is defined or accessed within the with `symbolic_mode()` context manager.
+
+This approach ensures that your class definitions remain pure and decoupled from the query mechanism 
+outside the explicit symbolic context. Consequently, your classes can focus exclusively on their domain logic, 
+leading to better adherence to the [Single Responsibility Principle](https://realpython.com/solid-principles-python/#single-responsibility-principle-srp).
 
 Here is a query that does work due to the symbolic mode:
 
