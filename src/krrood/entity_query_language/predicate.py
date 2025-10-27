@@ -184,7 +184,6 @@ class Predicate(Symbol, ABC):
             )
         )
 
-    @profile
     def __call__(
         self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
     ) -> bool:

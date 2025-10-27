@@ -173,7 +173,6 @@ class PropertyDescriptor(Generic[T], Predicate):
         setattr(obj, self.attr_name, value)
         self.add_relation(obj, value)
 
-    @profile
     def _holds_direct(
         self, domain_value: Optional[Any], range_value: Optional[Any]
     ) -> bool:
@@ -195,7 +194,6 @@ class PropertyDescriptor(Generic[T], Predicate):
             domain_value=domain_value, range_value=range_value
         )
 
-    @profile
     def _check_relation_holds_for_subclasses_of_property(
         self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
     ) -> bool:
