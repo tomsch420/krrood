@@ -831,6 +831,61 @@ class ReferenceDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Refe
     }
 
 
+class RelationshipParentDAO(
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.RelationshipParent]
+):
+
+    __tablename__ = "RelationshipParentDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    positions_id: Mapped[int] = mapped_column(
+        ForeignKey("PositionDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    positions: Mapped[PositionDAO] = relationship(
+        "PositionDAO", uselist=False, foreign_keys=[positions_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RelationshipParentDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
+class RelationshipChildDAO(
+    RelationshipParentDAO,
+    DataAccessObject[test.dataset.example_classes.RelationshipChild],
+):
+
+    __tablename__ = "RelationshipChildDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(RelationshipParentDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    positions_id: Mapped[int] = mapped_column(
+        ForeignKey("PositionDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    positions: Mapped[PositionDAO] = relationship(
+        "PositionDAO", uselist=False, foreign_keys=[positions_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RelationshipChildDAO",
+        "inherit_condition": database_id == RelationshipParentDAO.database_id,
+    }
+
+
 class RotationMappedDAO(
     Base, DataAccessObject[test.dataset.example_classes.RotationMapped]
 ):

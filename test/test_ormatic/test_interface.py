@@ -451,3 +451,14 @@ def test_private_factories(session, database):
     dao = to_dao(obj)
     reconstructed: PrivateDefaultFactory = dao.from_dao()
     assert reconstructed._private_list == []
+
+
+def test_relationship_overloading(session, database):
+    obj = RelationshipChild(Position(1, 2, 3))
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(RelationshipParentDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed.positions == Position(1, 2, 3)
