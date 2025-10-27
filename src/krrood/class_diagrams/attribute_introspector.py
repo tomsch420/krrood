@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, Field
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from dataclasses import fields as dc_fields
 
 from typing_extensions import Dict, Iterable, List, Type, Optional, TYPE_CHECKING
