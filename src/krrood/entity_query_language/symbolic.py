@@ -1125,17 +1125,10 @@ class Variable(CanBehaveLikeAVariable[T]):
                 kwargs, unbound_kwargs, bound_kwargs
             )
         else:
+            instance = self._type_(**{k: hv.value for k, hv in bound_kwargs.items()})
             if self._predicate_type_ == PredicateType.SubClassOfPredicate:
-                # Evaluate predicate directly to boolean without further wrapping
-                res_bool = self._type_(
-                    **{k: hv.value for k, hv in bound_kwargs.items()}
-                )()
-                yield from self._process_output_and_update_values_(res_bool, **kwargs)
-            else:
-                instance = self._type_(
-                    **{k: hv.value for k, hv in bound_kwargs.items()}
-                )
-                yield from self._process_output_and_update_values_(instance, **kwargs)
+                instance = instance()
+            yield from self._process_output_and_update_values_(instance, **kwargs)
 
     def _bind_unbound_kwargs_and_yield_results_(
         self,
