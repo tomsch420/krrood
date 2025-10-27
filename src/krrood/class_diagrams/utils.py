@@ -56,13 +56,3 @@ def get_generic_type_param(cls, generic_base):
         if issubclass(get_origin(base), generic_base):
             return get_args(base)
     return None
-
-
-def assoc_key(rel: Association, include_field_name) -> tuple:
-    """
-    Precompute association keys per source node
-    Key = (relation class, target class[, field name])
-    """
-    if include_field_name:
-        return (rel.__class__, rel.target.clazz, rel.field.field.name)
-    return (rel.__class__, rel.target.clazz)

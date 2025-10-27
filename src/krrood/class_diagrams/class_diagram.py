@@ -19,7 +19,7 @@ from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from .utils import Role, get_generic_type_param, assoc_key, all_ancestors
+from .utils import Role, get_generic_type_param
 from .wrapped_field import WrappedField
 
 
@@ -72,6 +72,14 @@ class Association(Relation):
     def one_to_many(self) -> bool:
         """Whether the association is one-to-many (True) or many-to-one (False)."""
         return self.field.is_one_to_many_relationship and not self.field.is_type_type
+
+    def get_key(self, include_field_name: bool = False) -> tuple:
+        """
+        A tuple representing the key of the association.
+        """
+        if include_field_name:
+            return (self.__class__, self.target.clazz, self.field.field.name)
+        return (self.__class__, self.target.clazz)
 
     def __str__(self):
         return f"has-{self.field.public_name}"
@@ -248,8 +256,8 @@ class ClassDiagram:
         Build parent map from inheritance edges: child_idx -> set(parent_idx)
         """
         parent_map: dict[int, set[int]] = {}
-        for u, v in g.edge_list():
-            rel = g.get_edge_data(u, v)
+        for u, v in self._dependency_graph.edge_list():
+            rel = self._dependency_graph.get_edge_data(u, v)
             if isinstance(rel, Inheritance):
                 parent_map.setdefault(v, set()).add(u)
         return parent_map
@@ -274,11 +282,11 @@ class ClassDiagram:
         self, include_field_name: bool = False
     ) -> dict[int, set[tuple]]:
         assoc_keys_by_source = {}
-        for u, v in g.edge_list():
-            rel = g.get_edge_data(u, v)
+        for u, v in self._dependency_graph.edge_list():
+            rel = self._dependency_graph.get_edge_data(u, v)
             if isinstance(rel, Association):
                 assoc_keys_by_source.setdefault(u, set()).add(
-                    assoc_key(rel, include_field_name)
+                    rel.get_key(include_field_name)
                 )
         return assoc_keys_by_source
 
@@ -306,7 +314,7 @@ class ClassDiagram:
             if not isinstance(rel, Association):
                 continue
 
-            key = assoc_key(rel, include_field_name)
+            key = rel.get_key(include_field_name)
             # Collect all keys defined by any ancestor of u
             inherited_keys: set[tuple] = set()
             for anc in result.all_ancestors(u):
