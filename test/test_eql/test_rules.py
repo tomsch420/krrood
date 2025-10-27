@@ -536,11 +536,11 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_too_much_joins(
     # query._render_tree_()
 
     all_solutions = list(query.evaluate())
-    print(f"\nCache Enter Count = {cache_enter_count.values}")
-    print(f"\nCache Search Count = {cache_search_count.values}")
-    print(f"\nCache Match Count = {cache_match_count.values}")
-    print(f"\nCache LookUp Time = {cache_lookup_time.values}")
-    print(f"\nCache Update Time = {cache_update_time.values}")
+    # print(f"\nCache Enter Count = {cache_enter_count.values}")
+    # print(f"\nCache Search Count = {cache_search_count.values}")
+    # print(f"\nCache Match Count = {cache_match_count.values}")
+    # print(f"\nCache LookUp Time = {cache_lookup_time.values}")
+    # print(f"\nCache Update Time = {cache_update_time.values}")
     assert len(all_solutions) == 3, "Should generate 1 drawer, 1 door and 1 wardrobe."
     expected_solution_set = {
         (Door, "Handle3", "Body3"),
@@ -593,11 +593,11 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_better_rule_tree(
     # query._render_tree_()
 
     all_solutions = list(query.evaluate())
-    print(f"\nCache Enter Count = {cache_enter_count.values}")
-    print(f"\nCache Search Count = {cache_search_count.values}")
-    print(f"\nCache Match Count = {cache_match_count.values}")
-    print(f"\nCache LookUp Time = {cache_lookup_time.values}")
-    print(f"\nCache Update Time = {cache_update_time.values}")
+    # print(f"\nCache Enter Count = {cache_enter_count.values}")
+    # print(f"\nCache Search Count = {cache_search_count.values}")
+    # print(f"\nCache Match Count = {cache_match_count.values}")
+    # print(f"\nCache LookUp Time = {cache_lookup_time.values}")
+    # print(f"\nCache Update Time = {cache_update_time.values}")
     assert len(all_solutions) == 3, "Should generate 1 drawer, 1 door and 1 wardrobe."
     expected_solution_set = {
         (Door, "Handle3", "Body3"),
@@ -661,11 +661,11 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_better_rule_tree_op
     # query._render_tree_()
 
     all_solutions = list(query.evaluate())
-    print(f"\nCache Enter Count = {cache_enter_count.values}")
-    print(f"\nCache Search Count = {cache_search_count.values}")
-    print(f"\nCache Match Count = {cache_match_count.values}")
-    print(f"\nCache LookUp Time = {cache_lookup_time.values}")
-    print(f"\nCache Update Time = {cache_update_time.values}")
+    # print(f"\nCache Enter Count = {cache_enter_count.values}")
+    # print(f"\nCache Search Count = {cache_search_count.values}")
+    # print(f"\nCache Match Count = {cache_match_count.values}")
+    # print(f"\nCache LookUp Time = {cache_lookup_time.values}")
+    # print(f"\nCache Update Time = {cache_update_time.values}")
     assert len(all_solutions) == 3, "Should generate 1 drawer, 1 door and 1 wardrobe."
     expected_solution_set = {
         (Door, "Handle3", "Body3"),

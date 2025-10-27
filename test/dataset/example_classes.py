@@ -139,7 +139,7 @@ class Bowl(PhysicalObject):
 
 @dataclass
 class OriginalSimulatedObject(Symbol):
-    concept: PhysicalObject
+    concept: Optional[PhysicalObject]
     placeholder: float = field(default=0)
 
 
@@ -424,3 +424,16 @@ class ChildBaseMapping(ParentBaseMapping, AlternativeMapping[ChildBase]):
 class PrivateDefaultFactory(Symbol):
     public_value: int = 0
     _private_list: List[int] = field(default_factory=list)
+
+
+@dataclass
+class RelationshipParent(Symbol):
+    positions: Position
+
+
+@dataclass
+class RelationshipChild(RelationshipParent):
+    """
+    This class should produce a problem when reconstructed from the database as relationships must not be declared
+    twice.
+    """
