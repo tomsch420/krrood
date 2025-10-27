@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session, configure_mappers
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
-from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
+from krrood.entity_query_language.predicate import (
+    BinaryPredicate,
+    HasTypes,
+    HasType,
+)
 from krrood.entity_query_language.property_descriptor import PropertyDescriptor
 from krrood.entity_query_language.symbolic import Variable
 from krrood.entity_query_language.symbol_graph import SymbolGraph

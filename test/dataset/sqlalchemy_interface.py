@@ -57,7 +57,7 @@ class PredicateRelationDAO(
         use_existing_column=True,
     )
     predicate_id: Mapped[int] = mapped_column(
-        ForeignKey("PredicateDAO.database_id", use_alter=True),
+        ForeignKey("BinaryPredicateDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
@@ -75,8 +75,11 @@ class PredicateRelationDAO(
     target: Mapped[WrappedInstanceDAO] = relationship(
         "WrappedInstanceDAO", uselist=False, foreign_keys=[target_id], post_update=True
     )
-    predicate: Mapped[PredicateDAO] = relationship(
-        "PredicateDAO", uselist=False, foreign_keys=[predicate_id], post_update=True
+    predicate: Mapped[BinaryPredicateDAO] = relationship(
+        "BinaryPredicateDAO",
+        uselist=False,
+        foreign_keys=[predicate_id],
+        post_update=True,
     )
 
 
@@ -738,8 +741,25 @@ class PredicateDAO(
     }
 
 
-class PropertyDescriptorDAO(
+class BinaryPredicateDAO(
     PredicateDAO,
+    DataAccessObject[krrood.entity_query_language.predicate.BinaryPredicate],
+):
+
+    __tablename__ = "BinaryPredicateDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BinaryPredicateDAO",
+        "inherit_condition": database_id == PredicateDAO.database_id,
+    }
+
+
+class PropertyDescriptorDAO(
+    BinaryPredicateDAO,
     DataAccessObject[
         krrood.entity_query_language.property_descriptor.PropertyDescriptor
     ],
@@ -748,12 +768,14 @@ class PropertyDescriptorDAO(
     __tablename__ = "PropertyDescriptorDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
+        ForeignKey(BinaryPredicateDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "PropertyDescriptorDAO",
-        "inherit_condition": database_id == PredicateDAO.database_id,
+        "inherit_condition": database_id == BinaryPredicateDAO.database_id,
     }
 
 

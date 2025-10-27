@@ -19,7 +19,7 @@ from weakref import WeakKeyDictionary, ref as weakref_ref
 
 from line_profiler import profile
 
-from krrood.entity_query_language.predicate import Symbol, T, Predicate
+from krrood.entity_query_language.predicate import Symbol, T, BinaryPredicate
 from krrood.entity_query_language.typing_utils import get_range_types
 from krrood.entity_query_language.utils import make_set
 
@@ -79,7 +79,7 @@ class MonitoredSet(set):
 
 
 @dataclass
-class PropertyDescriptor(Generic[T], Predicate):
+class PropertyDescriptor(Generic[T], BinaryPredicate):
     """Descriptor storing values on instances while keeping type metadata on the descriptor.
 
     When used on dataclass fields and combined with Thing, the descriptor
@@ -231,68 +231,53 @@ class PropertyDescriptor(Generic[T], Predicate):
         if set_attr:
             getattr(domain_value, self.attr_name).add(range_value, call_on_add=False)
 
-    def _holds_direct(
-        self, domain_value: Optional[Any], range_value: Optional[Any]
+    @classmethod
+    def holds_direct(
+        cls, domain_value: Optional[Any], range_value: Optional[Any]
     ) -> bool:
         """Return True if `range_value` is contained directly in the property of `domain_value`.
         Also consider sub-properties declared on the domain type.
         """
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-
-        # If the concrete instance has our backing attribute, check it directly.
-        if hasattr(domain_value, self.attr_name):
-            if self._check_relation_value(
-                attr_name=self.attr_name,
-                domain_value=domain_value,
-                range_value=range_value,
-            ):
-                return True
-        # Fallback: check subclass properties declared on the domain type
-        return self._check_relation_holds_for_subclasses_of_property(
+        return cls._check_relation_holds_for_subclasses_of_property(
             domain_value=domain_value, range_value=range_value
         )
 
+    @classmethod
     def _check_relation_holds_for_subclasses_of_property(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+        cls, domain_value: Any, range_value: Any
     ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        for prop_data in self.get_sub_properties(domain_value):
-            if self._check_relation_value(
+        for prop_data in cls.get_sub_properties(domain_value):
+            if cls._check_relation_value(
                 prop_data.attr_name, domain_value=domain_value, range_value=range_value
             ):
                 return True
         return False
 
+    @classmethod
     def _check_relation_value(
-        self,
+        cls,
         attr_name: str,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        domain_value: Any,
+        range_value: Any,
     ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
         attr_value = getattr(domain_value, attr_name)
         if make_set(range_value).issubset(make_set(attr_value)):
             return True
         # Do not handle transitivity here; it is now centralized in Predicate.__call__
         return False
 
-    def get_sub_properties(
-        self, domain_value: Optional[Any] = None
-    ) -> Iterable["PropertyDescriptor"]:
+    @classmethod
+    def get_sub_properties(cls, domain_value: Any) -> Iterable["PropertyDescriptor"]:
         """Return sub-properties declared on the domain type.
 
         The result is cached per domain class and per descriptor subclass.
         """
-        domain_value = domain_value or self.domain_value
         owner = domain_value.__class__
-        prop_cls: Type[PropertyDescriptor] = self.__class__
+        prop_cls: Type[PropertyDescriptor] = cls
 
         # Two-level cache: domain class -> (descriptor subclass -> tuple of sub-props)
         level1: Dict[Type, Dict[Type, Tuple[PropertyDescriptor, ...]]] = (
-            self._subprops_cache
+            cls._subprops_cache
         )
         per_owner = level1.get(owner)
         if per_owner is not None:

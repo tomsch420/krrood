@@ -3,12 +3,12 @@ from typing import Any, ClassVar, Type
 
 import pytest
 
-from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.predicate import BinaryPredicate
 
 
 def test_inverse_of_sets_back_reference():
     @dataclass()
-    class ParentOf(Predicate):
+    class ParentOf(BinaryPredicate):
         def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
             return True
 
@@ -21,8 +21,8 @@ def test_inverse_of_sets_back_reference():
             return None
 
     @dataclass()
-    class ChildOf(Predicate):
-        inverse_of: ClassVar[Type[Predicate]] = ParentOf
+    class ChildOf(BinaryPredicate):
+        inverse_of: ClassVar[Type[BinaryPredicate]] = ParentOf
 
         def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
             return True
@@ -44,7 +44,7 @@ def test_inverse_of_type_validation():
     with pytest.raises(TypeError):
 
         @dataclass()
-        class InvalidInverse(Predicate):
+        class InvalidInverse(BinaryPredicate):
             inverse_of = object  # not a Predicate subclass
 
             def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:

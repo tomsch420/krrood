@@ -30,7 +30,15 @@ from .symbolic import (
     Exists,
 )
 from .symbol_graph import symbols_registry
-from .predicate import Predicate, predicate
+from .predicate import (
+    Predicate,
+    symbolic_function,
+    BinaryPredicate,
+)
+
+# These are to prevent automatic removal of the imports, which are there for ease of access.
+BP = BinaryPredicate
+sf = symbolic_function
 
 T = TypeVar("T")  # Define type variable "T"
 
@@ -123,7 +131,8 @@ def select_one_or_select_many_or_infer(
 
 
 def entity(
-    selected_variable: T, *properties: Union[SymbolicExpression, bool, Predicate, Any]
+    selected_variable: T,
+    *properties: Union[SymbolicExpression, bool, Predicate, Any],
 ) -> Entity[T]:
     """
     Create an entity descriptor from a selected variable and its properties.

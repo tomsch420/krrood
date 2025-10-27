@@ -45,7 +45,9 @@ if TYPE_CHECKING:
 cls_args = {}
 
 
-def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]]:
+def symbolic_function(
+    function: Callable[..., T],
+) -> Callable[..., SymbolicExpression[T]]:
     """
     Function decorator that constructs a symbolic expression representing the function call
      when inside a symbolic_rule context.
@@ -95,7 +97,9 @@ class Symbol:
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
-            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
+            PredicateType.SubClassOfPredicate
+            if issubclass(cls, BinaryPredicate)
+            else None
         )
         node = SymbolicExpression._current_parent_()
         args = bind_first_argument_of_predicate_if_in_query_context(
@@ -128,30 +132,58 @@ class Symbol:
 @dataclass(eq=False)
 class Predicate(Symbol, ABC):
     """
-    The super predicate class that represents a filtration operation.
+    The super predicate class that represents a filtration operation or asserts a relation.
     """
 
     is_expensive: ClassVar[bool] = False
+
+    @abstractmethod
+    def __call__(self) -> bool:
+        """
+        Evaluate the predicate for the supplied values.
+        """
+
+
+@dataclass(eq=False)
+class BinaryPredicate(Predicate, ABC):
+    """
+    A predicate that has a domain and a range.
+    """
+
     transitive: ClassVar[bool] = False
-    inverse_of: ClassVar[Optional[Type[Predicate]]] = None
+    inverse_of: ClassVar[Optional[Type[BinaryPredicate]]] = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         inverse = getattr(cls, "inverse_of", None)
         if inverse is not None:
-            if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
+            if not isinstance(inverse, type) or not issubclass(
+                inverse, BinaryPredicate
+            ):
                 raise TypeError("inverse_of must be set to a Predicate subclass")
             if getattr(inverse, "inverse_of", None) is None:
                 inverse.inverse_of = cls
 
-    # New: subclasses implement these two hooks.
+    @classmethod
     @abstractmethod
-    def _holds_direct(self) -> bool:
+    def holds_direct(
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
+    ) -> bool:
         """
         Return True if the relation holds directly (non-transitively) between
         the given domain and range values.
         """
         ...
+
+    @property
+    def domain_value(self):
+        raise NotImplementedError
+
+    @property
+    def range_value(self):
+        raise NotImplementedError
 
     @property
     def symbol_graph(self) -> SymbolGraph:
@@ -218,9 +250,10 @@ class Predicate(Symbol, ABC):
                 role_taker_field.public_name,
             )
 
-    @profile
     def __call__(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+        self,
+        domain_value: Optional[Symbol] = None,
+        range_value: Optional[Symbol] = None,
     ) -> bool:
         """
         Evaluate the predicate for the supplied values. If `transitive` is set,
@@ -229,10 +262,7 @@ class Predicate(Symbol, ABC):
         """
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
-        if self._holds_direct(domain_value, range_value):
-            # self.add_relation(domain_value, range_value)
-            return True
-        return False
+        return self.holds_direct(domain_value, range_value)
 
     def get_inverse(self, obj) -> MonitoredSet:
         wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
@@ -310,15 +340,13 @@ class Predicate(Symbol, ABC):
 
 
 @dataclass(eq=False)
-class HasType(Predicate):
+class HasType(BinaryPredicate):
     variable: Any
     types_: Type
-    is_expensive: ClassVar[bool] = False
 
-    def _holds_direct(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        return isinstance(self.variable, self.types_)
+    @classmethod
+    def holds_direct(cls, domain_value: Any, range_value: Type) -> bool:
+        return isinstance(domain_value, range_value)
 
     @property
     def domain_value(self):
@@ -446,7 +474,7 @@ def update_cache(instance: Symbol):
     else:
         kwargs = {}
     Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    if not isinstance(instance, Predicate) and isinstance(instance, Symbol):
+    if not isinstance(instance, BinaryPredicate) and isinstance(instance, Symbol):
         SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
@@ -463,4 +491,4 @@ def index_class_cache(symbolic_cls: Type) -> bool:
     """
     Determine whether the class cache should be indexed.
     """
-    return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
+    return issubclass(symbolic_cls, BinaryPredicate) and symbolic_cls.is_expensive

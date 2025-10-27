@@ -25,14 +25,14 @@ from ..class_diagrams import ClassDiagram, Relation
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
-    from .predicate import Predicate, Symbol
+    from .predicate import BinaryPredicate, Symbol
 
 
 @dataclass
 class PredicateRelation(Relation):
     source: WrappedInstance
     target: WrappedInstance
-    predicate: Predicate
+    predicate: BinaryPredicate
     inferred: bool = False
 
     def __str__(self):
@@ -202,7 +202,9 @@ class SymbolGraph:
         return self._instance_graph.nodes()
 
     def get_outgoing_neighbors_with_predicate_subclass(
-        self, wrapped_instance: WrappedInstance, predicate_subclass: Type[Predicate]
+        self,
+        wrapped_instance: WrappedInstance,
+        predicate_subclass: Type[BinaryPredicate],
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
@@ -214,7 +216,7 @@ class SymbolGraph:
         )
 
     def get_incoming_neighbors_with_predicate_type(
-        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
+        self, wrapped_instance: WrappedInstance, predicate_type: Type[BinaryPredicate]
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
@@ -237,7 +239,7 @@ class SymbolGraph:
         )
 
     def get_outgoing_neighbors_with_predicate_type(
-        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
+        self, wrapped_instance: WrappedInstance, predicate_type: Type[BinaryPredicate]
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         for _, child_idx, edge in self._instance_graph.out_edges(

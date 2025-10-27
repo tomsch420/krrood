@@ -8,7 +8,7 @@ import krrood
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from ..dataset.example_classes import Position
 from ..dataset.sqlalchemy_interface import *
-from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.predicate import BinaryPredicate
 from krrood.ormatic.dao import to_dao
 
 
