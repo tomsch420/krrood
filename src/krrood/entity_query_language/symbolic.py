@@ -110,10 +110,12 @@ class SymbolicExpression(Generic[T], ABC):
     _yield_when_false_: bool = field(init=False, repr=False, default=False)
     _is_false_: bool = field(init=False, repr=False, default=False)
     _seen_parent_values_: Dict[bool, SeenSet] = field(
-        default_factory=lambda: {True: SeenSet(), False: SeenSet()}, init=False
+        default_factory=lambda: {True: SeenSet(), False: SeenSet()},
+        init=False,
+        repr=False,
     )
     _seen_parent_values_by_parent_: Dict[int, Dict[bool, SeenSet]] = field(
-        default_factory=dict, init=False
+        default_factory=dict, init=False, repr=False
     )
     _eval_parent_: Optional[SymbolicExpression] = field(
         default=None, init=False, repr=False
@@ -357,7 +359,7 @@ class SymbolicExpression(Generic[T], ABC):
         return self._name_
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     """
     This class adds the monitoring/tracking behaviour on variables that tracks attribute access, calling,
@@ -596,7 +598,7 @@ class The(ResultQuantifier[T]):
         return result
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class An(ResultQuantifier[T]):
     """Quantifier that yields all matching results one by one."""
 
@@ -886,29 +888,31 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     The properties of the variable as keyword arguments.
     """
-    _domain_source_: Optional[From] = field(default=None, kw_only=True)
+    _domain_source_: Optional[From] = field(default=None, kw_only=True, repr=False)
     """
     An optional source for the variable domain. If not given, the global cache of the variable class type will be used
     as the domain, or if kwargs are given the type and the kwargs will be used to create/infer new values for the
     variable.
     """
-    _domain_: HashedIterable = field(default_factory=HashedIterable, kw_only=True)
+    _domain_: HashedIterable = field(
+        default_factory=HashedIterable, kw_only=True, repr=False
+    )
     """
     The iterable domain of values for this variable.
     """
-    _invert_: bool = field(init=False, default=False)
+    _invert_: bool = field(init=False, default=False, repr=False)
     """
     Redefined from super class to give it a default value.
     """
-    _predicate_type_: Optional[PredicateType] = field(default=None)
+    _predicate_type_: Optional[PredicateType] = field(default=None, repr=False)
     """
     If this symbol is an instance of the Predicate class.
     """
-    _is_inferred_: bool = field(default=False)
+    _is_inferred_: bool = field(default=False, repr=False)
     """
     Whether this variable should be inferred.
     """
-    _is_indexed_: bool = field(default=True)
+    _is_indexed_: bool = field(default=True, repr=False)
     """
     Whether this variable cache is indexed or flat.
     """
@@ -917,16 +921,18 @@ class Variable(CanBehaveLikeAVariable[T]):
     A mapping from variable type to an indexed cache of all seen inputs and outputs of the variable type. 
     """
     _child_vars_: Optional[Dict[str, SymbolicExpression]] = field(
-        default_factory=dict, init=False
+        default_factory=dict, init=False, repr=False
     )
     """
     A dictionary mapping child variable names to variables, these are from the _kwargs_ dictionary. 
     """
-    _kwargs_expression_: Optional[SymbolicExpression] = field(default=None, init=False)
+    _kwargs_expression_: Optional[SymbolicExpression] = field(
+        default=None, init=False, repr=False
+    )
     """
     An expression of the constraints added from the keyword arguments of the variable.
     """
-    _evaluating_kwargs_expression_: bool = field(default=False, init=False)
+    _evaluating_kwargs_expression_: bool = field(default=False, init=False, repr=False)
     """
     A flag indicating that the kwargs expression is currently being evaluated so do not evaluate them again, and instead
     yield from the domain.
@@ -1811,7 +1817,7 @@ class LogicalOperator(BinaryOperator, ABC):
         return ColorLegend("LogicalOperator", "#2ca02c")
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class AND(LogicalOperator):
     """
     A symbolic AND operation that can be used to combine multiple symbolic expressions.

@@ -1,5 +1,3 @@
-__version__ = "1.1.16"
-
 import logging
 import sys
 
@@ -15,7 +13,7 @@ logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 # Configure all module loggers
-for module_name in ["dao", "ormatic", "sqlalchemy_generator"]:
+for module_name in ["dao", "ormatic", "sqlalchemy_generator", "wrapped_table"]:
     module_logger = logging.getLogger(f"{__name__}.{module_name}")
     module_logger.addHandler(handler)
     module_logger.setLevel(logging.INFO)

@@ -1,4 +1,5 @@
 import os
+import logging
 from dataclasses import is_dataclass
 
 import pytest
@@ -15,6 +16,7 @@ from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module, recursive_subclasses
 from krrood.ormatic.utils import drop_database
+
 from .dataset import example_classes, semantic_world_like_classes
 from .dataset.example_classes import (
     PhysicalObject,
