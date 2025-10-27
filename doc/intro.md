@@ -20,7 +20,7 @@ A major inspiration for the development of KRROOD is the book
 - Entity Query Language (EQL)
   - A pythonic relational query language for entities and relationships
   - Supports joins, nesting, predicates, rule-based inference, and more
-  - Works uniformly against in-memory data and, via ORMatic, SQL backends
+  - Works uniformly against in-memory data, and via ORMatic, SQL backends
 
 - ORMatic
   - Bridges your object model to relational storage

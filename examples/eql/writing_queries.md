@@ -24,8 +24,8 @@ Queries typically compare attributes of variables where the assignments of the
 variables don't exist yet, hence an immediate evaluation would cause failures, as demonstrated below.
 
 ```{note}
-The symbolic mode is something that is explicitly entered. Whenever this is not entered you are in the non-symbolic mode
-which just is ordinary python behavior.
+The symbolic mode is a context that is explicitly entered. Whenever this is not entered you are in the non-symbolic mode
+which just is ordinary python.
 ```
 
 Frameworks like SQLAlchemy, as an Object-Relational Mapper (ORM), use metaprogramming techniques 

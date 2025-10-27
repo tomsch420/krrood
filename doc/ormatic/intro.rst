@@ -1,6 +1,6 @@
 .. _ormatic-overview:
 
-Overview
+ORMatic Overview
 ========
 
 ORMatic is a subpackage of KRROOD designed to integrate Python **dataclasses** with the **SQLAlchemy ORM**.

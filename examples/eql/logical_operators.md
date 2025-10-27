@@ -65,13 +65,15 @@ with symbolic_mode():
 print(*query.evaluate(), sep="\n")
 ```
 
-Take note that queries involving negations atre actually transformed into a simplified one under the hood.
+Take note that queries involving negations are actually transformed into a simplified one under the hood.
+Basically, `~(a | b)` got translated to `(~a & ~b)`
 
 ```{code-cell} ipython3
-print(type(query._child_._child_))
-print(query._child_._child_.left._invert_)
-print(query._child_._child_.right._invert_)
+print("not_(or_(...)) got translated to",type(query._child_._child_))
+print("Is the left child of AND inverted?", query._child_._child_.left._invert_)
+print("Is the right child of AND inverted?", query._child_._child_.right._invert_)
 ```
+
 
 EQL also optimizes what you mean by or_. Sometimes, it is more beneficial to treat the or statement as an `ElseIf` statement.
 - `ElseIf` (else-if semantics) is used when both sides of `or_` reference the exact same set of non-literal symbolic variables; the right side is evaluated only if the left side is false for the current bindings.
