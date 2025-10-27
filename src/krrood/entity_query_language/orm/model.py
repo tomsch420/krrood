@@ -3,6 +3,7 @@ from typing_extensions import List
 
 from ..predicate import Predicate
 from ..symbol_graph import SymbolGraph, WrappedInstance, PredicateRelation
+from ..symbolic import Variable
 from ...ormatic.dao import AlternativeMapping, T
 
 
@@ -25,7 +26,7 @@ class SymbolGraphMapping(AlternativeMapping[SymbolGraph]):
         )
 
     def create_from_dao(self) -> T:
-        result = Predicate.build_symbol_graph()
+        result = SymbolGraph.build()
         for instance in self.instances:
             result.add_instance(instance)
         for relation in self.predicate_relations:

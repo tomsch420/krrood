@@ -1,17 +1,29 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from abc import ABC
+from collections import defaultdict
+from copy import copy
 from dataclasses import dataclass
 from dataclasses import field, InitVar, fields
-from functools import cached_property
-from typing import List, Optional
+from functools import cached_property, lru_cache
+from types import NoneType
+from typing import List, Optional, Dict, Iterable, Union, Any, Tuple, Set
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
-from typing_extensions import Type
+from typing_extensions import Type, TYPE_CHECKING
 
-from krrood.class_diagrams.wrapped_field import WrappedField
+from .attribute_introspector import (
+    AttributeIntrospector,
+    DataclassOnlyIntrospector,
+)
+from .utils import Role, get_generic_type_param
+from .wrapped_field import WrappedField
+
+if TYPE_CHECKING:
+    from ..entity_query_language.predicate import PropertyDescriptor
 
 
 @dataclass
@@ -47,7 +59,7 @@ class Inheritance(Relation):
         return f"isSuperClassOf"
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Association(Relation):
     """
     Represents a general association relationship between two classes.
@@ -59,8 +71,26 @@ class Association(Relation):
     field: WrappedField
     """The field in the source class that creates this association with the target class."""
 
+    one_to_many: bool = dataclasses.field(init=False)
+    """Whether the association is one-to-many (True) or many-to-one (False)."""
+
+    def __post_init__(self):
+        self.one_to_many = (
+            self.field.is_one_to_many_relationship and not self.field.is_type_type
+        )
+
     def __str__(self):
-        return f"has-{self.field.field.name}"
+        return f"has-{self.field.public_name}"
+
+
+@dataclass(eq=False)
+class HasRoleTaker(Association):
+    """
+    This is an association between a role and a role taker where the role class contains a role taker field.
+    """
+
+    def __str__(self):
+        return f"role-taker({self.field.public_name})"
 
 
 class ParseError(TypeError):
@@ -80,15 +110,34 @@ class WrappedClass:
     _class_diagram: Optional[ClassDiagram] = field(
         init=False, hash=False, default=None, repr=False
     )
+    _wrapped_field_name_map_: Dict[str, WrappedField] = field(
+        init=False, hash=False, default_factory=dict, repr=False
+    )
 
     @cached_property
     def fields(self) -> List[WrappedField]:
+        """Return wrapped fields discovered by the diagram’s attribute introspector.
+
+        Public names from the introspector are used to index `_wrapped_field_name_map_`.
+        """
         try:
-            return [
-                WrappedField(self, f)
-                for f in fields(self.clazz)
-                if not f.name.startswith("_")
-            ]
+            wrapped_fields: list[WrappedField] = []
+            if self._class_diagram is None:
+                introspector = DataclassOnlyIntrospector()
+            else:
+                introspector = self._class_diagram.introspector
+            discovered = introspector.discover(self.clazz)
+            for item in discovered:
+                wf = WrappedField(
+                    self,
+                    item.field,
+                    public_name=item.public_name,
+                    property_descriptor=item.property_descriptor,
+                )
+                # Map under the public attribute name (e.g., "advisor")
+                self._wrapped_field_name_map_[item.public_name] = wf
+                wrapped_fields.append(wf)
+            return wrapped_fields
         except TypeError as e:
             logging.error(f"Error parsing class {self.clazz}: {e}")
             raise ParseError(e) from e
@@ -102,12 +151,25 @@ class WrappedClass:
 
 
 @dataclass
+class RoleTakerPropertyFields:
+    role_taker: WrappedField
+    fields: Tuple[WrappedField, ...]
+
+
+@dataclass
 class ClassDiagram:
 
     classes: InitVar[List[Type]]
 
+    introspector: AttributeIntrospector = field(
+        default_factory=DataclassOnlyIntrospector, init=True, repr=False
+    )
+
     _dependency_graph: rx.PyDiGraph[WrappedClass, Relation] = field(
         default_factory=rx.PyDiGraph, init=False
+    )
+    _cls_wrapped_cls_map: Dict[Type, WrappedClass] = field(
+        default_factory=dict, init=False, repr=False
     )
 
     def __post_init__(self, classes: List[Type]):
@@ -115,6 +177,137 @@ class ClassDiagram:
         for clazz in classes:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
+
+    @lru_cache(maxsize=None)
+    def get_role_taker_superclass_properties(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Optional[RoleTakerPropertyFields]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, HasRoleTaker):
+                continue
+            role_taker = assoc.target
+            role_taker_fields = self.get_fields_of_superclass_property_descriptors(
+                role_taker, property_descriptor_cls
+            )
+            return RoleTakerPropertyFields(assoc.field, role_taker_fields)
+        return None
+
+    @lru_cache(maxsize=None)
+    def get_fields_of_superclass_property_descriptors(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Tuple[WrappedField, ...]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        association_fields = []
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, Association):
+                continue
+            if not assoc.field.property_descriptor:
+                continue
+            other_prop_type = type(assoc.field.property_descriptor)
+            if (
+                issubclass(property_descriptor_cls, other_prop_type)
+                and property_descriptor_cls is not other_prop_type
+            ):
+                association_fields.append(assoc.field)
+        return tuple(association_fields)
+
+    @lru_cache(maxsize=None)
+    def get_the_field_of_property_descriptor_type(
+        self,
+        wrapped_cls: Union[Type, WrappedClass],
+        property_descriptor_cls: Type[PropertyDescriptor],
+    ) -> Optional[WrappedField]:
+        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        for assoc in self.get_out_edges(wrapped_cls):
+            if not isinstance(assoc, Association):
+                continue
+            if not assoc.field.property_descriptor:
+                continue
+            other_prop_type = type(assoc.field.property_descriptor)
+            if property_descriptor_cls is other_prop_type:
+                return assoc.field
+
+    @lru_cache(maxsize=None)
+    def get_common_role_taker_associations(
+        self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
+    ) -> Tuple[Optional[HasRoleTaker], Optional[HasRoleTaker]]:
+        cls1 = self.get_wrapped_class(cls1)
+        cls2 = self.get_wrapped_class(cls2)
+        assoc1 = self.get_role_taker_associations_of_cls(cls1)
+        if not assoc1:
+            return None, None
+        target_1 = assoc1.target
+        for _, _, assoc2 in self._dependency_graph.in_edges(target_1.index):
+            if not isinstance(assoc2, HasRoleTaker):
+                continue
+            if assoc2.source.clazz != cls2.clazz:
+                continue
+            if assoc2.field.is_role_taker:
+                return assoc1, assoc2
+        return None, None
+
+    @lru_cache(maxsize=None)
+    def get_role_taker_associations_of_cls(
+        self, cls: Union[Type, WrappedClass]
+    ) -> Optional[HasRoleTaker]:
+        """
+        :return: Association objects representing the role takers of the given class, a role taker is
+        a field that is a one-to-one relationship and is not optional.
+        """
+        for assoc in self.get_out_edges(cls):
+            if isinstance(assoc, HasRoleTaker) and assoc.field.is_role_taker:
+                return assoc
+        return None
+
+    @lru_cache(maxsize=None)
+    def get_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Tuple[WrappedClass, ...]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        filtered_neighbors = [
+            self._dependency_graph.get_node_data(n)
+            for n, e in self._dependency_graph.adj(wrapped_cls.index).items()
+            if edge_filter_func(e)
+        ]
+        return tuple(filtered_neighbors)
+
+    @lru_cache(maxsize=None)
+    def get_outgoing_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Tuple[WrappedClass, ...]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        find_successors_by_edge = self._dependency_graph.find_successors_by_edge
+        return tuple(find_successors_by_edge(wrapped_cls.index, edge_filter_func))
+
+    @lru_cache(maxsize=None)
+    def get_incoming_neighbors_with_relation_type(
+        self,
+        cls: Union[Type, WrappedClass],
+        relation_type: Type[Relation],
+    ) -> Tuple[WrappedClass, ...]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        edge_filter_func = lambda edge: isinstance(edge, relation_type)
+        find_predecessors_by_edge = self._dependency_graph.find_predecessors_by_edge
+        return tuple(find_predecessors_by_edge(wrapped_cls.index, edge_filter_func))
+
+    @lru_cache(maxsize=None)
+    def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Tuple[Relation, ...]:
+        wrapped_cls = self.get_wrapped_class(cls)
+        out_edges = [
+            edge for _, _, edge in self._dependency_graph.out_edges(wrapped_cls.index)
+        ]
+        return tuple(out_edges)
 
     def to_subdiagram_without_inherited_associations(
         self,
@@ -127,7 +320,7 @@ class ClassDiagram:
         Inheritance edges are preserved.
         """
         # Rebuild a fresh diagram from the same classes to avoid mutating this instance
-        result = ClassDiagram(classes=[wc.clazz for wc in self.wrapped_classes])
+        result = copy(self)
 
         # Convenience locals
         g = result._dependency_graph
@@ -215,12 +408,14 @@ class ClassDiagram:
         ]
 
     def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
-        base = [cls for cls in self.wrapped_classes if cls.clazz == clazz]
-        return base[0] if base else None
+        if isinstance(clazz, WrappedClass):
+            return clazz
+        return self._cls_wrapped_cls_map.get(clazz, None)
 
     def add_node(self, clazz: WrappedClass):
         clazz.index = self._dependency_graph.add_node(clazz)
         clazz._class_diagram = self
+        self._cls_wrapped_cls_map[clazz.clazz] = clazz
 
     def add_relation(self, relation: Relation):
         self._dependency_graph.add_edge(
@@ -245,18 +440,20 @@ class ClassDiagram:
     def _create_association_relations(self):
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
-                target_type = (
-                    wrapped_field.contained_type
-                    if wrapped_field.is_container or wrapped_field.is_optional
-                    else wrapped_field.resolved_type
-                )
+                target_type = wrapped_field.type_endpoint
 
                 wrapped_target_class = self.get_wrapped_class(target_type)
 
                 if not wrapped_target_class:
                     continue
 
-                relation = Association(
+                association_type = Association
+                if wrapped_field.is_role_taker and issubclass(clazz.clazz, Role):
+                    role_taker_type = get_generic_type_param(clazz.clazz, Role)[0]
+                    if role_taker_type is target_type:
+                        association_type = HasRoleTaker
+
+                relation = association_type(
                     field=wrapped_field,
                     source=clazz,
                     target=wrapped_target_class,
@@ -349,3 +546,9 @@ class ClassDiagram:
 
     def clear(self):
         self._dependency_graph.clear()
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        return self is other

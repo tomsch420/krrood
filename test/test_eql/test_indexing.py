@@ -3,18 +3,28 @@ from typing_extensions import Dict, List
 
 from krrood.entity_query_language.entity import an, entity, let, symbolic_mode, From
 from krrood.entity_query_language.predicate import Symbol
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 
 
 def test_indexing_on_dict_field():
 
-    @dataclass(unsafe_hash=True)
+    @dataclass
     class Item(Symbol):
         name: str
         attrs: Dict[str, int]
 
+        def __hash__(self):
+            return hash(self.name)
+
     @dataclass(eq=False)
     class World(Symbol):
         items: List[Item]
+
+        def __hash__(self):
+            return hash(id(self))
+
+    SymbolGraph().clear()
+    SymbolGraph.build()
 
     world = World(
         [
@@ -32,7 +42,7 @@ def test_indexing_on_dict_field():
 
 
 def test_indexing_2():
-    @dataclass
+    @dataclass(unsafe_hash=True)
     class Shape(Symbol):
         name: str
         color: str
@@ -40,6 +50,12 @@ def test_indexing_2():
     @dataclass
     class Body(Symbol):
         shapes: List[Shape]
+
+        def __hash__(self):
+            return hash(id(self))
+
+    SymbolGraph().clear()
+    SymbolGraph.build([Body, Shape])
 
     world_bodies = [
         Body(shapes=[Shape("shape1", color="red"), Shape("shape2", color="blue")]),

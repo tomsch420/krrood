@@ -1,30 +1,28 @@
 from __future__ import annotations
 
 import inspect
-import typing
 from abc import ABC, abstractmethod
 from collections import deque
-from copy import copy
-from dataclasses import dataclass, field, Field
-from functools import wraps, cached_property
-from typing_extensions import (
-    Callable,
-    Optional,
-    Any,
-    Type,
-    Tuple,
-    ClassVar,
+from dataclasses import dataclass
+from functools import wraps
+from typing import (
     Iterable,
-    List,
-    TypeVar,
-    Generic,
-    Set,
 )
+
+from line_profiler import profile
+from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
+
+from typing_extensions import ClassVar
 
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
-from .symbol_graph import PredicateRelation, SymbolGraph, WrappedInstance
+from .symbol_graph import (
+    PredicateRelation,
+    WrappedInstance,
+    SymbolGraph,
+    symbols_registry,
+)
 from .symbolic import (
     T,
     SymbolicExpression,
@@ -36,11 +34,14 @@ from .symbolic import (
     AND,
     properties_to_expression_tree,
     From,
+    Flatten,
 )
 from .utils import is_iterable, make_list
-from ..class_diagrams import ClassDiagram
+from ..class_diagrams.wrapped_field import WrappedField
 
-symbols_registry: typing.Set[Type] = set()
+if TYPE_CHECKING:
+    from .property_descriptor import MonitoredSet
+
 cls_args = {}
 
 
@@ -76,13 +77,6 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     return wrapper
 
 
-def recursive_subclasses(cls_):
-    subclasses = cls_.__subclasses__()
-    for subclass in subclasses:
-        yield from recursive_subclasses(subclass)
-        yield subclass
-
-
 @dataclass
 class Symbol:
     """Base class for things that can be described by property descriptors."""
@@ -91,9 +85,8 @@ class Symbol:
         if in_symbolic_mode():
             return cls._symbolic_new_(cls, *args, **kwargs)
         else:
-            instance = instantiate_class_and_update_cache(
-                cls, super().__new__, *args, **kwargs
-            )
+            instance = super().__new__(cls)
+            update_cache(instance)
             return instance
 
     def __init_subclass__(cls, **kwargs):
@@ -141,15 +134,6 @@ class Predicate(Symbol, ABC):
     is_expensive: ClassVar[bool] = False
     transitive: ClassVar[bool] = False
     inverse_of: ClassVar[Optional[Type[Predicate]]] = None
-    symbol_graph: ClassVar[SymbolGraph] = SymbolGraph(ClassDiagram([]))
-
-    @classmethod
-    def build_symbol_graph(cls, classes: List[Type] = None):
-        if not classes:
-            for cls_ in copy(symbols_registry):
-                symbols_registry.update(recursive_subclasses(cls_))
-            classes = symbols_registry
-        cls.symbol_graph = SymbolGraph(ClassDiagram(list(classes)))
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -169,21 +153,72 @@ class Predicate(Symbol, ABC):
         """
         ...
 
-    def _neighbors(self, value: Any) -> Iterable[Any]:
+    @property
+    def symbol_graph(self) -> SymbolGraph:
+        return SymbolGraph()
+
+    def _neighbors(self, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
         """
         Return direct neighbors of the given value to traverse when transitivity is enabled.
         Default is no neighbors (non-transitive or leaf).
+
+        :param value: The value to get neighbors for.
+        :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
+        :return: Iterable of neighbors.
         """
         wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
         if not wrapped_instance:
             return
+        if outgoing:
+            yield from (
+                n.instance
+                for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
+                    wrapped_instance, self.__class__
+                )
+            )
+        else:
+            yield from (
+                n.instance
+                for n in self.symbol_graph.get_incoming_neighbors_with_predicate_type(
+                    wrapped_instance, self.__class__
+                )
+            )
+
+    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[MonitoredSet]:
+        """
+        Find neighboring symbols connected by super edges.
+
+        This method identifies neighboring symbols that are connected
+        through edge with predicate types that are superclasses of the current predicate.
+
+        :param value: (Symbol): The symbol for which neighboring symbols are
+                evaluated through super predicate type edges.
+
+        :return: A list containing neighboring symbols connected by super type edges.
+        """
+        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(value))
+        if not wrapped_cls:
+            return
         yield from (
-            n.instance
-            for n in self.symbol_graph.get_outgoing_neighbors_with_edge_type(
-                wrapped_instance, self.__class__
+            getattr(value, property_field.public_name)
+            for property_field in self.symbol_graph.type_graph.get_fields_of_superclass_property_descriptors(
+                wrapped_cls, self.__class__
             )
         )
+        role_taker_property_fields = (
+            self.symbol_graph.type_graph.get_role_taker_superclass_properties(
+                wrapped_cls, self.__class__
+            )
+        )
+        if not role_taker_property_fields:
+            return
+        for role_taker_field in role_taker_property_fields.fields:
+            yield getattr(
+                getattr(value, role_taker_property_fields.role_taker.public_name),
+                role_taker_field.public_name,
+            )
 
+    @profile
     def __call__(
         self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
     ) -> bool:
@@ -195,34 +230,33 @@ class Predicate(Symbol, ABC):
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
         if self._holds_direct(domain_value, range_value):
-            self.add_relation(domain_value, range_value)
+            # self.add_relation(domain_value, range_value)
             return True
-        elif not self.transitive:
-            return False
-
-        # BFS with cycle protection
-        visited = set()
-        queue = deque()
-
-        start = HashedValue(domain_value)
-        visited.add(start)
-        queue.append(domain_value)
-
-        while queue:
-            current = queue.popleft()
-            for nxt in self._neighbors(current):
-                if self._holds_direct(nxt, range_value):
-                    self.add_relation(domain_value, range_value, inferred=True)
-                    return True
-                key = HashedValue(nxt)
-                if key not in visited:
-                    visited.add(key)
-                    queue.append(nxt)
         return False
 
-    @property
-    def inverse(self) -> Optional[Predicate]:
-        return None
+    def get_inverse(self, obj) -> MonitoredSet:
+        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
+        inverse_field = (
+            self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
+                wrapped_cls, self.inverse_of
+            )
+        )
+        if not inverse_field:
+            # try to get it from role taker if there is one.
+            role_taker = self.symbol_graph.get_role_takers_of_instance(obj)
+            role_taker_wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(
+                type(role_taker)
+            )
+            if role_taker:
+                inverse_field = self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
+                    role_taker_wrapped_cls, self.inverse_of
+                )
+                return getattr(role_taker, inverse_field.public_name)
+        if not inverse_field:
+            raise ValueError(
+                f"cannot find a field for the inverse {self.inverse_of} defined for {wrapped_cls}"
+            )
+        return getattr(obj, inverse_field.public_name)
 
     def add_relation(
         self,
@@ -239,8 +273,17 @@ class Predicate(Symbol, ABC):
         range_value = make_list(range_value)
         for rv in range_value:
             self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
-            if self.inverse:
-                self.inverse.add_relation(rv, domain_value)
+            for property_value in self._get_super_property_descriptors(domain_value):
+                property_value.add(rv, inferred=True)
+            if self.inverse_of:
+                inverse = self.get_inverse(rv)
+                if domain_value not in inverse:
+                    self.get_inverse(rv).add(domain_value, inferred=True)
+            if self.transitive:
+                for nxt in self._neighbors(rv):
+                    self.add_relation(domain_value, nxt, inferred=True)
+                for nxt in self._neighbors(domain_value, outgoing=False):
+                    self.add_relation(nxt, rv, inferred=True)
 
     def get_relation(
         self,
@@ -384,17 +427,11 @@ def extract_selected_variable_and_expression(
     return var, expression
 
 
-def instantiate_class_and_update_cache(
-    symbolic_cls: Type, original_new: Callable, *args, **kwargs
-):
+def update_cache(instance: Symbol):
     """
-    :param symbolic_cls: The constructed class.
-    :param original_new: The original class __new__ method.
-    :param args: The positional arguments to the class constructor.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The instantiated class.
+    :param instance: The instance to update the cache with.
     """
-    instance = original_new(symbolic_cls)
+    symbolic_cls = type(instance)
     index = index_class_cache(symbolic_cls)
     if index:
         update_cls_args(symbolic_cls)
@@ -409,8 +446,8 @@ def instantiate_class_and_update_cache(
     else:
         kwargs = {}
     Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    if not isinstance(instance, Predicate):
-        Predicate.symbol_graph.add_node(WrappedInstance(instance))
+    if not isinstance(instance, Predicate) and isinstance(instance, Symbol):
+        SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
 

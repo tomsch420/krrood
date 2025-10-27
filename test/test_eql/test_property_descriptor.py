@@ -11,12 +11,12 @@ from krrood.entity_query_language.property_descriptor import Thing, PropertyDesc
 class WorksFor(PropertyDescriptor): ...
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class Organization(Thing):
     name: str
 
 
-@dataclass
+@dataclass(eq=False)
 class Company(Organization): ...
 
 
@@ -25,6 +25,9 @@ class Person(Thing):
     name: str
     worksForOrg: List[Organization] = field(default_factory=WorksFor)
     worksForCompany: List[Company] = field(default_factory=WorksFor)
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 @dataclass
@@ -42,11 +45,12 @@ def test_descriptor_stores_per_instance_values_and_metadata():
     person2 = Person("Jane")
     person2.worksForCompany = [company]
 
-    assert person.worksForOrg == [organization]
+    assert organization in person.worksForOrg and len(person.worksForOrg) == 1
 
     # setattr should work
-    setattr(person2, "worksForCompany", [Company("SetAttr")])
-    assert person2.worksForCompany == [Company("SetAttr")]
+    com_set_attr = Company("SetAttr")
+    setattr(person2, "worksForCompany", [com_set_attr])
+    assert com_set_attr in person2.worksForCompany and len(person2.worksForCompany) == 1
 
     # Class access returns the descriptor
     assert isinstance(person2.__class__.worksForOrg, WorksFor)

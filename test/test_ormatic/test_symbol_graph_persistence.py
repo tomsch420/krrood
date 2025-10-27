@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy import select
 
 import krrood
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from ..dataset.example_classes import Position
 from ..dataset.sqlalchemy_interface import *
 from krrood.entity_query_language.predicate import Predicate
@@ -14,8 +15,7 @@ from krrood.ormatic.dao import to_dao
 def test_symbol_graph_persistence(session, database):
     p1 = Position(1, 2, 3)
 
-    symbol_graph = Predicate.symbol_graph
-
+    symbol_graph = SymbolGraph()
     symbol_graph_dao = to_dao(symbol_graph)
     session.add(symbol_graph_dao)
     session.commit()

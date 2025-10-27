@@ -5,7 +5,7 @@ import importlib
 import inspect
 import logging
 import sys
-from dataclasses import dataclass, Field
+from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
@@ -23,11 +23,13 @@ from typing_extensions import (
     Union,
 )
 
+from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
+    from ..entity_query_language.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -58,10 +60,23 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
+    public_name: Optional[str] = None
+    """
+    If the field is a relationship managed field, this is public name of the relationship that manages the field.
+    """
+
+    property_descriptor: Optional[PropertyDescriptor] = None
+    """
+    The property descriptor instance that manages the field.
+    """
+
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
     """
+
+    def __post_init__(self):
+        self.public_name = self.public_name or self.field.name
 
     def __hash__(self):
         return hash((self.clazz.clazz, self.field))
@@ -107,7 +122,6 @@ class WrappedField:
 
     @cached_property
     def is_builtin_type(self) -> bool:
-
         return self.type_endpoint in [int, float, str, bool, datetime, NoneType]
 
     @cached_property
@@ -178,6 +192,15 @@ class WrappedField:
             return self.contained_type
         else:
             return self.resolved_type
+
+    @cached_property
+    def is_role_taker(self) -> bool:
+        return (
+            self.is_one_to_one_relationship
+            and not self.is_optional
+            and self.field.default == MISSING
+            and self.field.default_factory == MISSING
+        )
 
 
 @lru_cache(maxsize=None)

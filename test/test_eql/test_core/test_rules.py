@@ -11,7 +11,7 @@ from krrood.entity_query_language.entity import infer
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rule import refinement, alternative, next_rule
 from krrood.entity_query_language.symbolic import symbolic_mode, rule_mode
-from ..dataset.semantic_world_like_classes import (
+from ...dataset.semantic_world_like_classes import (
     Container,
     Handle,
     FixedConnection,
@@ -56,25 +56,19 @@ def test_generate_drawers(handles_and_containers_world):
 def test_generate_drawers_predicate_form(handles_and_containers_world):
     world = handles_and_containers_world
     with rule_mode():
-        query = an(
-            entity(
-                Drawer(
-                    handle=an(entity(handle := Handle(From(world.bodies)))),
-                    container=an(entity(container := Container(From(world.bodies)))),
-                ),
-                an(
-                    entity(
-                        FixedConnection(
-                            From(world.connections), parent=container, child=handle
-                        )
+        query = infer(
+            Drawer(
+                handle=an(entity(handle := Handle(From(world.bodies)))),
+                container=an(entity(container := Container(From(world.bodies)))),
+            ),
+            an(
+                entity(
+                    FixedConnection(
+                        From(world.connections), parent=container, child=handle
                     )
-                ),
-                an(
-                    entity(
-                        PrismaticConnection(From(world.connections), child=container)
-                    )
-                ),
-            )
+                )
+            ),
+            an(entity(PrismaticConnection(From(world.connections), child=container))),
         )
 
     # query._render_tree_()
@@ -92,7 +86,7 @@ def test_generate_drawers_predicate_form(handles_and_containers_world):
 def test_generate_drawers_predicate_form_without_entity(handles_and_containers_world):
     world = handles_and_containers_world
     with rule_mode():
-        query = a(
+        query = infer(
             Drawer(
                 handle=a(handle := Handle(From(world.bodies))),
                 container=a(container := Container(From(world.bodies))),

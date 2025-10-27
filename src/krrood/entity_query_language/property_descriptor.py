@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import copy
-from dataclasses import Field, dataclass, field
+from dataclasses import Field, dataclass, field, MISSING, fields
 from functools import cached_property
 from typing import (
     Generic,
@@ -15,7 +15,7 @@ from typing import (
     Tuple,
     Dict,
 )
-from weakref import WeakKeyDictionary
+from weakref import WeakKeyDictionary, ref as weakref_ref
 
 from line_profiler import profile
 
@@ -52,6 +52,32 @@ class Thing(Symbol, metaclass=ThingMeta): ...
 T = TypeVar("T")
 
 
+class MonitoredSet(set):
+
+    def __init__(self, *args, **kwargs):
+        self.descriptor: PropertyDescriptor = kwargs.pop("descriptor")
+        self._owner_ref = None  # weakref to owner instance
+        super().__init__(*args, **kwargs)
+
+    def bind_owner(self, owner) -> "MonitoredSet":
+        """
+        Bind the owning instance via a weak reference and return self.
+        """
+        self._owner_ref = weakref_ref(owner)
+        return self
+
+    @property
+    def owner(self):
+        return self._owner_ref() if self._owner_ref is not None else None
+
+    def add(self, value, inferred: bool = False, call_on_add: bool = True):
+        super().add(value)
+        # route through descriptor with the concrete owner instance
+        owner = self.owner
+        if owner is not None and call_on_add:
+            self.descriptor.on_add(owner, value, inferred=inferred)
+
+
 @dataclass
 class PropertyDescriptor(Generic[T], Predicate):
     """Descriptor storing values on instances while keeping type metadata on the descriptor.
@@ -72,10 +98,10 @@ class PropertyDescriptor(Generic[T], Predicate):
     # Weak keys prevent memory leaks when domain classes are unloaded.
     _subprops_cache: ClassVar[WeakKeyDictionary] = WeakKeyDictionary()
 
-    def __set_name__(self, owner, name):
-        # Only wire once per owner
-        if not hasattr(owner, self.attr_name):
-            self.create_managed_attribute_for_class(owner, name)
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        cls.domain_types = set()
+        cls.range_types = set()
 
     @property
     def domain_value(self) -> Optional[Any]:
@@ -104,7 +130,7 @@ class PropertyDescriptor(Generic[T], Predicate):
             cls,
             self.attr_name,
             field(
-                default_factory=set,
+                default_factory=lambda: MonitoredSet(descriptor=self),
                 init=False,
                 repr=False,
                 hash=False,
@@ -113,40 +139,51 @@ class PropertyDescriptor(Generic[T], Predicate):
         # Preserve the declared annotation for the hidden field
         cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
 
-        self.update_domain_types(cls)
-        self.update_range_types(cls, attr_name)
+        self.update_domain_types()
+        self.update_range_types()
 
-    def update_domain_types(self, cls: Type) -> None:
+    def on_add(self, domain_value, val: Symbol, inferred: bool = False) -> None:
+        """Add a value to the property descriptor."""
+        self.add_relation(domain_value, val, inferred=inferred)
+
+    def update_domain_types(self) -> None:
         """
         Add a class to the domain types if it is not already a subclass of any existing domain type.
 
         This method is used to keep track of the classes that are valid as values for the property descriptor.
         It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
-        :param cls: The class to add to the domain types.
         :return: None
         """
+        cls = self._cls_
         if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
             return
         self.domain_types.add(cls)
 
-    def update_range_types(self, cls: Type, attr_name: str) -> None:
-        type_hint = cls.__annotations__[attr_name]
+    @property
+    def range_type(self):
+        type_hint = self._cls_.__annotations__[self.attr_name]
         if isinstance(type_hint, str):
             try:
                 type_hint = eval(
-                    type_hint, vars(__import__(cls.__module__, fromlist=["*"]))
+                    type_hint, vars(__import__(self._cls_.__module__, fromlist=["*"]))
                 )
             except NameError:
                 # Try again with the class under construction injected; if still failing, skip for now.
                 try:
                     module_globals = vars(
-                        __import__(cls.__module__, fromlist=["*"])
+                        __import__(self._cls_.__module__, fromlist=["*"])
                     ).copy()
-                    module_globals[cls.__name__] = cls
+                    module_globals[self._cls_.__name__] = self._cls_
                     type_hint = eval(type_hint, module_globals)
                 except NameError:
                     return
-        for new_type in get_range_types(type_hint):
+        return get_range_types(type_hint)
+
+    def update_range_types(self) -> None:
+        range_types = self.range_type
+        if range_types is None:
+            return
+        for new_type in range_types:
             try:
                 is_sub = any(
                     issubclass(new_type, range_cls) for range_cls in self.range_types
@@ -165,13 +202,34 @@ class PropertyDescriptor(Generic[T], Predicate):
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        return getattr(obj, self.attr_name)
+        container = getattr(obj, self.attr_name)
+        # Bind the owner so subsequent `add` calls know the instance
+        if getattr(container, "owner", None) is not obj:
+            container.bind_owner(obj)
+        return container
 
     def __set__(self, obj, value):
         if isinstance(value, PropertyDescriptor):
             return
-        setattr(obj, self.attr_name, value)
-        self.add_relation(obj, value)
+        attr = getattr(obj, self.attr_name)
+        attr.clear()
+        for v in make_set(value):
+            attr.add(v, call_on_add=False)
+            self.add_relation(obj, v, set_attr=False)
+
+    def add_relation(
+        self,
+        domain_value: Optional[Any] = None,
+        range_value: Optional[Any] = None,
+        inferred: bool = False,
+        set_attr: bool = True,
+    ) -> None:
+        """Add a relation to the property descriptor."""
+        domain_value = domain_value or self.domain_value
+        range_value = range_value or self.range_value
+        super().add_relation(domain_value, range_value, inferred=inferred)
+        if set_attr:
+            getattr(domain_value, self.attr_name).add(range_value, call_on_add=False)
 
     def _holds_direct(
         self, domain_value: Optional[Any], range_value: Optional[Any]
@@ -184,12 +242,13 @@ class PropertyDescriptor(Generic[T], Predicate):
 
         # If the concrete instance has our backing attribute, check it directly.
         if hasattr(domain_value, self.attr_name):
-            return self._check_relation_value(
+            if self._check_relation_value(
                 attr_name=self.attr_name,
                 domain_value=domain_value,
                 range_value=range_value,
-            )
-        # Otherwise, look through sub-properties of this property.
+            ):
+                return True
+        # Fallback: check subclass properties declared on the domain type
         return self._check_relation_holds_for_subclasses_of_property(
             domain_value=domain_value, range_value=range_value
         )
