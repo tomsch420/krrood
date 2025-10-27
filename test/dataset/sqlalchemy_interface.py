@@ -260,10 +260,6 @@ class DerivedEntityDAO(
         use_existing_column=True,
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
-    attribute_that_shouldnt_appear_at_all: Mapped[builtins.float] = mapped_column(
-        use_existing_column=True
-    )
     description: Mapped[builtins.str] = mapped_column(use_existing_column=True)
 
     __mapper_args__ = {
@@ -512,7 +508,6 @@ class ChildMappedDAO(
         ForeignKey(ParentDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
     attribute1: Mapped[builtins.int] = mapped_column(use_existing_column=True)
 
     __mapper_args__ = {
@@ -610,15 +605,6 @@ class PositionDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Posit
         nullable=True,
         use_existing_column=True,
     )
-    positionssubclasswithanotherpositiondao_positions_id: Mapped[
-        typing.Optional[builtins.int]
-    ] = mapped_column(
-        ForeignKey(
-            "PositionsSubclassWithAnotherPositionDAO.database_id", use_alter=True
-        ),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     __mapper_args__ = {
         "polymorphic_identity": "PositionDAO",
@@ -636,9 +622,6 @@ class Position4DDAO(
         ForeignKey(PositionDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    x: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    y: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    z: Mapped[builtins.float] = mapped_column(use_existing_column=True)
     w: Mapped[builtins.float] = mapped_column(use_existing_column=True)
 
     __mapper_args__ = {
@@ -659,10 +642,6 @@ class Position5DDAO(
         use_existing_column=True,
     )
 
-    x: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    y: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    z: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    w: Mapped[builtins.float] = mapped_column(use_existing_column=True)
     v: Mapped[builtins.float] = mapped_column(use_existing_column=True)
 
     __mapper_args__ = {
@@ -726,21 +705,12 @@ class PositionsSubclassWithAnotherPositionDAO(
         ForeignKey(PositionsDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    some_strings: Mapped[typing.List[builtins.str]] = mapped_column(
-        JSON, nullable=False, use_existing_column=True
-    )
-
     positions2_id: Mapped[int] = mapped_column(
         ForeignKey("PositionDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    positions: Mapped[typing.List[PositionDAO]] = relationship(
-        "PositionDAO",
-        foreign_keys="[PositionDAO.positionssubclasswithanotherpositiondao_positions_id]",
-        post_update=True,
-    )
     positions2: Mapped[PositionDAO] = relationship(
         "PositionDAO", uselist=False, foreign_keys=[positions2_id], post_update=True
     )
@@ -870,16 +840,6 @@ class RelationshipChildDAO(
         use_existing_column=True,
     )
 
-    positions_id: Mapped[int] = mapped_column(
-        ForeignKey("PositionDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    positions: Mapped[PositionDAO] = relationship(
-        "PositionDAO", uselist=False, foreign_keys=[positions_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "RelationshipChildDAO",
         "inherit_condition": database_id == RelationshipParentDAO.database_id,
@@ -1004,8 +964,6 @@ class TorsoDAO(KinematicChainDAO, DataAccessObject[test.dataset.example_classes.
         primary_key=True,
         use_existing_column=True,
     )
-
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
 
     kinematic_chains: Mapped[typing.List[KinematicChainDAO]] = relationship(
         "KinematicChainDAO",
@@ -1162,15 +1120,6 @@ class BodyDAO(
         nullable=True,
         use_existing_column=True,
     )
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
 
     __mapper_args__ = {
         "polymorphic_identity": "BodyDAO",
@@ -1188,19 +1137,6 @@ class ContainerDAO(
         ForeignKey(BodyDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
-    size: Mapped[builtins.int] = mapped_column(use_existing_column=True)
-
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "ContainerDAO",
         "inherit_condition": database_id == BodyDAO.database_id,
@@ -1215,19 +1151,6 @@ class HandleDAO(
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(BodyDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
-    size: Mapped[builtins.int] = mapped_column(use_existing_column=True)
-
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -1254,11 +1177,6 @@ class ConnectionDAO(
         nullable=True,
         use_existing_column=True,
     )
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     parent_id: Mapped[int] = mapped_column(
         ForeignKey("BodyDAO.database_id", use_alter=True),
         nullable=True,
@@ -1270,9 +1188,6 @@ class ConnectionDAO(
         use_existing_column=True,
     )
 
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
     parent: Mapped[BodyDAO] = relationship(
         "BodyDAO", uselist=False, foreign_keys=[parent_id], post_update=True
     )
@@ -1299,32 +1214,6 @@ class FixedConnectionDAO(
         use_existing_column=True,
     )
 
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    parent_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    child_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
-    parent: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[parent_id], post_update=True
-    )
-    child: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[child_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "FixedConnectionDAO",
         "inherit_condition": database_id == ConnectionDAO.database_id,
@@ -1344,32 +1233,6 @@ class PrismaticConnectionDAO(
         use_existing_column=True,
     )
 
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    parent_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    child_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
-    parent: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[parent_id], post_update=True
-    )
-    child: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[child_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "PrismaticConnectionDAO",
         "inherit_condition": database_id == ConnectionDAO.database_id,
@@ -1387,32 +1250,6 @@ class RevoluteConnectionDAO(
         ForeignKey(ConnectionDAO.database_id),
         primary_key=True,
         use_existing_column=True,
-    )
-
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    parent_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    child_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
-    parent: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[parent_id], post_update=True
-    )
-    child: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[child_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -1438,15 +1275,6 @@ class ViewDAO(
         nullable=True,
         use_existing_column=True,
     )
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
 
     __mapper_args__ = {
         "polymorphic_identity": "ViewDAO",
@@ -1464,20 +1292,12 @@ class CabinetDAO(
         ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     container_id: Mapped[int] = mapped_column(
         ForeignKey("ContainerDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
     container: Mapped[ContainerDAO] = relationship(
         "ContainerDAO", uselist=False, foreign_keys=[container_id], post_update=True
     )
@@ -1499,11 +1319,6 @@ class DoorDAO(ViewDAO, DataAccessObject[test.dataset.semantic_world_like_classes
         ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     handle_id: Mapped[int] = mapped_column(
         ForeignKey("HandleDAO.database_id", use_alter=True),
         nullable=True,
@@ -1515,9 +1330,6 @@ class DoorDAO(ViewDAO, DataAccessObject[test.dataset.semantic_world_like_classes
         use_existing_column=True,
     )
 
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
     handle: Mapped[HandleDAO] = relationship(
         "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
     )
@@ -1550,11 +1362,6 @@ class DrawerDAO(
         nullable=True,
         use_existing_column=True,
     )
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     handle_id: Mapped[int] = mapped_column(
         ForeignKey("HandleDAO.database_id", use_alter=True),
         nullable=True,
@@ -1566,9 +1373,6 @@ class DrawerDAO(
         use_existing_column=True,
     )
 
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
     handle: Mapped[HandleDAO] = relationship(
         "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
     )
@@ -1592,11 +1396,6 @@ class WardrobeDAO(
         ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     handle_id: Mapped[int] = mapped_column(
         ForeignKey("HandleDAO.database_id", use_alter=True),
         nullable=True,
@@ -1613,9 +1412,6 @@ class WardrobeDAO(
         use_existing_column=True,
     )
 
-    world: Mapped[WorldDAO] = relationship(
-        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
     handle: Mapped[HandleDAO] = relationship(
         "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
     )

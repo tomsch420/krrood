@@ -338,7 +338,7 @@ def test_inheriting_from_inherited_class(session, database):
     assert queried_position_5d in queried_position_4d
     assert queried_position_5d in queried_position
     assert queried_position_4d[0] in queried_position
-    assert len(columns) == 5  # w column
+    assert len(columns) == 1  # w column
 
 
 def test_backreference_with_mapping(session, database):

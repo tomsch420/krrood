@@ -189,28 +189,35 @@ class WrappedTable:
         :return: The list of fields specified only in this associated dataclass that should be mapped.
         """
 
-        # initialize the skip_fields of this class by excluding all parent fields
-        self.skip_fields = []
-        if self.parent_table is not None:
-            self.skip_fields += self.parent_table.skip_fields + self.parent_table.fields
+        # Collect all inherited field names up the chain
+        inherited_names: set[str] = set()
+        p = self.parent_table
+        while p is not None:
+            # Use the original dataclass fields of each ancestor
+            inherited_names.update(f.field.name for f in p.wrapped_clazz.fields)
+            p = p.parent_table
 
-        # get all new fields given by this class
-        result = [f for f in self.wrapped_clazz.fields if f not in self.skip_fields]
+        # Keep only fields that are not inherited by name
+        result = [
+            f for f in self.wrapped_clazz.fields if f.field.name not in inherited_names
+        ]
 
-        # if the parent table is alternatively mapped, we need to remove the fields that are not present in the original class
+        # If the parent table is alternatively mapped, drop fields that do not exist
+        # in the original parent class (compare by name as well)
         if self.parent_table is not None and self.parent_table.is_alternatively_mapped:
-            # get the wrapped class of the original parent class
             og_parent_class = self.parent_table.wrapped_clazz.clazz.original_class()
             wrapped_og_parent_class = (
                 self.ormatic.class_dependency_graph.get_wrapped_class(og_parent_class)
             )
-            fields_in_og_class_but_not_in_dao = [
-                f
-                for f in wrapped_og_parent_class.fields
-                if f not in self.parent_table.fields
-            ]
 
-            result = [r for r in result if r not in fields_in_og_class_but_not_in_dao]
+            og_parent_field_names = {
+                f.field.name for f in wrapped_og_parent_class.fields
+            }
+            parent_dao_field_names = {f.field.name for f in self.parent_table.fields}
+
+            # Fields present in original parent class but removed by the DAO mapping
+            removed_by_dao = og_parent_field_names - parent_dao_field_names
+            result = [r for r in result if r.field.name not in removed_by_dao]
 
         return result
 
