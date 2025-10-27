@@ -185,11 +185,8 @@ class BinaryPredicate(Predicate, ABC):
     def range_value(self):
         raise NotImplementedError
 
-    @property
-    def symbol_graph(self) -> SymbolGraph:
-        return SymbolGraph()
-
-    def _neighbors(self, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
+    @classmethod
+    def _neighbors(cls, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
         """
         Return direct neighbors of the given value to traverse when transitivity is enabled.
         Default is no neighbors (non-transitive or leaf).
@@ -198,25 +195,26 @@ class BinaryPredicate(Predicate, ABC):
         :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
         :return: Iterable of neighbors.
         """
-        wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
+        wrapped_instance = SymbolGraph().get_wrapped_instance(value)
         if not wrapped_instance:
             return
         if outgoing:
             yield from (
                 n.instance
-                for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
-                    wrapped_instance, self.__class__
+                for n in SymbolGraph().get_outgoing_neighbors_with_predicate_type(
+                    wrapped_instance, cls
                 )
             )
         else:
             yield from (
                 n.instance
-                for n in self.symbol_graph.get_incoming_neighbors_with_predicate_type(
-                    wrapped_instance, self.__class__
+                for n in SymbolGraph().get_incoming_neighbors_with_predicate_type(
+                    wrapped_instance, cls
                 )
             )
 
-    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[MonitoredSet]:
+    @classmethod
+    def _get_super_property_descriptors(cls, value: Symbol) -> Iterable[MonitoredSet]:
         """
         Find neighboring symbols connected by super edges.
 
@@ -228,18 +226,18 @@ class BinaryPredicate(Predicate, ABC):
 
         :return: A list containing neighboring symbols connected by super type edges.
         """
-        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(value))
+        wrapped_cls = SymbolGraph().type_graph.get_wrapped_class(type(value))
         if not wrapped_cls:
             return
         yield from (
             getattr(value, property_field.public_name)
-            for property_field in self.symbol_graph.type_graph.get_fields_of_superclass_property_descriptors(
-                wrapped_cls, self.__class__
+            for property_field in SymbolGraph().type_graph.get_fields_of_superclass_property_descriptors(
+                wrapped_cls, cls
             )
         )
         role_taker_property_fields = (
-            self.symbol_graph.type_graph.get_role_taker_superclass_properties(
-                wrapped_cls, self.__class__
+            SymbolGraph().type_graph.get_role_taker_superclass_properties(
+                wrapped_cls, cls
             )
         )
         if not role_taker_property_fields:
@@ -264,77 +262,77 @@ class BinaryPredicate(Predicate, ABC):
         range_value = range_value or self.range_value
         return self.holds_direct(domain_value, range_value)
 
-    def get_inverse(self, obj) -> MonitoredSet:
-        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
+    @classmethod
+    def get_inverse(cls, obj) -> MonitoredSet:
+        wrapped_cls = SymbolGraph().type_graph.get_wrapped_class(type(obj))
         inverse_field = (
-            self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
-                wrapped_cls, self.inverse_of
+            SymbolGraph().type_graph.get_the_field_of_property_descriptor_type(
+                wrapped_cls, cls.inverse_of
             )
         )
         if not inverse_field:
             # try to get it from role taker if there is one.
-            role_taker = self.symbol_graph.get_role_takers_of_instance(obj)
-            role_taker_wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(
+            role_taker = SymbolGraph().get_role_takers_of_instance(obj)
+            role_taker_wrapped_cls = SymbolGraph().type_graph.get_wrapped_class(
                 type(role_taker)
             )
             if role_taker:
-                inverse_field = self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
-                    role_taker_wrapped_cls, self.inverse_of
+                inverse_field = (
+                    SymbolGraph().type_graph.get_the_field_of_property_descriptor_type(
+                        role_taker_wrapped_cls, cls.inverse_of
+                    )
                 )
                 return getattr(role_taker, inverse_field.public_name)
         if not inverse_field:
             raise ValueError(
-                f"cannot find a field for the inverse {self.inverse_of} defined for {wrapped_cls}"
+                f"cannot find a field for the inverse {cls.inverse_of} defined for {wrapped_cls}"
             )
         return getattr(obj, inverse_field.public_name)
 
     def add_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
         inferred: bool = False,
     ):
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
         if range_value is None:
             raise ValueError(
-                f"range_value cannot be None for {self.__class__}, domain={domain_value}"
+                f"range_value cannot be None for {cls}, domain={domain_value}"
             )
         range_value = make_list(range_value)
         for rv in range_value:
-            self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
-            for property_value in self._get_super_property_descriptors(domain_value):
+            SymbolGraph().add_edge(cls.get_relation(domain_value, rv, inferred))
+            for property_value in cls._get_super_property_descriptors(domain_value):
                 property_value.add(rv, inferred=True)
-            if self.inverse_of:
-                inverse = self.get_inverse(rv)
+            if cls.inverse_of:
+                inverse = cls.get_inverse(rv)
                 if domain_value not in inverse:
-                    self.get_inverse(rv).add(domain_value, inferred=True)
-            if self.transitive:
-                for nxt in self._neighbors(rv):
-                    self.add_relation(domain_value, nxt, inferred=True)
-                for nxt in self._neighbors(domain_value, outgoing=False):
-                    self.add_relation(nxt, rv, inferred=True)
+                    cls.get_inverse(rv).add(domain_value, inferred=True)
+            if cls.transitive:
+                for nxt in cls._neighbors(rv):
+                    cls.add_relation(domain_value, nxt, inferred=True)
+                for nxt in cls._neighbors(domain_value, outgoing=False):
+                    cls.add_relation(nxt, rv, inferred=True)
 
+    @classmethod
     def get_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
         inferred: bool = False,
     ) -> PredicateRelation:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        wrapped_domain_instance = self.symbol_graph.get_wrapped_instance(domain_value)
+        wrapped_domain_instance = SymbolGraph().get_wrapped_instance(domain_value)
         if not wrapped_domain_instance:
             wrapped_domain_instance = WrappedInstance(domain_value)
-            self.symbol_graph.add_node(wrapped_domain_instance)
-        wrapped_range_instance = self.symbol_graph.get_wrapped_instance(range_value)
+            SymbolGraph().add_node(wrapped_domain_instance)
+        wrapped_range_instance = SymbolGraph().get_wrapped_instance(range_value)
         if not wrapped_range_instance:
             wrapped_range_instance = WrappedInstance(range_value)
-            self.symbol_graph.add_node(wrapped_range_instance)
+            SymbolGraph().add_node(wrapped_range_instance)
         return PredicateRelation(
             wrapped_domain_instance,
             wrapped_range_instance,
-            self,
+            cls(domain_value, range_value),
             inferred=inferred,
         )
 
@@ -473,8 +471,10 @@ def update_cache(instance: Symbol):
             Variable._cache_[symbolic_cls].keys = kwargs.keys()
     else:
         kwargs = {}
-    Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
     if not isinstance(instance, BinaryPredicate) and isinstance(instance, Symbol):
+        Variable._cache_[symbolic_cls].insert(
+            kwargs, HashedValue(instance), index=index
+        )
         SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
