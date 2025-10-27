@@ -19,7 +19,7 @@ from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from .utils import Role, get_generic_type_param
+from .utils import Role, get_generic_type_param, assoc_key, all_ancestors
 from .wrapped_field import WrappedField
 
 
@@ -242,6 +242,46 @@ class ClassDiagram:
         ]
         return tuple(out_edges)
 
+    @property
+    def parent_map(self):
+        """
+        Build parent map from inheritance edges: child_idx -> set(parent_idx)
+        """
+        parent_map: dict[int, set[int]] = {}
+        for u, v in g.edge_list():
+            rel = g.get_edge_data(u, v)
+            if isinstance(rel, Inheritance):
+                parent_map.setdefault(v, set()).add(u)
+        return parent_map
+
+    def all_ancestors(self, node_idx: int) -> set[int]:
+        """DFS to compute all ancestors for each node index"""
+        parent_map = self.parent_map
+        parents = parent_map.get(node_idx, set())
+        if not parents:
+            return set()
+        stack = list(parents)
+        seen: set[int] = set(parents)
+        while stack:
+            cur = stack.pop()
+            for p in parent_map.get(cur, set()):
+                if p not in seen:
+                    seen.add(p)
+                    stack.append(p)
+        return seen
+
+    def get_assoc_keys_by_source(
+        self, include_field_name: bool = False
+    ) -> dict[int, set[tuple]]:
+        assoc_keys_by_source = {}
+        for u, v in g.edge_list():
+            rel = g.get_edge_data(u, v)
+            if isinstance(rel, Association):
+                assoc_keys_by_source.setdefault(u, set()).add(
+                    assoc_key(rel, include_field_name)
+                )
+        return assoc_keys_by_source
+
     def to_subdiagram_without_inherited_associations(
         self,
         include_field_name: bool = False,
@@ -254,71 +294,39 @@ class ClassDiagram:
         """
         # Rebuild a fresh diagram from the same classes to avoid mutating this instance
         result = copy(self)
-
         # Convenience locals
         g = result._dependency_graph
 
-        # 1) Build parent map from inheritance edges: child_idx -> set(parent_idx)
-        parent_map: dict[int, set[int]] = {}
-        for u, v in g.edge_list():
-            rel = g.get_edge_data(u, v)
-            if isinstance(rel, Inheritance):
-                parent_map.setdefault(v, set()).add(u)
+        assoc_keys_by_source = result.get_assoc_keys_by_source(include_field_name)
 
-        # 2) DFS to compute all ancestors for each node index
-        def all_ancestors(node_idx: int) -> set[int]:
-            parents = parent_map.get(node_idx, set())
-            if not parents:
-                return set()
-            stack = list(parents)
-            seen: set[int] = set(parents)
-            while stack:
-                cur = stack.pop()
-                for p in parent_map.get(cur, set()):
-                    if p not in seen:
-                        seen.add(p)
-                        stack.append(p)
-            return seen
-
-        # 3) Precompute association keys per source node
-        #    Key = (relation class, target class[, field name])
-        def assoc_key(rel: Association) -> tuple:
-            if include_field_name:
-                return (rel.__class__, rel.target.clazz, rel.field.field.name)
-            return (rel.__class__, rel.target.clazz)
-
-        assoc_keys_by_source: dict[int, set[tuple]] = {}
-        for u, v in g.edge_list():
-            rel = g.get_edge_data(u, v)
-            if isinstance(rel, Association):
-                assoc_keys_by_source.setdefault(u, set()).add(assoc_key(rel))
-
-        # 4) Mark redundant descendant association edges for removal
+        # Mark redundant descendant association edges for removal
         edges_to_remove: list[tuple[int, int]] = []
         for u, v in g.edge_list():
             rel = g.get_edge_data(u, v)
             if not isinstance(rel, Association):
                 continue
 
-            key = assoc_key(rel)
+            key = assoc_key(rel, include_field_name)
             # Collect all keys defined by any ancestor of u
             inherited_keys: set[tuple] = set()
-            for anc in all_ancestors(u):
+            for anc in result.all_ancestors(u):
                 inherited_keys |= assoc_keys_by_source.get(anc, set())
 
             if key in inherited_keys:
                 edges_to_remove.append((u, v))
 
-        # 5) Remove redundant edges
-        for u, v in edges_to_remove:
-            # Safe even if duplicates appear in list; graph ignores missing
-            try:
-                g.remove_edge(u, v)
-            except Exception:
-                # Be conservative: if already removed due to earlier operation, skip
-                pass
+        # Remove redundant edges
+        result.remove_edges(edges_to_remove)
 
         return result
+
+    def remove_edges(self, edges):
+        """Remove edges from the dependency graph"""
+        for u, v in edges:
+            try:
+                self._dependency_graph.remove_edge(u, v)
+            except Exception:
+                pass
 
     @property
     def wrapped_classes(self):
