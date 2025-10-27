@@ -22,9 +22,6 @@ from .attribute_introspector import (
 from .utils import Role, get_generic_type_param
 from .wrapped_field import WrappedField
 
-if TYPE_CHECKING:
-    from ..entity_query_language.predicate import PropertyDescriptor
-
 
 @dataclass
 class Relation(ABC):
@@ -71,13 +68,10 @@ class Association(Relation):
     field: WrappedField
     """The field in the source class that creates this association with the target class."""
 
-    one_to_many: bool = dataclasses.field(init=False)
-    """Whether the association is one-to-many (True) or many-to-one (False)."""
-
-    def __post_init__(self):
-        self.one_to_many = (
-            self.field.is_one_to_many_relationship and not self.field.is_type_type
-        )
+    @cached_property
+    def one_to_many(self) -> bool:
+        """Whether the association is one-to-many (True) or many-to-one (False)."""
+        return self.field.is_one_to_many_relationship and not self.field.is_type_type
 
     def __str__(self):
         return f"has-{self.field.public_name}"
@@ -132,9 +126,8 @@ class WrappedClass:
                     self,
                     item.field,
                     public_name=item.public_name,
-                    property_descriptor=item.property_descriptor,
                 )
-                # Map under the public attribute name (e.g., "advisor")
+                # Map under the public attribute name
                 self._wrapped_field_name_map_[item.public_name] = wf
                 wrapped_fields.append(wf)
             return wrapped_fields
@@ -148,12 +141,6 @@ class WrappedClass:
 
     def __hash__(self):
         return hash((self.index, self.clazz))
-
-
-@dataclass
-class RoleTakerPropertyFields:
-    role_taker: WrappedField
-    fields: Tuple[WrappedField, ...]
 
 
 @dataclass
@@ -177,60 +164,6 @@ class ClassDiagram:
         for clazz in classes:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
-
-    @lru_cache(maxsize=None)
-    def get_role_taker_superclass_properties(
-        self,
-        wrapped_cls: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Optional[RoleTakerPropertyFields]:
-        wrapped_cls = self.get_wrapped_class(wrapped_cls)
-        for assoc in self.get_out_edges(wrapped_cls):
-            if not isinstance(assoc, HasRoleTaker):
-                continue
-            role_taker = assoc.target
-            role_taker_fields = self.get_fields_of_superclass_property_descriptors(
-                role_taker, property_descriptor_cls
-            )
-            return RoleTakerPropertyFields(assoc.field, role_taker_fields)
-        return None
-
-    @lru_cache(maxsize=None)
-    def get_fields_of_superclass_property_descriptors(
-        self,
-        wrapped_cls: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Tuple[WrappedField, ...]:
-        wrapped_cls = self.get_wrapped_class(wrapped_cls)
-        association_fields = []
-        for assoc in self.get_out_edges(wrapped_cls):
-            if not isinstance(assoc, Association):
-                continue
-            if not assoc.field.property_descriptor:
-                continue
-            other_prop_type = type(assoc.field.property_descriptor)
-            if (
-                issubclass(property_descriptor_cls, other_prop_type)
-                and property_descriptor_cls is not other_prop_type
-            ):
-                association_fields.append(assoc.field)
-        return tuple(association_fields)
-
-    @lru_cache(maxsize=None)
-    def get_the_field_of_property_descriptor_type(
-        self,
-        wrapped_cls: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Optional[WrappedField]:
-        wrapped_cls = self.get_wrapped_class(wrapped_cls)
-        for assoc in self.get_out_edges(wrapped_cls):
-            if not isinstance(assoc, Association):
-                continue
-            if not assoc.field.property_descriptor:
-                continue
-            other_prop_type = type(assoc.field.property_descriptor)
-            if property_descriptor_cls is other_prop_type:
-                return assoc.field
 
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(

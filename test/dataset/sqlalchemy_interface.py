@@ -18,7 +18,6 @@ import builtins
 import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
-import krrood.entity_query_language.property_descriptor
 import krrood.entity_query_language.symbol_graph
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
@@ -758,27 +757,6 @@ class BinaryPredicateDAO(
     }
 
 
-class PropertyDescriptorDAO(
-    BinaryPredicateDAO,
-    DataAccessObject[
-        krrood.entity_query_language.property_descriptor.PropertyDescriptor
-    ],
-):
-
-    __tablename__ = "PropertyDescriptorDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BinaryPredicateDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "PropertyDescriptorDAO",
-        "inherit_condition": database_id == BinaryPredicateDAO.database_id,
-    }
-
-
 class PrivateDefaultFactoryDAO(
     SymbolDAO, DataAccessObject[test.dataset.example_classes.PrivateDefaultFactory]
 ):
@@ -962,22 +940,6 @@ class SymbolGraphMappingDAO(
         foreign_keys="[PredicateRelationDAO.symbolgraphmappingdao_predicate_relations_id]",
         post_update=True,
     )
-
-
-class ThingDAO(
-    SymbolDAO, DataAccessObject[krrood.entity_query_language.property_descriptor.Thing]
-):
-
-    __tablename__ = "ThingDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "ThingDAO",
-        "inherit_condition": database_id == SymbolDAO.database_id,
-    }
 
 
 class TorsoDAO(KinematicChainDAO, DataAccessObject[test.dataset.example_classes.Torso]):

@@ -18,7 +18,6 @@ from typing_extensions import (
     Set,
 )
 
-from .attribute_introspector import DescriptorAwareIntrospector
 from .utils import recursive_subclasses
 from .. import logger
 from ..class_diagrams import ClassDiagram, Relation
@@ -274,7 +273,7 @@ class SymbolGraph:
             for cls_ in copy(symbols_registry):
                 symbols_registry.update(recursive_subclasses(cls_))
             classes = symbols_registry
-        return SymbolGraph(ClassDiagram(list(classes), DescriptorAwareIntrospector()))
+        return SymbolGraph(ClassDiagram(list(classes)))
 
     def to_dot(
         self,

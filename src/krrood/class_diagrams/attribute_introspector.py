@@ -6,9 +6,6 @@ from dataclasses import fields as dc_fields
 
 from typing_extensions import Dict, Iterable, List, Type, Optional, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
-
 
 @dataclass
 class DiscoveredAttribute:
@@ -18,8 +15,6 @@ class DiscoveredAttribute:
     """The dataclass field object that is wrapped."""
     public_name: Optional[str] = None
     """The public name of the field."""
-    property_descriptor: Optional[PropertyDescriptor] = None
-    """The property descriptor instance that manages the field."""
 
     def __post_init__(self):
         if self.public_name is None:

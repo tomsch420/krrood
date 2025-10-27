@@ -14,7 +14,6 @@ from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
 )
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor
 from krrood.entity_query_language.symbolic import Variable
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import AlternativeMapping
@@ -132,7 +131,6 @@ def cleanup_after_test():
         c.clear()
     Variable._cache_.clear()
     SymbolGraph().clear()
-    PropertyDescriptor.clear_subproperties_cache()
 
 
 @pytest.fixture(scope="session")
