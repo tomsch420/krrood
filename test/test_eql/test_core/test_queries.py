@@ -217,7 +217,6 @@ def test_nested_specified_property_predicate_form_without_entity_without_domain(
     assert results[0].child.name == "Handle1"
 
 
-@pytest.mark.skip(reason="Not my code not my problem")
 def test_nested_property_with_extra_conditions_predicate_form(
     handles_and_containers_world,
 ):
