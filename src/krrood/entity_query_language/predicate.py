@@ -93,9 +93,7 @@ class Symbol:
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
-            PredicateType.SubClassOfPredicate
-            if issubclass(cls, BinaryPredicate)
-            else None
+            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
         )
         node = SymbolicExpression._current_parent_()
         args = bind_first_argument_of_predicate_if_in_query_context(

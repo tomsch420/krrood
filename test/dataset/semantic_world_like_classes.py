@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Iterable
 
-from typing_extensions import List, Optional
+from typing_extensions import List, Optional, Type
 
-from krrood.entity_query_language.predicate import Symbol
+from krrood.entity_query_language.predicate import Symbol, Predicate
 
 
 @dataclass(unsafe_hash=True)
@@ -112,3 +113,33 @@ class Wardrobe(View):
     handle: Handle
     body: Body
     container: Container
+
+
+@dataclass
+class Apple(Body): ...
+
+
+@dataclass
+class FruitBox(Symbol):
+    name: str
+    fruits: List[Body]
+
+
+@dataclass
+class ContainsType(Predicate):
+    """
+    Predicate that checks if any object in the iterable is of the given type.
+    """
+
+    iterable: Iterable
+    """
+    Iterable to check for objects of the given type.
+    """
+
+    obj_type: Type
+    """
+    Object type to check for.
+    """
+
+    def __call__(self) -> bool:
+        return any(isinstance(obj, self.obj_type) for obj in self.iterable)
