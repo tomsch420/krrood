@@ -37,7 +37,7 @@ from scipy import sparse as sp
 from krrood.entity_query_language.entity import entity, an, let, contains, in_
 from krrood.entity_query_language.predicate import Symbol, Predicate, symbolic_function
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.entity_query_language.symbolic import symbolic_mode
+from krrood.entity_query_language.symbolic import symbolic_mode, in_symbolic_mode
 from krrood.symbolic_math.exceptions import HasFreeSymbolsError, NotSquareMatrixError
 
 EPS: float = sys.float_info.epsilon * 4.0
@@ -705,7 +705,7 @@ class MatrixOperationsMixin:
 
 
 @dataclass(eq=False)
-class MathSymbol(CasadiScalarWrapper, Symbol, BasicOperatorMixin):
+class MathSymbol(CasadiScalarWrapper, BasicOperatorMixin, Symbol):
     """
     A symbolic expression, which should be only a single symbols.
     No matrix and no numbers.
@@ -715,8 +715,21 @@ class MathSymbol(CasadiScalarWrapper, Symbol, BasicOperatorMixin):
 
     casadi_sx: ca.SX = field(kw_only=True, init=False, default=None)
 
+    _registry: ClassVar[Dict[str, ca.SX]] = {}
+    """
+    To avoid two symbols with the same name, references to existing symbols are stored on a class level.
+    """
+
     def __post_init__(self):
-        self.casadi_sx = ca.SX.sym(self.name)
+        """
+        Multiton design pattern prevents two symbol instances with the same name.
+        """
+        cls = self.__class__
+        if self.name in cls._registry:
+            self.casadi_sx = cls._registry[self.name]
+        else:
+            self.casadi_sx = ca.SX.sym(self.name)
+            cls._registry[self.name] = self.casadi_sx
 
     @classmethod
     def from_casadi_sx(cls, expression: casadi.SX) -> Self:
