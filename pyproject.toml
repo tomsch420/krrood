@@ -51,7 +51,7 @@ include = ["krrood*"]
 exclude = ["test*"]
 
 [tool.setuptools.package-data]
-my_library = ["ormatic/templates/*.j2"]  # glob patterns allowed
+krrood = ["ormatic/templates/*.j2"]  # glob patterns allowed
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
