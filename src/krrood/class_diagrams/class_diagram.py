@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import dataclasses
 import logging
 from abc import ABC
-from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass
-from dataclasses import field, InitVar, fields
+from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
-from types import NoneType
-from typing_extensions import List, Optional, Dict, Iterable, Union, Any, Tuple, Set
 
 import rustworkx as rx
 from rustworkx_utils import RWXNode
-from typing_extensions import Type, TYPE_CHECKING
+from typing_extensions import List, Optional, Dict, Union, Tuple
+from typing_extensions import Type
 
 from .attribute_introspector import (
     AttributeIntrospector,

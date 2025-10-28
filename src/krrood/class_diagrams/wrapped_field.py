@@ -29,7 +29,6 @@ from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -63,11 +62,6 @@ class WrappedField:
     public_name: Optional[str] = None
     """
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
-    """
-
-    property_descriptor: Optional[PropertyDescriptor] = None
-    """
-    The property descriptor instance that manages the field.
     """
 
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
@@ -245,6 +239,7 @@ def search_class_in_globals(target_class_name: str) -> List[Type]:
         for name, value in globals().items()
         if inspect.isclass(value) and value.__name__ == target_class_name
     ]
+
 
 def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
     """

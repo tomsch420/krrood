@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
 from typing_extensions import (
     Generic,
     Optional,
@@ -9,13 +10,10 @@ from typing_extensions import (
     Any,
     Callable,
     List,
-    Union,
 )
-
 from typing_extensions import TypeVar, ClassVar
 
 from .utils import make_list, ALL
-
 
 T = TypeVar("T")
 
