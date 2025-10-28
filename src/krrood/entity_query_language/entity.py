@@ -32,8 +32,8 @@ from .symbolic import (
 from .symbol_graph import symbols_registry
 from .predicate import (
     Predicate,
-    symbolic_function,
-    BinaryPredicate,
+    symbolic_function,  # type: ignore
+    BinaryPredicate,  # type: ignore
 )
 
 T = TypeVar("T")  # Define type variable "T"
