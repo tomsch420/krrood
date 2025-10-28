@@ -1,6 +1,12 @@
 import inspect
 import sys
-from typing import List, Type
+from dataclasses import dataclass
+from typing_extensions import List, Type, Generic, TYPE_CHECKING
+
+from typing_extensions import TypeVar, get_origin, get_args
+
+if TYPE_CHECKING:
+    from krrood.class_diagrams.class_diagram import Association
 
 
 def classes_of_module(module) -> List[Type]:
@@ -20,3 +26,33 @@ def classes_of_module(module) -> List[Type]:
 
 def is_builtin_class(clazz: Type) -> bool:
     return clazz.__module__ == "builtins"
+
+
+T = TypeVar("T")
+
+
+@dataclass
+class Role(Generic[T]):
+    """
+    Represents a role with generic typing. This is used in Role Design Pattern in OOP.
+
+    This class serves as a container for defining roles with associated generic
+    types, enabling flexibility and type safety when modeling role-specific
+    behavior and data.
+    """
+
+
+def get_generic_type_param(cls, generic_base):
+    """
+    Given a subclass and its generic base, return the concrete type parameter(s).
+
+    Example:
+        get_generic_type_param(Employee, Role) -> (<class '__main__.Person'>,)
+    """
+    for base in getattr(cls, "__orig_bases__", []):
+        base_origin = get_origin(base)
+        if base_origin is None:
+            continue
+        if issubclass(get_origin(base), generic_base):
+            return get_args(base)
+    return None

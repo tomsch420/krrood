@@ -1,30 +1,24 @@
 from __future__ import annotations
 
 import inspect
-import typing
 from abc import ABC, abstractmethod
 from collections import deque
-from copy import copy
-from dataclasses import dataclass, field, Field
-from functools import wraps, cached_property
-from typing_extensions import (
-    Callable,
-    Optional,
-    Any,
-    Type,
-    Tuple,
-    ClassVar,
-    Iterable,
-    List,
-    TypeVar,
-    Generic,
-    Set,
-)
+from dataclasses import dataclass
+from functools import wraps
+
+from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
+
+from typing_extensions import ClassVar, Iterable
 
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
-from .symbol_graph import PredicateRelation, SymbolGraph, WrappedInstance
+from .symbol_graph import (
+    PredicateRelation,
+    WrappedInstance,
+    SymbolGraph,
+    symbols_registry,
+)
 from .symbolic import (
     T,
     SymbolicExpression,
@@ -36,16 +30,20 @@ from .symbolic import (
     AND,
     properties_to_expression_tree,
     From,
+    Flatten,
 )
-from .typing_utils import get_range_types
-from .utils import is_iterable, make_list, make_set
-from ..class_diagrams import ClassDiagram
+from .utils import is_iterable, make_list
+from ..class_diagrams.wrapped_field import WrappedField
 
-symbols_registry: typing.Set[Type] = set()
 cls_args = {}
+"""
+Cache of class arguments.
+"""
 
 
-def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]]:
+def symbolic_function(
+    function: Callable[..., T],
+) -> Callable[..., SymbolicExpression[T]]:
     """
     Function decorator that constructs a symbolic expression representing the function call
      when inside a symbolic_rule context.
@@ -77,13 +75,6 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
     return wrapper
 
 
-def recursive_subclasses(cls_):
-    subclasses = cls_.__subclasses__()
-    for subclass in subclasses:
-        yield from recursive_subclasses(subclass)
-        yield subclass
-
-
 @dataclass
 class Symbol:
     """Base class for things that can be described by property descriptors."""
@@ -92,9 +83,8 @@ class Symbol:
         if in_symbolic_mode():
             return cls._symbolic_new_(cls, *args, **kwargs)
         else:
-            instance = instantiate_class_and_update_cache(
-                cls, super().__new__, *args, **kwargs
-            )
+            instance = super().__new__(cls)
+            update_cache(instance)
             return instance
 
     def __init_subclass__(cls, **kwargs):
@@ -103,7 +93,9 @@ class Symbol:
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
-            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
+            PredicateType.SubClassOfPredicate
+            if issubclass(cls, BinaryPredicate)
+            else None
         )
         node = SymbolicExpression._current_parent_()
         args = bind_first_argument_of_predicate_if_in_query_context(
@@ -133,85 +125,110 @@ class Symbol:
             return An(Entity(expression, [var])) if expression else var
 
 
-class ThingMeta(type):
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
-        for attr_name, attr_value in copy(attrs).items():
-            if attr_name.startswith("__"):
-                continue
-            if isinstance(attr_value, Field):
-                if isinstance(attr_value.default_factory, type) and issubclass(
-                    attr_value.default_factory, PropertyDescriptor
-                ):
-                    instance = attr_value.default_factory(_cls_=cls)
-                    instance.create_managed_attribute_for_class(cls, attr_name)
-
-                    # Important: remove original annotation so dataclass does not shadow the descriptor
-                    if attr_name in cls.__annotations__:
-                        del cls.__annotations__[attr_name]
-
-                    # Bind the descriptor at the class attribute name so __get__/__set__ are used
-                    setattr(cls, attr_name, instance)
-
-
-@dataclass
-class Thing(Symbol, metaclass=ThingMeta): ...
-
-
 @dataclass(eq=False)
 class Predicate(Symbol, ABC):
     """
-    The super predicate class that represents a filtration operation.
+    The super predicate class that represents a filtration operation or asserts a relation.
     """
 
     is_expensive: ClassVar[bool] = False
-    transitive: ClassVar[bool] = False
-    inverse_of: ClassVar[Optional[Type[Predicate]]] = None
-    symbol_graph: ClassVar[SymbolGraph] = SymbolGraph(ClassDiagram([]))
 
-    @classmethod
-    def build_symbol_graph(cls, classes: List[Type] = None):
-        if not classes:
-            for cls_ in copy(symbols_registry):
-                symbols_registry.update(recursive_subclasses(cls_))
-            classes = symbols_registry
-        cls.symbol_graph = SymbolGraph(ClassDiagram(list(classes)))
+    @abstractmethod
+    def __call__(self) -> bool:
+        """
+        Evaluate the predicate for the supplied values.
+        """
+
+
+@dataclass(eq=False)
+class BinaryPredicate(Predicate, ABC):
+    """
+    A predicate that has a domain and a range.
+    """
+
+    transitive: ClassVar[bool] = False
+    inverse_of: ClassVar[Optional[Type[BinaryPredicate]]] = None
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         inverse = getattr(cls, "inverse_of", None)
         if inverse is not None:
-            if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
+            if not isinstance(inverse, type) or not issubclass(
+                inverse, BinaryPredicate
+            ):
                 raise TypeError("inverse_of must be set to a Predicate subclass")
             if getattr(inverse, "inverse_of", None) is None:
                 inverse.inverse_of = cls
 
-    # New: subclasses implement these two hooks.
+    @classmethod
     @abstractmethod
-    def _holds_direct(self) -> bool:
+    def holds_direct(
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
+    ) -> bool:
         """
         Return True if the relation holds directly (non-transitively) between
         the given domain and range values.
         """
         ...
 
-    def _neighbors(self, value: Any) -> Iterable[Any]:
+    @property
+    def domain_value(self):
+        """
+        Property that retrieves the domain value for the current instance.
+
+        This property should be implemented in a subclass where it returns
+        the specific domain value. Attempting to access it directly from
+        this base implementation will raise a NotImplementedError.
+
+        :raise: NotImplementedError: If the property is accessed and not
+                implemented in a subclass.
+        """
+        raise NotImplementedError
+
+    @property
+    def range_value(self):
+        """
+        Gets the range value. This is an abstract property and must be implemented
+        by subclasses to return a value indicating the range.
+
+        :raises NotImplementedError: If not implemented in a subclass.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def _neighbors(cls, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
         """
         Return direct neighbors of the given value to traverse when transitivity is enabled.
         Default is no neighbors (non-transitive or leaf).
+
+        :param value: The value to get neighbors for.
+        :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
+        :return: Iterable of neighbors.
         """
-        wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
+        wrapped_instance = SymbolGraph().get_wrapped_instance(value)
         if not wrapped_instance:
             return
-        yield from (
-            n.instance
-            for n in self.symbol_graph.get_outgoing_neighbors_with_edge_type(
-                wrapped_instance, self.__class__
+        if outgoing:
+            yield from (
+                n.instance
+                for n in SymbolGraph().get_outgoing_neighbors_with_predicate_type(
+                    wrapped_instance, cls
+                )
             )
-        )
+        else:
+            yield from (
+                n.instance
+                for n in SymbolGraph().get_incoming_neighbors_with_predicate_type(
+                    wrapped_instance, cls
+                )
+            )
 
     def __call__(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
+        self,
+        domain_value: Optional[Symbol] = None,
+        range_value: Optional[Symbol] = None,
     ) -> bool:
         """
         Evaluate the predicate for the supplied values. If `transitive` is set,
@@ -220,89 +237,84 @@ class Predicate(Symbol, ABC):
         """
         domain_value = domain_value or self.domain_value
         range_value = range_value or self.range_value
-
-        if self._holds_direct(domain_value, range_value):
-            self.add_relation(domain_value, range_value)
-            return True
-        if not self.transitive:
-            return False
-
-        # BFS with cycle protection
-        visited = set()
-        queue = deque()
-
-        start = HashedValue(domain_value)
-        visited.add(start)
-        queue.append(domain_value)
-
-        while queue:
-            current = queue.popleft()
-            for nxt in self._neighbors(current):
-                if self._holds_direct(nxt, range_value):
-                    self.add_relation(domain_value, range_value, inferred=True)
-                    return True
-                key = HashedValue(nxt)
-                if key not in visited:
-                    visited.add(key)
-                    queue.append(nxt)
-        return False
-
-    @property
-    def inverse(self) -> Optional[Predicate]:
-        return None
+        return self.holds_direct(domain_value, range_value)
 
     def add_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
         inferred: bool = False,
     ):
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
         if range_value is None:
             raise ValueError(
-                f"range_value cannot be None for {self.__class__}, domain={domain_value}"
+                f"range_value cannot be None for {cls}, domain={domain_value}"
             )
         range_value = make_list(range_value)
         for rv in range_value:
-            self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
-            if self.inverse:
-                self.inverse.add_relation(rv, domain_value)
+            SymbolGraph().add_edge(cls.get_relation(domain_value, rv, inferred))
+            if cls.transitive:
+                for nxt in cls._neighbors(rv):
+                    cls.add_relation(domain_value, nxt, inferred=True)
+                for nxt in cls._neighbors(domain_value, outgoing=False):
+                    cls.add_relation(nxt, rv, inferred=True)
 
+    @classmethod
     def get_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        cls,
+        domain_value: Symbol,
+        range_value: Symbol,
         inferred: bool = False,
     ) -> PredicateRelation:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        wrapped_domain_instance = self.symbol_graph.get_wrapped_instance(domain_value)
+        """
+        Gets or creates a relation between two symbols, representing the domain and range
+        values. The function ensures that the symbols are wrapped in instances, adding
+        them to the symbol graph if they do not already exist. It then creates and returns
+        a `PredicateRelation` object linking the domain and range symbols.
+
+        :param domain_value: The symbol representing the domain value.
+        :param range_value: The symbol representing the range value.
+        :param inferred: A boolean flag indicating whether the relationship is inferred. Defaults to False.
+
+        :return: A `PredicateRelation` instance that links the given domain and range values.
+        """
+        wrapped_domain_instance = SymbolGraph().get_wrapped_instance(domain_value)
         if not wrapped_domain_instance:
             wrapped_domain_instance = WrappedInstance(domain_value)
-            self.symbol_graph.add_node(wrapped_domain_instance)
-        wrapped_range_instance = self.symbol_graph.get_wrapped_instance(range_value)
+            SymbolGraph().add_node(wrapped_domain_instance)
+        wrapped_range_instance = SymbolGraph().get_wrapped_instance(range_value)
         if not wrapped_range_instance:
             wrapped_range_instance = WrappedInstance(range_value)
-            self.symbol_graph.add_node(wrapped_range_instance)
+            SymbolGraph().add_node(wrapped_range_instance)
         return PredicateRelation(
             wrapped_domain_instance,
             wrapped_range_instance,
-            self,
+            cls(domain_value, range_value),
             inferred=inferred,
         )
 
 
 @dataclass(eq=False)
-class HasType(Predicate):
-    variable: Any
-    types_: Type
-    is_expensive: ClassVar[bool] = False
+class HasType(BinaryPredicate):
+    """
+    Represents a predicate to check if a given variable is an instance of a specified type.
 
-    def _holds_direct(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        return isinstance(self.variable, self.types_)
+    This class is used to evaluate whether the domain value belongs to a given type by leveraging
+    Python's built-in `isinstance` functionality. It provides methods to retrieve the domain and
+    range values and perform direct checks.
+    """
+
+    variable: Any
+    """
+    The variable whose type is being checked.
+    """
+    types_: Type
+    """
+    The type or tuple of types against which the `variable` is validated.
+    """
+
+    @classmethod
+    def holds_direct(cls, domain_value: Any, range_value: Type) -> bool:
+        return isinstance(domain_value, range_value)
 
     @property
     def domain_value(self):
@@ -315,12 +327,36 @@ class HasType(Predicate):
 
 @dataclass(eq=False)
 class HasTypes(HasType):
+    """
+    Represents a specialized data structure holding multiple types.
+
+    This class is a data container designed to store and manage a tuple of
+    types. It inherits from the `HasType` class and extends its functionality
+    to handle multiple types efficiently. The primary goal of this class is to
+    allow structured representation and access to a collection of type
+    information with equality comparison explicitly disabled.
+    """
+
     types_: Tuple[Type, ...]
+    """
+    A tuple containing Type objects that are associated with this instance.
+    """
 
 
 def bind_first_argument_of_predicate_if_in_query_context(
     node: SymbolicExpression, predicate_type: Optional[PredicateType], *args
 ):
+    """
+    Binds the first argument of a predicate to a result quantifier's selected variable if
+    in a query context and predicate type is specified.
+
+    :param node: The symbolic expression node to evaluate or use.
+    :param predicate_type: The type of predicate, can be None.
+    :param args: Additional arguments to bind with the predicate.
+
+    :return: A list of arguments where the first argument of the predicate is potentially
+        replaced by the result quantifier's selected variable.
+    """
     if predicate_type and node and in_symbolic_mode(EQLMode.Query):
         if not isinstance(node, ResultQuantifier):
             result_quantifier = node._parent_._parent_
@@ -336,6 +372,18 @@ def update_query_child_expression_if_in_query_context(
     predicate_type: Optional[PredicateType],
     var: SymbolicExpression,
 ):
+    """
+    Updates the child expression of a given symbolic expression node in the context of a
+    query mode. This function modifies the structure of the symbolic expression to inject
+    a logical condition involving the provided variable, based on the specified predicate
+    type and the current query mode.
+
+    :param node: The symbolic expression node whose child expression may be updated.
+    :param predicate_type: The type of logical predicate guiding the behavior of this update.
+    :param var: The symbolic expression to be integrated into the node's child expression if applicable.
+    :raise: AssertionError: If any condition for in_symbolic_mode or other logical assertions fail during
+        execution.
+    """
     if predicate_type and node and in_symbolic_mode(EQLMode.Query):
         if node._child_._child_:
             node._child_._child_ = AND(node._child_._child_, var)
@@ -376,11 +424,18 @@ def extract_selected_variable_and_expression(
     **kwargs,
 ):
     """
-    :param symbolic_cls: The constructed class.
-    :param domain: The domain source for the values of the variable by.
-    :param predicate_type: The predicate type.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The selected variable and expression.
+    Extracts a variable and constructs its expression tree for the given symbolic class.
+
+    This function generates a variable of the specified `symbolic_cls` and uses the
+    provided domain, predicate type, and additional arguments to create its expression
+    tree. The domain can optionally be filtered when iterating through its elements
+    if specified or retrieved from the cache keys associated with the symbolic class.
+
+    :param symbolic_cls: The symbolic class type to be used for variable creation.
+    :param domain: Optional domain to provide constraints for the variable.
+    :param predicate_type: Optional predicate type associated with the variable.
+    :param kwargs: Additional properties to define and construct the variable.
+    :return: A tuple containing the generated variable and its corresponding expression tree.
     """
     cache_keys = get_cache_keys_for_class_(Variable._cache_, symbolic_cls)
     if not domain and cache_keys:
@@ -411,17 +466,18 @@ def extract_selected_variable_and_expression(
     return var, expression
 
 
-def instantiate_class_and_update_cache(
-    symbolic_cls: Type, original_new: Callable, *args, **kwargs
-):
+def update_cache(instance: Symbol):
     """
-    :param symbolic_cls: The constructed class.
-    :param original_new: The original class __new__ method.
-    :param args: The positional arguments to the class constructor.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The instantiated class.
+    Updates the cache with the given instance of a symbolic type. The function ensures
+    proper handling of symbolic class cache, updates associated arguments, and adds
+    relevant instances to the variable cache and symbol graph. This function operates
+    based on the type and characteristics of the given instance.
+
+    :param instance: The symbolic instance to be cached, which can include types such as
+        Symbol or BinaryPredicate, among others.
+    :return: Returns the updated instance that has been added to the cache.
     """
-    instance = original_new(symbolic_cls)
+    symbolic_cls = type(instance)
     index = index_class_cache(symbolic_cls)
     if index:
         update_cls_args(symbolic_cls)
@@ -435,13 +491,27 @@ def instantiate_class_and_update_cache(
             Variable._cache_[symbolic_cls].keys = kwargs.keys()
     else:
         kwargs = {}
-    Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    if not isinstance(instance, Predicate):
-        Predicate.symbol_graph.add_node(WrappedInstance(instance))
+    if not isinstance(instance, BinaryPredicate) and isinstance(instance, Symbol):
+        Variable._cache_[symbolic_cls].insert(
+            kwargs, HashedValue(instance), index=index
+        )
+        SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
 
 def update_cls_args(symbolic_cls: Type):
+    """
+    Updates the global `cls_args` dictionary with the constructor arguments
+    of the given symbolic class, if it is not already present. The keys in
+    `cls_args` are symbolic class types, and the values are lists of
+    constructor parameter names for those classes.
+
+    This function inspects the signature of the `__init__` method of the
+    given symbolic class and stores the parameter names if the class
+    is not already in the global `cls_args`.
+
+    :param symbolic_cls: A symbolic class type to be inspected.
+    """
     global cls_args
     if symbolic_cls not in cls_args:
         cls_args[symbolic_cls] = list(
@@ -452,184 +522,7 @@ def update_cls_args(symbolic_cls: Type):
 def index_class_cache(symbolic_cls: Type) -> bool:
     """
     Determine whether the class cache should be indexed.
+
+    :param symbolic_cls: The symbolic class type.
     """
-    return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive
-
-
-T = TypeVar("T")
-
-
-@dataclass
-class PropertyDescriptor(Generic[T], Predicate):
-    """Descriptor storing values on instances while keeping type metadata on the descriptor.
-
-    When used on dataclass fields and combined with Thing, the descriptor
-    injects a hidden dataclass-managed attribute (backing storage) into the owner class
-    and collects domain and range types for introspection.
-    """
-
-    domain_types: ClassVar[Set[Type]] = set()
-    range_types: ClassVar[Set[Type]] = set()
-
-    _domain_value: Optional[Any] = None
-    _range_value: Optional[Any] = None
-    _cls_: Optional[Type] = None
-
-    def __set_name__(self, owner, name):
-        # Only wire once per owner
-        if not hasattr(owner, self.attr_name):
-            self.create_managed_attribute_for_class(owner, name)
-
-    @property
-    def domain_value(self) -> Optional[Any]:
-        return self._domain_value
-
-    @property
-    def range_value(self) -> Optional[Any]:
-        return self._range_value
-
-    @cached_property
-    def attr_name(self) -> str:
-        return f"_{self.name}_{id(self)}"
-
-    @cached_property
-    def name(self) -> str:
-        name = self.__class__.__name__
-        return name[0].lower() + name[1:]
-
-    @cached_property
-    def nullable(self) -> bool:
-        return type(None) in self.range_types
-
-    def create_managed_attribute_for_class(self, cls: Type, attr_name: str) -> None:
-        """Create hidden dataclass field to store instance values and update type sets."""
-        setattr(
-            cls,
-            self.attr_name,
-            field(
-                default_factory=list,
-                init=False,
-                repr=False,
-                hash=False,
-            ),
-        )
-        # Preserve the declared annotation for the hidden field
-        cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
-
-        self.update_domain_types(cls)
-        self.update_range_types(cls, attr_name)
-
-    def update_domain_types(self, cls: Type) -> None:
-        """
-        Add a class to the domain types if it is not already a subclass of any existing domain type.
-
-        This method is used to keep track of the classes that are valid as values for the property descriptor.
-        It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
-        :param cls: The class to add to the domain types.
-        :return: None
-        """
-        if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
-            return
-        self.domain_types.add(cls)
-
-    def update_range_types(self, cls: Type, attr_name: str) -> None:
-        type_hint = cls.__annotations__[attr_name]
-        if isinstance(type_hint, str):
-            try:
-                type_hint = eval(
-                    type_hint, vars(__import__(cls.__module__, fromlist=["*"]))
-                )
-            except NameError:
-                # Try again with the class under construction injected; if still failing, skip for now.
-                try:
-                    module_globals = vars(
-                        __import__(cls.__module__, fromlist=["*"])
-                    ).copy()
-                    module_globals[cls.__name__] = cls
-                    type_hint = eval(type_hint, module_globals)
-                except NameError:
-                    return
-        for new_type in get_range_types(type_hint):
-            try:
-                is_sub = any(
-                    issubclass(new_type, range_cls) for range_cls in self.range_types
-                )
-            except TypeError:
-                # new_type is not a class (e.g., typing constructs); skip subclass check
-                is_sub = False
-            if is_sub:
-                continue
-            try:
-                self.range_types.add(new_type)
-            except TypeError:
-                # Unhashable or invalid type; ignore
-                continue
-
-    def __get__(self, obj, objtype=None):
-        if obj is None:
-            return self
-        return getattr(obj, self.attr_name)
-
-    def __set__(self, obj, value):
-        if isinstance(value, PropertyDescriptor):
-            return
-        setattr(obj, self.attr_name, value)
-        self.add_relation(obj, value)
-
-    def _holds_direct(
-        self, domain_value: Optional[Any], range_value: Optional[Any]
-    ) -> bool:
-        """Return True if `range_value` is contained directly in the property of `domain_value`.
-        Also consider sub-properties declared on the domain type.
-        """
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-
-        # If the concrete instance has our backing attribute, check it directly.
-        if hasattr(domain_value, self.attr_name):
-            return self._check_relation_value(
-                attr_name=self.attr_name,
-                domain_value=domain_value,
-                range_value=range_value,
-            )
-        # Otherwise, look through sub-properties of this property.
-        return self._check_relation_holds_for_subclasses_of_property(
-            domain_value=domain_value, range_value=range_value
-        )
-
-    def _check_relation_holds_for_subclasses_of_property(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        for prop_data in self.get_sub_properties(domain_value):
-            if self._check_relation_value(
-                prop_data.attr_name, domain_value=domain_value, range_value=range_value
-            ):
-                return True
-        return False
-
-    def _check_relation_value(
-        self,
-        attr_name: str,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
-    ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        attr_value = getattr(domain_value, attr_name)
-        if make_set(range_value).issubset(make_set(attr_value)):
-            return True
-        # Do not handle transitivity here; it is now centralized in Predicate.__call__
-        return False
-
-    def get_sub_properties(
-        self, domain_value: Optional[Any] = None
-    ) -> Iterable[PropertyDescriptor]:
-        domain_value = domain_value or self.domain_value
-        for attr_name in dir(domain_value.__class__):
-            if attr_name.startswith("_"):
-                continue
-            attr_value = getattr(domain_value.__class__, attr_name)
-            if issubclass(type(attr_value), self.__class__):
-                yield attr_value
+    return issubclass(symbolic_cls, BinaryPredicate) and symbolic_cls.is_expensive

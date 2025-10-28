@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Any, Optional
+from typing_extensions import List, Any, Optional
 import operator
 
 import sqlalchemy.inspection

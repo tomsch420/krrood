@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from typing import Union, TYPE_CHECKING
+from typing_extensions import Union, TYPE_CHECKING
 
 from .hashed_data import T
 from .enums import RDREdge
-from .symbolic import SymbolicExpression, chained_logic, AND, BinaryOperator, Variable, properties_to_expression_tree, \
-    CanBehaveLikeAVariable, ResultQuantifier
+from .symbolic import (
+    SymbolicExpression,
+    chained_logic,
+    AND,
+    BinaryOperator,
+)
 from .conclusion_selector import ExceptIf, Alternative, ConclusionSelector, Next
 
 if TYPE_CHECKING:
-    from .predicate import Predicate
+    from .predicate import BinaryPredicate
 
 
-def refinement(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> SymbolicExpression[T]:
+def refinement(
+    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
+) -> SymbolicExpression[T]:
     """
     Add a refinement branch (ExceptIf node with its right the new conditions and its left the base/parent rule/query)
      to the current condition tree.
@@ -33,7 +39,9 @@ def refinement(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> Sy
     return new_conditions_root.right
 
 
-def alternative(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> SymbolicExpression[T]:
+def alternative(
+    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
+) -> SymbolicExpression[T]:
     """
     Add an alternative branch (logical ElseIf) to the current condition tree.
 
@@ -46,7 +54,9 @@ def alternative(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> S
     return alternative_or_next(RDREdge.Alternative, *conditions)
 
 
-def next_rule(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> SymbolicExpression[T]:
+def next_rule(
+    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
+) -> SymbolicExpression[T]:
     """
     Add a consequent rule that gets always executed after the current rule.
 
@@ -59,8 +69,10 @@ def next_rule(*conditions: Union[SymbolicExpression[T], bool, Predicate]) -> Sym
     return alternative_or_next(RDREdge.Next, *conditions)
 
 
-def alternative_or_next(type_: Union[RDREdge.Alternative, RDREdge.Next],
-                        *conditions: Union[SymbolicExpression[T], bool, Predicate]) -> SymbolicExpression[T]:
+def alternative_or_next(
+    type_: Union[RDREdge.Alternative, RDREdge.Next],
+    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate],
+) -> SymbolicExpression[T]:
     """
     Add an alternative/next branch to the current condition tree.
 
@@ -75,7 +87,10 @@ def alternative_or_next(type_: Union[RDREdge.Alternative, RDREdge.Next],
     current_node = SymbolicExpression._current_parent_()
     if isinstance(current_node._parent_, (Alternative, Next)):
         current_node = current_node._parent_
-    elif isinstance(current_node._parent_, ExceptIf) and current_node is current_node._parent_.left:
+    elif (
+        isinstance(current_node._parent_, ExceptIf)
+        and current_node is current_node._parent_.left
+    ):
         current_node = current_node._parent_
     prev_parent = current_node._parent_
     current_node._parent_ = None
@@ -84,7 +99,9 @@ def alternative_or_next(type_: Union[RDREdge.Alternative, RDREdge.Next],
     elif type_ == RDREdge.Next:
         new_conditions_root = Next(current_node, new_branch)
     else:
-        raise ValueError(f"Invalid type: {type_}, expected one of: {RDREdge.Alternative}, {RDREdge.Next}")
+        raise ValueError(
+            f"Invalid type: {type_}, expected one of: {RDREdge.Alternative}, {RDREdge.Next}"
+        )
     new_branch._node_.weight = type_
     new_conditions_root._parent_ = prev_parent
     if isinstance(prev_parent, BinaryOperator):

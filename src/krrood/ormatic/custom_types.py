@@ -1,5 +1,5 @@
 import importlib
-from typing import Type, Optional
+from typing_extensions import Type, Optional
 
 from sqlalchemy import TypeDecorator
 from sqlalchemy import types

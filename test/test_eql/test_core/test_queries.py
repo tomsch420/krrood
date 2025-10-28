@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from math import factorial
 
 import pytest
 
@@ -10,7 +11,7 @@ from krrood.entity_query_language.entity import (
     in_,
     symbolic_mode,
     From,
-    Predicate,
+    BinaryPredicate,
     an,
     entity,
     set_of,
@@ -24,8 +25,8 @@ from krrood.entity_query_language.cache_data import (
     cache_match_count,
 )
 from krrood.entity_query_language.failures import MultipleSolutionFound
-from krrood.entity_query_language.predicate import HasType, predicate
-from ..dataset.semantic_world_like_classes import (
+from krrood.entity_query_language.predicate import HasType, symbolic_function, Predicate
+from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
     Container,
@@ -740,7 +741,7 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     """
     world = handles_and_containers_world
 
-    @predicate
+    @symbolic_function
     def is_handle(body_: Body):
         return body_.name.startswith("Handle")
 
@@ -756,44 +757,115 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     ), "All generated items should be of type Handle."
 
 
-def test_generate_with_using_inherited_predicate(handles_and_containers_world):
+def test_generate_with_using_inherited_binary_predicate(handles_and_containers_world):
     """
     Test the generation of handles in the HandlesAndContainersWorld.
     """
     world = handles_and_containers_world
 
-    @dataclass()
-    class IsHandle(Predicate):
-        body: Body
+    @dataclass
+    class HaveSameFirstCharacter(Predicate):
+        body1: Body
+        body2: Body
+        body3: Body
 
-        def _holds_direct(self, domain_value=None, range_value=None):
-            return self.body.name.startswith("Handle")
+        @classmethod
+        def holds_direct(cls, body1, body2, body3):
+            return body1.name[0] == body2.name[0] == body3.name[0]
+
+        def __call__(self):
+            return self.body1.name[0] == self.body2.name[0] == self.body3.name[0]
+
+    with symbolic_mode():
+        query = a(
+            set_of(
+                (
+                    body1 := Body(From(world.bodies)),
+                    body2 := Body(From(world.bodies)),
+                    body3 := Body(From(world.bodies)),
+                ),
+                body1 != body2,
+                body2 != body3,
+                HaveSameFirstCharacter(
+                    body1,
+                    body2,
+                    body3,
+                ),
+            )
+        )
+
+    body_pairs = list(query.evaluate())
+    body_pairs = [
+        (body_pair[body1], body_pair[body2], body_pair[body3])
+        for body_pair in body_pairs
+    ]
+
+    print(body_pairs)
+    expected = factorial(
+        len([h for h in world.bodies if isinstance(h, Handle)])
+    ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
+    assert len(body_pairs) == expected, "Should generate at least one handle."
+    assert all(
+        HaveSameFirstCharacter(b1, b2, b3)() for b1, b2, b3 in body_pairs
+    ), "All generated items should satisfy the predicate."
+    assert all(
+        not HaveSameFirstCharacter(b1, b2, b3)()
+        for b1 in world.bodies
+        for b2 in world.bodies
+        for b3 in world.bodies
+        if (b1, b2, b3) not in body_pairs
+    ), ("All not generated items " "should not satisfy the " "predicate.")
+
+
+def test_generate_with_using_inherited_binary_predicate(handles_and_containers_world):
+    """
+    Test the generation of handles in the HandlesAndContainersWorld.
+    """
+    world = handles_and_containers_world
+
+    @dataclass
+    class HaveSameFirstCharacter(BinaryPredicate):
+        body1: Body
+        body2: Body
+
+        @classmethod
+        def holds_direct(cls, body1, body2):
+            return body1.name[0] == body2.name[0]
 
         @property
         def domain_value(self):
-            return self.body
+            return self.body1
 
         @property
         def range_value(self):
-            return self.body
+            return self.body2
 
     with symbolic_mode():
-        query = an(entity(body := Body(From(world.bodies)), IsHandle(body=body)))
+        query = a(
+            set_of(
+                (body1 := Body(From(world.bodies)), body2 := Body(From(world.bodies))),
+                body1 != body2,
+                HaveSameFirstCharacter(body1, body2),
+            )
+        )
 
-    handles = list(query.evaluate())
+    body_pairs = list(query.evaluate())
+    body_pairs = [(body_pair[body1], body_pair[body2]) for body_pair in body_pairs]
 
-    assert len(handles) == 3, "Should generate at least one handle."
+    print(body_pairs)
+    expected = factorial(
+        len([h for h in world.bodies if isinstance(h, Handle)])
+    ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
+    assert len(body_pairs) == expected, "Should generate at least one handle."
     assert all(
-        isinstance(h, Handle) for h in handles
-    ), "All generated items should be of type Handle."
-    assert all(
-        IsHandle(h)() for h in handles
+        HaveSameFirstCharacter(b1, b2)() for b1, b2 in body_pairs
     ), "All generated items should satisfy the predicate."
-    # assert all(not IsHandle(b).should_infer for b in world.bodies), ("All seen items should not be inferred again"
-    #                                                                  " but retrieved.")
-    assert all(not IsHandle(b)() for b in world.bodies if b not in handles), (
-        "All not generated items " "should not satisfy the " "predicate."
-    )
+    assert all(
+        not HaveSameFirstCharacter(b1, b2)()
+        for b1 in world.bodies
+        for b2 in world.bodies
+        if b1 != b2 and (b1, b2) not in body_pairs and (b2, b1) not in body_pairs
+    ), ("All not generated items " "should not satisfy the " "predicate.")
 
 
 def test_nested_query_with_or(handles_and_containers_world):

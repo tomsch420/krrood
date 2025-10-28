@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Set, Optional
-from typing import TextIO
+from typing_extensions import Set, Optional, TextIO
 
 import rustworkx as rx
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Type, Iterable, Tuple, Union
 
 """
 Utilities for hashing, rendering, and general helpers used by the
@@ -59,6 +58,56 @@ def generate_combinations(generators_dict):
     """Yield all combinations of generator values as keyword arguments"""
     for combination in itertools.product(*generators_dict.values()):
         yield dict(zip(generators_dict.keys(), combination))
+
+
+def generate_bindings(child_vars_items, sources):
+    """
+    Yield keyword-argument dictionaries for child variables using a depth‑first
+    backtracking strategy with early pruning.
+
+    The input mirrors Variable._child_vars_.items(): a sequence of (name, var)
+    pairs. Each yielded item is a mapping: name -> {var_id: HashedValue}.
+
+    The function evaluates each child variable against the current partial
+    binding "sources" so constraints can prune the search space early.
+    A simple heuristic chooses an evaluation order that prefers already bound,
+    indexed, or kwargs‑constrained variables first.
+    """
+    sources = sources or {}
+
+    def score(item):
+        name, var = item
+        return (
+            0 if var._id_ in sources else 1,
+            0 if getattr(var, "_is_indexed_", False) else 1,
+            0 if getattr(var, "_kwargs_expression_", None) else 1,
+        )
+
+    ordered = sorted(list(child_vars_items), key=score)
+
+    acc = dict(sources)  # var_id -> HashedValue
+    initially_bound = set(acc.keys())
+    selected = {}  # name -> {var_id: HashedValue}
+
+    def dfs(i: int):
+        if i == len(ordered):
+            # Emit a shallow copy because selected is mutated during DFS
+            yield dict(selected)
+            return
+        name, var = ordered[i]
+        for res in var._evaluate__(acc):
+            hv = res.get(var._id_)
+            if hv is None:
+                continue
+            acc[var._id_] = hv
+            selected[name] = {var._id_: hv}
+            yield from dfs(i + 1)
+            # backtrack
+            selected.pop(name, None)
+            if var._id_ not in initially_bound:
+                acc.pop(var._id_, None)
+
+    yield from dfs(0)
 
 
 def filter_data(data, selected_indices):
@@ -132,3 +181,10 @@ class ALL:
 
 
 All = ALL()
+
+
+def recursive_subclasses(cls_):
+    subclasses = cls_.__subclasses__()
+    for subclass in subclasses:
+        yield from recursive_subclasses(subclass)
+        yield subclass

@@ -4,7 +4,7 @@ import typing
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Dict
+from typing_extensions import Dict
 
 from typing_extensions import Any, Optional, List
 
@@ -22,6 +22,7 @@ class Conclusion(SymbolicExpression[T], ABC):
     :ivar var: The variable being affected by the conclusion.
     :ivar value: The value or expression used by the conclusion.
     """
+
     var: Variable[T]
     value: Any
     _child_: Optional[SymbolicExpression[T]] = field(init=False, default=None)
@@ -48,11 +49,14 @@ class Conclusion(SymbolicExpression[T], ABC):
 
     @property
     def _name_(self) -> str:
-        value_str = self.value._type_.__name__ if isinstance(self.value, Variable) else str(self.value)
+        value_str = (
+            self.value._type_.__name__
+            if isinstance(self.value, Variable)
+            else str(self.value)
+        )
         return f"{self.__class__.__name__}({self.var._var_._name_}, {value_str})"
 
-    def _reset_cache_(self) -> None:
-        ...
+    def _reset_cache_(self) -> None: ...
 
     @property
     def _plot_color_(self) -> ColorLegend:
@@ -63,13 +67,20 @@ class Conclusion(SymbolicExpression[T], ABC):
 class Set(Conclusion[T]):
     """Set the value of a variable in the current solution binding."""
 
-    def _evaluate__(self, sources: Optional[Dict[int, HashedValue]] = None,
-                    yield_when_false: bool = False) -> Dict[int, HashedValue]:
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Dict[int, HashedValue]:
         self._yield_when_false_ = False
         if self.var._var_._id_ not in sources:
-            parent_value = next(iter(self.var._evaluate__(sources)))[self.var._var_._id_]
+            parent_value = next(iter(self.var._evaluate__(sources)))[
+                self.var._var_._id_
+            ]
             sources[self.var._var_._id_] = parent_value
-        sources[self.var._var_._id_] = next(iter(self.value._evaluate__(sources)))[self.value._id_]
+        sources[self.var._var_._id_] = next(iter(self.value._evaluate__(sources)))[
+            self.value._id_
+        ]
         return sources
 
 
@@ -77,8 +88,11 @@ class Set(Conclusion[T]):
 class Add(Conclusion[T]):
     """Add a new value to the domain of a variable."""
 
-    def _evaluate__(self, sources: Optional[Dict[int, HashedValue]] = None,
-                    yield_when_false: bool = False) -> Dict[int, HashedValue]:
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+    ) -> Dict[int, HashedValue]:
         self._yield_when_false_ = False
         v = next(iter(self.value._evaluate__(sources)))[self.value._id_]
         sources[self.var._var_._id_] = v

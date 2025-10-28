@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import copy
 
-
 from typing_extensions import Type
 
 from .hashed_data import HashedIterable
@@ -29,6 +28,7 @@ class CacheCount:
     :ivar values: Mapping from counter name to its integer value.
     :vartype values: Dict[str, int]
     """
+
     values: Dict[str, int] = field(default_factory=lambda: defaultdict(lambda: 0))
 
     def update(self, name: str) -> None:
@@ -51,6 +51,7 @@ class CacheTime:
     :ivar values: Mapping from timer name to accumulated seconds.
     :vartype values: Dict[str, float]
     """
+
     values: Dict[str, float] = field(default_factory=lambda: defaultdict(lambda: 0.0))
 
     def add(self, name: str, seconds: float) -> None:
@@ -75,6 +76,7 @@ cache_update_time = CacheTime()
 
 # Runtime switch to enable/disable caching paths
 _caching_enabled = contextvars.ContextVar("caching_enabled", default=True)
+
 
 def enable_caching() -> None:
     """
@@ -123,52 +125,115 @@ def cache_profile_report() -> Dict[str, Dict[str, float]]:
 
 
 @dataclass
+class TrieNode:
+    """
+    A node in the coverage trie. Each edge is keyed by a (key, value) pair.
+    Terminal nodes indicate a complete stored constraint.
+    """
+
+    children: dict = field(default_factory=dict)
+    terminal: bool = False
+
+
+@dataclass
 class SeenSet:
     """
-    Tracks sets of partial assignments to avoid duplicate processing.
+    Coverage index for previously seen partial assignments.
 
-    Each assignment is a dict of key->value pairs. Missing keys act as wildcards.
-
-    :ivar seen: Collected assignment constraints.
-    :ivar all_seen: Becomes True when an empty assignment is added, meaning any
-                    assignment is considered seen.
+    This replaces the linear scan with a trie-based index using a fixed key order.
+    An assignment A is considered covered if there exists a stored constraint C
+    such that C.items() is a subset of A.items().
     """
-    seen: List[Any] = field(default_factory=list, init=False)
+
+    sorted_keys: tuple = field(default_factory=tuple)
+    root: TrieNode = field(default_factory=TrieNode, init=False)
     all_seen: bool = field(default=False, init=False)
+    _fallback_constraints: list = field(default_factory=list, init=False, repr=False)
 
-    def add(self, assignment):
+    def set_keys(self, keys: Iterable[Hashable]) -> None:
         """
-        Add an assignment (dict of key→value).
-        Missing keys are implicitly wildcards.
-        Example: {"k1": "v1"} means all k2,... are allowed
+        Set or update the fixed key order for the index.
+        Resets the trie since the projection order has changed.
         """
-        if not self.all_seen:
-            self.seen.append(assignment)
-            if not assignment:
-                self.all_seen = True
+        self.sorted_keys = tuple(sorted(keys))
+        self.clear()
 
-    def check(self, assignment):
+    def add(self, assignment: Dict) -> None:
         """
-        Check if an assignment (dict) is covered by seen entries.
+        Add a constraint (partial assignment) to the coverage index.
+        """
+        if self.all_seen:
+            return
+        if not assignment:
+            # Empty constraint means everything is covered
+            self.all_seen = True
+            # Only mark terminal when we actually use the trie
+            if self.sorted_keys:
+                self.root.terminal = True
+            return
+        # If we have no key order, fall back to linear storage and subset checks
+        if not self.sorted_keys:
+            self._fallback_constraints.append(dict(assignment))
+            return
+        node = self.root
+        # Insert only pairs present in the constraint, following fixed key order
+        for k in self.sorted_keys:
+            if k not in assignment:
+                continue
+            v = assignment[k]
+            node = node.children.setdefault((k, v), TrieNode())
+        node.terminal = True
+
+    def check(self, assignment: Dict) -> bool:
+        """
+        Return True if any stored constraint is a subset of the given assignment.
+        Mirrors previous semantics: encountering an empty assignment flips all_seen
+        but returns False the first time to allow population.
         """
         if self.all_seen:
             return True
         if not assignment:
+            # First observation of empty assignment should not be considered covered
+            # but should mark the index so subsequent checks short-circuit.
             self.all_seen = True
-            self.seen.append(assignment)
+            if self.sorted_keys:
+                self.root.terminal = True
             return False
-        for constraint in self.seen:
-            if all(assignment[k] == v if k in assignment else False for k, v in constraint.items()):
+
+        # Fallback linear scan when no key order is defined
+        if not self.sorted_keys:
+            for constraint in self._fallback_constraints:
+                if all(
+                    (k in assignment) and (assignment[k] == v)
+                    for k, v in constraint.items()
+                ):
+                    return True
+            return False
+
+        node = self.root
+        if node.terminal:
+            return True
+        # Walk down following available keys in assignment; any terminal on the path
+        # implies a stored constraint is a subset of this assignment.
+        for k in self.sorted_keys:
+            v = assignment.get(k, None)
+            if v is None:
+                continue
+            child = node.children.get((k, v))
+            if child is None:
+                continue
+            node = child
+            if node.terminal:
                 return True
         return False
 
     def clear(self):
-        self.seen.clear()
+        self.root = TrieNode()
         self.all_seen = False
+        self._fallback_constraints.clear()
 
 
-class CacheDict(UserDict):
-    ...
+class CacheDict(UserDict): ...
 
 
 @dataclass
@@ -185,12 +250,21 @@ class IndexedCache:
     :ivar enter_count: Diagnostic counter for retrieval entries.
     :ivar search_count: Diagnostic counter for wildcard searches.
     """
+
     _keys: List[Hashable] = field(default_factory=list)
     seen_set: SeenSet = field(default_factory=SeenSet, init=False)
     cache: CacheDict = field(default_factory=CacheDict, init=False)
     flat_cache: HashedIterable = field(default_factory=HashedIterable, init=False)
     enter_count: int = field(default=0, init=False)
     search_count: int = field(default=0, init=False)
+
+    # Fast-path helpers
+    _keys_tuple: tuple = field(default_factory=tuple, init=False, repr=False)
+    _key_bitmask_map: Dict[Hashable, int] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    _mask: int = field(default=0, init=False, repr=False)
+    _exact: set = field(default_factory=set, init=False, repr=False)
 
     def __post_init__(self):
         self.keys = self._keys
@@ -202,10 +276,17 @@ class IndexedCache:
     @keys.setter
     def keys(self, keys: List[Hashable]):
         self._keys = list(sorted(keys))
+        self._keys_tuple = tuple(self._keys)
+        # Precompute bit positions for each key and overall mask
+        self._key_bitmask_map = {k: 1 << i for i, k in enumerate(self._keys_tuple)}
+        self._mask = 0
+        for k in self._keys_tuple:
+            self._mask |= self._key_bitmask_map[k]
+        # Reset structures
         self.cache.clear()
-        self.seen_set.clear()
+        self.seen_set.set_keys(self._keys)
+        self._exact.clear()
 
-    
     def insert(self, assignment: Dict, output: Any, index: bool = True) -> None:
         """
         Insert an output under the given partial assignment.
@@ -229,6 +310,10 @@ class IndexedCache:
         seen_assignment = dict(assignment)
         self.seen_set.add(seen_assignment)
 
+        # Maintain exact-match set only when all keys are present
+        if all(k in assignment for k in self._keys_tuple):
+            self._exact.add(tuple(assignment[k] for k in self._keys_tuple))
+
         cache = self.cache
         keys = self.keys
         last_idx = len(keys) - 1
@@ -251,17 +336,56 @@ class IndexedCache:
 
         :param assignment: The assignment to check.
         """
-        assignment = {k: v for k, v in assignment.items() if k in self.keys}
-        seen = self.seen_set.check(assignment)
-        # if not seen:
-        #     self.seen_set.add(assignment)
-        return seen
+        # Bitmask prefilter: if assignment has no overlapping keys with this cache, skip.
+        a_mask = 0
+        for k in assignment.keys():
+            bit = self._key_bitmask_map.get(k)
+            if bit is not None:
+                a_mask |= bit
+        if (a_mask & self._mask) == 0:
+            return False
+
+        # Fast exact-key path when all keys are present
+        if all(k in assignment for k in self._keys_tuple):
+            t = tuple(assignment[k] for k in self._keys_tuple)
+            if t in self._exact:
+                return True
+
+        # Fallback to coverage check via SeenSet
+        if not self.seen_set.check(assignment):
+            return False
+        # Double-check there is at least one retrievable match under this assignment.
+        # This prevents false positives from coverage that would otherwise skip evaluation.
+        for _ in self.retrieve(assignment):
+            return True
+        return False
 
     def __getitem__(self, key: Any):
         return self.flat_cache[key]
 
-    
-    def retrieve(self, assignment: Optional[Dict] = None, cache=None, key_idx=0, result: Dict = None, from_index: bool = True) -> Iterable:
+    def exact_contains(self, assignment: Dict) -> bool:
+        """
+        Return True if the assignment contains all cache keys and the exact key tuple
+        exists in the cache. This is an O(1) membership test and does not consult
+        the coverage trie.
+        """
+        if not self._keys_tuple:
+            return False
+        # Require all keys to be present for exact membership
+        for k in self._keys_tuple:
+            if k not in assignment:
+                return False
+        t = tuple(assignment[k] for k in self._keys_tuple)
+        return t in self._exact
+
+    def retrieve(
+        self,
+        assignment: Optional[Dict] = None,
+        cache=None,
+        key_idx=0,
+        result: Dict = None,
+        from_index: bool = True,
+    ) -> Iterable:
         """
         Retrieve leaf results matching a (possibly partial) assignment.
 
@@ -321,7 +445,9 @@ class IndexedCache:
                 for cache_key, cache_val in cache.items():
                     local_result = copy(result)
                     local_result[key] = cache_key
-                    yield from self._yield_result(assignment, cache_val, key_idx, local_result)
+                    yield from self._yield_result(
+                        assignment, cache_val, key_idx, local_result
+                    )
         else:
             # Reached the leaf (value or next dict) specifically specified by assignment
             yield result, cache
@@ -330,8 +456,13 @@ class IndexedCache:
         self.cache.clear()
         self.seen_set.clear()
         self.flat_cache.clear()
+        self._exact.clear()
+        self.enter_count = 0
+        self.search_count = 0
 
-    def _yield_result(self, assignment: Dict, cache_val: Any, key_idx: int, result: Dict[int, Any]):
+    def _yield_result(
+        self, assignment: Dict, cache_val: Any, key_idx: int, result: Dict[int, Any]
+    ):
         """
         Internal helper to descend into cache and yield concrete results.
 
@@ -348,10 +479,13 @@ class IndexedCache:
             yield result, cache_val
 
 
-def yield_class_values_from_cache(cache: Dict[Type, IndexedCache], clazz: Type,
-                                  assignment: Optional[Dict] = None,
-                                  from_index: bool = True,
-                                  cache_keys: Optional[List] = None) -> Iterable:
+def yield_class_values_from_cache(
+    cache: Dict[Type, IndexedCache],
+    clazz: Type,
+    assignment: Optional[Dict] = None,
+    from_index: bool = True,
+    cache_keys: Optional[List] = None,
+) -> Iterable:
     if from_index and assignment and ((clazz not in cache) or (not cache[clazz].keys)):
         cache[clazz].keys = list(assignment.keys())
     if not cache_keys:
@@ -360,13 +494,17 @@ def yield_class_values_from_cache(cache: Dict[Type, IndexedCache], clazz: Type,
         yield from cache[t].retrieve(assignment, from_index=from_index)
 
 
-def get_cache_keys_for_class_(cache: Dict[Type, IndexedCache], clazz: Type) -> List[Type]:
+def get_cache_keys_for_class_(
+    cache: Dict[Type, IndexedCache], clazz: Type
+) -> List[Type]:
     """
     Get the cache keys for the given class which are its subclasses and itself.
     """
     cache_keys = []
     if isinstance(clazz, type):
-        cache_keys = [t for t in cache.keys() if isinstance(t, type) and issubclass(t, clazz)]
+        cache_keys = [
+            t for t in cache.keys() if isinstance(t, type) and issubclass(t, clazz)
+        ]
     elif clazz in cache:
         cache_keys = [clazz]
     return cache_keys

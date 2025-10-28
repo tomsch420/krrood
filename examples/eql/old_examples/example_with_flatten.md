@@ -9,7 +9,7 @@ In this example, we place a single "cabinet" view into `world.views`. The cabine
 
 ```python
 from dataclasses import dataclass, field
-from typing import List
+from typing_extensions import List
 
 from krrood.entity_query_language import a, set_of, symbolic_mode, let, flatten, symbol
 

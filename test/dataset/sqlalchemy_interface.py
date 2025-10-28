@@ -56,7 +56,7 @@ class PredicateRelationDAO(
         use_existing_column=True,
     )
     predicate_id: Mapped[int] = mapped_column(
-        ForeignKey("PredicateDAO.database_id", use_alter=True),
+        ForeignKey("BinaryPredicateDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
@@ -74,8 +74,11 @@ class PredicateRelationDAO(
     target: Mapped[WrappedInstanceDAO] = relationship(
         "WrappedInstanceDAO", uselist=False, foreign_keys=[target_id], post_update=True
     )
-    predicate: Mapped[PredicateDAO] = relationship(
-        "PredicateDAO", uselist=False, foreign_keys=[predicate_id], post_update=True
+    predicate: Mapped[BinaryPredicateDAO] = relationship(
+        "BinaryPredicateDAO",
+        uselist=False,
+        foreign_keys=[predicate_id],
+        post_update=True,
     )
 
 
@@ -737,19 +740,19 @@ class PredicateDAO(
     }
 
 
-class PropertyDescriptorDAO(
+class BinaryPredicateDAO(
     PredicateDAO,
-    DataAccessObject[krrood.entity_query_language.predicate.PropertyDescriptor],
+    DataAccessObject[krrood.entity_query_language.predicate.BinaryPredicate],
 ):
 
-    __tablename__ = "PropertyDescriptorDAO"
+    __tablename__ = "BinaryPredicateDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     __mapper_args__ = {
-        "polymorphic_identity": "PropertyDescriptorDAO",
+        "polymorphic_identity": "BinaryPredicateDAO",
         "inherit_condition": database_id == PredicateDAO.database_id,
     }
 
@@ -937,22 +940,6 @@ class SymbolGraphMappingDAO(
         foreign_keys="[PredicateRelationDAO.symbolgraphmappingdao_predicate_relations_id]",
         post_update=True,
     )
-
-
-class ThingDAO(
-    SymbolDAO, DataAccessObject[krrood.entity_query_language.predicate.Thing]
-):
-
-    __tablename__ = "ThingDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "ThingDAO",
-        "inherit_condition": database_id == SymbolDAO.database_id,
-    }
 
 
 class TorsoDAO(KinematicChainDAO, DataAccessObject[test.dataset.example_classes.Torso]):

@@ -9,8 +9,13 @@ from sqlalchemy.orm import Session, configure_mappers
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
-from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
+from krrood.entity_query_language.predicate import (
+    BinaryPredicate,
+    HasTypes,
+    HasType,
+)
 from krrood.entity_query_language.symbolic import Variable
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module, recursive_subclasses
@@ -39,8 +44,7 @@ def generate_sqlalchemy_interface():
     """
 
     # build the symbol graph
-    Predicate.build_symbol_graph()
-    symbol_graph = Predicate.symbol_graph
+    symbol_graph = SymbolGraph.build()
 
     # collect all classes
     all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
@@ -105,23 +109,28 @@ from .dataset.sqlalchemy_interface import *
 
 @pytest.fixture
 def handles_and_containers_world() -> World:
-    return HandlesAndContainersWorld().create()
+    world = HandlesAndContainersWorld().create()
+    SymbolGraph.build()
+    return world
 
 
 @pytest.fixture
 def doors_and_drawers_world() -> World:
-    return DoorsAndDrawersWorld().create()
+    world = DoorsAndDrawersWorld().create()
+    SymbolGraph.build()
+    return world
 
 
 @pytest.fixture(autouse=True)
 def cleanup_after_test():
     # Setup: runs before each test
+    SymbolGraph.build()
     yield
     # Teardown: runs after each test
     for c in Variable._cache_.values():
         c.clear()
     Variable._cache_.clear()
-    Predicate.symbol_graph.clear()
+    SymbolGraph().clear()
 
 
 @pytest.fixture(scope="session")

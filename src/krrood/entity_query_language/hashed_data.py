@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Generic, Optional, Iterable, Dict, Any, Callable, List, Union
 
-from typing_extensions import TypeVar
+from typing_extensions import (
+    Generic,
+    Optional,
+    Iterable,
+    Dict,
+    Any,
+    Callable,
+    List,
+)
+from typing_extensions import TypeVar, ClassVar
 
 from .utils import make_list, ALL
 
@@ -12,6 +20,26 @@ T = TypeVar("T")
 
 @dataclass
 class HashedValue(Generic[T]):
+    # Internal registry for boolean singletons
+    _SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
+
+    def __new__(cls, value, id_: Optional[int] = None):
+        # If wrapping a HashedValue of a boolean, return the boolean singleton instance
+        if (
+            id_ is None
+            and isinstance(value, HashedValue)
+            and isinstance(value.value, (bool, type(None)))
+        ):
+            existing = cls._SINGLETONS.get(value.value)
+            if existing is not None:
+                return existing
+        # Return singletons for booleans when available
+        if id_ is None and isinstance(value, bool):
+            existing = cls._SINGLETONS.get(value)
+            if existing is not None:
+                return existing
+        return super().__new__(cls)
+
     """
     Value wrapper carrying a stable hash identifier.
 
@@ -28,11 +56,30 @@ class HashedValue(Generic[T]):
         """
         Initialize the identifier from the wrapped value when not provided.
         """
+        # Intern common immutable values to avoid reallocation on hot paths
         if self.id_ is None:
+            if isinstance(self.value, bool):
+                # Use fixed ids for booleans for stable hashing and object reuse
+                self.id_ = 1 if self.value else 0
+                # ensure singleton registry populated on first construction
+                if type(self)._SINGLETONS.get(self.value) is None:
+                    type(self)._SINGLETONS[self.value] = self
+                return
             if isinstance(self.value, HashedValue):
+                # Handle the case where __new__ returned a boolean singleton and dataclass __init__
+                # temporarily set value to self (self-referential); restore proper boolean payload.
+                singletons = type(self)._SINGLETONS
+                if self is singletons.get(True) or self is singletons.get(False):
+                    # Map back to the corresponding boolean
+                    is_true = self is singletons.get(True)
+                    self.value = True if is_true else False
+                    self.id_ = 1 if is_true else 0
+                    return
+                # General nested HashedValue: unwrap
                 self.id_ = self.value.id_
                 self.value = self.value.value
-            elif hasattr(self.value, "_id_"):
+                return
+            if hasattr(self.value, "_id_"):
                 self.id_ = self.value._id_
             else:
                 self.id_ = id(self.value)
@@ -50,6 +97,14 @@ class HashedValue(Generic[T]):
         if not isinstance(other, HashedValue):
             return False
         return self.id_ == other.id_
+
+
+# Initialize boolean singletons after class definition
+# We create them by constructing HashedValue once for True and False; subsequent
+# HashedValue(True/False) constructions will return these singletons via __new__.
+HV_TRUE = HashedValue(True)
+HV_FALSE = HashedValue(False)
+HV_NONE = HashedValue(None)
 
 
 @dataclass
