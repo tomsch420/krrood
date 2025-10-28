@@ -16,9 +16,6 @@ from typing_extensions import TypeVar, ClassVar
 
 from .utils import make_list, ALL
 
-# Pre-create singletons for boolean hashed values to avoid repeated allocations
-HV_FALSE = None  # will be initialized after HashedValue class definition
-HV_TRUE = None  # will be initialized after HashedValue class definition
 
 T = TypeVar("T")
 
@@ -26,21 +23,21 @@ T = TypeVar("T")
 @dataclass
 class HashedValue(Generic[T]):
     # Internal registry for boolean singletons
-    _BOOL_SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
+    _SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
 
     def __new__(cls, value, id_: Optional[int] = None):
         # If wrapping a HashedValue of a boolean, return the boolean singleton instance
         if (
             id_ is None
             and isinstance(value, HashedValue)
-            and isinstance(value.value, bool)
+            and isinstance(value.value, (bool, type(None)))
         ):
-            existing = cls._BOOL_SINGLETONS.get(value.value)
+            existing = cls._SINGLETONS.get(value.value)
             if existing is not None:
                 return existing
         # Return singletons for booleans when available
         if id_ is None and isinstance(value, bool):
-            existing = cls._BOOL_SINGLETONS.get(value)
+            existing = cls._SINGLETONS.get(value)
             if existing is not None:
                 return existing
         return super().__new__(cls)
@@ -67,13 +64,13 @@ class HashedValue(Generic[T]):
                 # Use fixed ids for booleans for stable hashing and object reuse
                 self.id_ = 1 if self.value else 0
                 # ensure singleton registry populated on first construction
-                if type(self)._BOOL_SINGLETONS.get(self.value) is None:
-                    type(self)._BOOL_SINGLETONS[self.value] = self
+                if type(self)._SINGLETONS.get(self.value) is None:
+                    type(self)._SINGLETONS[self.value] = self
                 return
             if isinstance(self.value, HashedValue):
                 # Handle the case where __new__ returned a boolean singleton and dataclass __init__
                 # temporarily set value to self (self-referential); restore proper boolean payload.
-                singletons = type(self)._BOOL_SINGLETONS
+                singletons = type(self)._SINGLETONS
                 if self is singletons.get(True) or self is singletons.get(False):
                     # Map back to the corresponding boolean
                     is_true = self is singletons.get(True)
@@ -109,6 +106,7 @@ class HashedValue(Generic[T]):
 # HashedValue(True/False) constructions will return these singletons via __new__.
 HV_TRUE = HashedValue(True)
 HV_FALSE = HashedValue(False)
+HV_NONE = HashedValue(None)
 
 
 @dataclass

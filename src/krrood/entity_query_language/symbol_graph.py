@@ -29,12 +29,18 @@ if TYPE_CHECKING:
 
 @dataclass
 class PredicateRelation(Relation):
+    """Edge data representing a predicate-based relation between two wrapped instances.
+
+    The relation carries the predicate instance that asserted the edge and a flag indicating
+    whether it was inferred transitively or added directly.
+    """
     source: WrappedInstance
     target: WrappedInstance
     predicate: BinaryPredicate
     inferred: bool = False
 
     def __str__(self):
+        """Return the predicate type name for labeling the edge."""
         return self.predicate.__class__.__name__
 
     @property
@@ -44,6 +50,7 @@ class PredicateRelation(Relation):
 
 @dataclass
 class WrappedInstance:
+    """A node wrapper around a concrete Symbol instance used in the instance graph."""
     instance: Symbol
     index: Optional[int] = field(init=False, default=None)
     _symbol_graph_: Optional[SymbolGraph] = field(
@@ -53,10 +60,12 @@ class WrappedInstance:
 
     @cached_property
     def fields(self) -> List[WrappedField]:
+        """Wrap dataclass fields of the instance with metadata for graph use."""
         return [WrappedField(self.instance, f) for f in fields(self.instance)]
 
     @property
     def name(self):
+        """Return a unique display name composed of class name and node index."""
         return self.instance.__class__.__name__ + str(self.index)
 
     @property
@@ -93,6 +102,7 @@ class SymbolGraph:
     _initialized: ClassVar[bool] = False
 
     def __new__(cls, *args, **kwargs):
+        """Ensure a singleton instance is used for the symbol graph."""
         if cls._current_graph is None:
             cls._current_graph = super().__new__(cls)
         return cls._current_graph

@@ -1713,6 +1713,11 @@ class ForAll(BinaryOperator):
 
 @dataclass(eq=False)
 class Exists(BinaryOperator):
+    """
+    An existential checker that checks if a condition holds for any value of the variable given, the benefit
+    of this is that this short circuits the condition and returns True if the condition holds for any value without
+    getting all the condition values that hold for one specific value of the variable.
+    """
 
     @property
     def _name_(self) -> str:

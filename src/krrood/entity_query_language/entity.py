@@ -36,10 +36,6 @@ from .predicate import (
     BinaryPredicate,
 )
 
-# These are to prevent automatic removal of the imports, which are there for ease of access.
-BP = BinaryPredicate
-sf = symbolic_function
-
 T = TypeVar("T")  # Define type variable "T"
 
 
