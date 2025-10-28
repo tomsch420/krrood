@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "krrood"
-version = "1.0.1"
+version = "1.0.2"
 description = "A university data generator based on the LUBM (Lehigh University Benchmark) ontology"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,17 +37,21 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tom/krrood"
-Repository = "https://github.com/tom/krrood"
-Issues = "https://github.com/tom/krrood/issues"
+Homepage = "https://code-iai.github.io/krrood/intro.html"
+Repository = "https://github.com/code-iai/krrood"
+Issues = "https://github.com/code-iai/krrood/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["krrood*"]
 exclude = ["test*"]
+
+[tool.setuptools.package-data]
+my_library = ["templates/*.j2"]  # glob patterns allowed
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
@@ -79,5 +83,4 @@ exclude_lines = [
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "krrood.__version__"}
 dependencies = { file = ["requirements.txt"] }
