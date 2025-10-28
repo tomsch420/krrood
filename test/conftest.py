@@ -93,7 +93,8 @@ def pytest_configure(config):
     """
 
     try:
-        generate_sqlalchemy_interface()
+        ...
+        # generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 
