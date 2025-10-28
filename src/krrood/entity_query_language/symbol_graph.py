@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import weakref
 from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
+from weakref import WeakKeyDictionary
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -34,6 +36,7 @@ class PredicateRelation(Relation):
     The relation carries the predicate instance that asserted the edge and a flag indicating
     whether it was inferred transitively or added directly.
     """
+
     source: WrappedInstance
     target: WrappedInstance
     predicate: BinaryPredicate
@@ -51,6 +54,7 @@ class PredicateRelation(Relation):
 @dataclass
 class WrappedInstance:
     """A node wrapper around a concrete Symbol instance used in the instance graph."""
+
     instance: Symbol
     index: Optional[int] = field(init=False, default=None)
     _symbol_graph_: Optional[SymbolGraph] = field(
@@ -94,7 +98,9 @@ class SymbolGraph:
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
         default_factory=PyDiGraph
     )
-    _instance_index: Dict = field(default_factory=dict, init=False, repr=False)
+    _instance_index: WeakKeyDictionary[Symbol, WrappedInstance] = field(
+        default_factory=WeakKeyDictionary, init=False, repr=False
+    )
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )

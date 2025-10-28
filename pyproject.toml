@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "krrood"
-version = "1.0.2"
+version = "1.0.3"
 description = "A university data generator based on the LUBM (Lehigh University Benchmark) ontology"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -51,7 +51,7 @@ include = ["krrood*"]
 exclude = ["test*"]
 
 [tool.setuptools.package-data]
-my_library = ["templates/*.j2"]  # glob patterns allowed
+my_library = ["ormatic/templates/*.j2"]  # glob patterns allowed
 
 [tool.pytest.ini_options]
 testpaths = ["test"]
