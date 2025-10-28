@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-import operator
-from abc import abstractmethod, ABC
-from enum import IntEnum
-
-import casadi
-import numpy as np
 import builtins
 import copy
 import functools
 import math
+import operator
 import sys
-from copy import copy, deepcopy
+from abc import abstractmethod, ABC
+from copy import copy
 from dataclasses import dataclass, field, InitVar
+from enum import IntEnum
+
+import casadi
+import casadi as ca
+import numpy as np
+from scipy import sparse as sp
 from typing_extensions import (
     Optional,
     List,
@@ -20,24 +22,17 @@ from typing_extensions import (
     Dict,
     Sequence,
     Any,
-    Type,
     Self,
     ClassVar,
-    TYPE_CHECKING,
     Iterable,
     Union,
     TypeVar,
     Callable,
-    overload,
 )
 
-import casadi as ca
-from scipy import sparse as sp
-
-from krrood.entity_query_language.entity import entity, an, let, contains, in_
-from krrood.entity_query_language.predicate import Symbol, Predicate, symbolic_function
-from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.entity_query_language.symbolic import symbolic_mode, in_symbolic_mode
+from krrood.entity_query_language.entity import entity, an, let, contains
+from krrood.entity_query_language.predicate import Symbol, symbolic_function
+from krrood.entity_query_language.symbolic import symbolic_mode
 from krrood.symbolic_math.exceptions import HasFreeSymbolsError, NotSquareMatrixError
 
 EPS: float = sys.float_info.epsilon * 4.0
