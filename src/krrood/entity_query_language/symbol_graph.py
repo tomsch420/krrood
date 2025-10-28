@@ -94,7 +94,7 @@ class SymbolGraph:
     contains also the Predicate object that represents the relation.
     """
 
-    _type_graph: Optional[ClassDiagram] = field(default=None)
+    _class_diagram: Optional[ClassDiagram] = field(default=None)
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
         default_factory=PyDiGraph
     )
@@ -115,7 +115,7 @@ class SymbolGraph:
 
     def __init__(self, type_graph: Optional[ClassDiagram] = None):
         if not self._initialized:
-            self._type_graph = type_graph or ClassDiagram([])
+            self._class_diagram = type_graph or ClassDiagram([])
             self._instance_graph = PyDiGraph()
             self._instance_index = {}
             self._relation_index = {}
@@ -130,7 +130,7 @@ class SymbolGraph:
         wrapped_instance = self.get_wrapped_instance(instance)
         if not wrapped_instance:
             raise ValueError(f"Instance {instance} not found in graph.")
-        role_taker_assoc = self.type_graph.get_role_taker_associations_of_cls(
+        role_taker_assoc = self.class_diagram.get_role_taker_associations_of_cls(
             type(wrapped_instance.instance)
         )
         if not role_taker_assoc:
@@ -138,8 +138,8 @@ class SymbolGraph:
         return getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
 
     @property
-    def type_graph(self) -> ClassDiagram:
-        return self._current_graph._type_graph
+    def class_diagram(self) -> ClassDiagram:
+        return self._current_graph._class_diagram
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
@@ -154,15 +154,15 @@ class SymbolGraph:
         return self._instance_index.get(id(instance), None)
 
     def get_cls_associations(self, cls: Type) -> List[WrappedField]:
-        if self._type_graph is None:
+        if self._class_diagram is None:
             return []
-        wrapped_cls = self._type_graph.get_wrapped_class(cls)
+        wrapped_cls = self._class_diagram.get_wrapped_class(cls)
         if wrapped_cls is None:
             return []
-        return self._type_graph.g
+        return self._class_diagram.g
 
     def clear(self):
-        self._type_graph.clear()
+        self._class_diagram.clear()
         self._instance_graph.clear()
         self._instance_index.clear()
         self.__class__._current_graph = None
@@ -302,11 +302,13 @@ class SymbolGraph:
 
         if graph_type == "type":
             if without_inherited_associations:
-                graph = self._type_graph.to_subdiagram_without_inherited_associations(
-                    True
-                )._dependency_graph
+                graph = (
+                    self._class_diagram.to_subdiagram_without_inherited_associations(
+                        True
+                    )._dependency_graph
+                )
             else:
-                graph = self._type_graph._dependency_graph
+                graph = self._class_diagram._dependency_graph
         else:
             graph = self._instance_graph
         if not filepath.endswith(f".{format}"):
