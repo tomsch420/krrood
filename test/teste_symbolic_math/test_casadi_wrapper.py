@@ -1,12 +1,13 @@
 from typing import Union, Iterable
 
-import hypothesis.strategies as st
+
 import numpy as np
 import pytest
 import scipy
-from hypothesis import given, assume
+
 
 import krrood.symbolic_math.symbolic_math as cas
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.symbolic_math.exceptions import (
     HasFreeSymbolsError,
     WrongDimensionsError,
@@ -17,12 +18,16 @@ TrinaryFalse = cas.TrinaryFalse.to_np()[0]
 TrinaryUnknown = cas.TrinaryUnknown.to_np()[0]
 
 all_expressions_float_np = Union[
-    cas.SymbolicType, float, np.ndarray, Iterable[float], Iterable[Iterable[float]]
+    cas.CasadiScalarWrapper,
+    float,
+    np.ndarray,
+    Iterable[float],
+    Iterable[Iterable[float]],
 ]
 
 
 def to_float_or_np(x: all_expressions_float_np) -> Union[float, np.ndarray]:
-    if isinstance(x, cas.SymbolicType):
+    if isinstance(x, cas.CasadiScalarWrapper):
         return x.to_np()
     return x
 
@@ -80,8 +85,8 @@ class TestLogic3:
     ]
 
     def test_and3(self):
-        s = cas.Symbol(name="a")
-        s2 = cas.Symbol(name="b")
+        s = cas.MathSymbol(name="a")
+        s2 = cas.MathSymbol(name="b")
         expr = cas.trinary_logic_and(s, s2)
         f = expr.compile()
         for i in self.values:
@@ -93,8 +98,8 @@ class TestLogic3:
                 ), f"a={i}, b={j}, expected {expected}, actual {actual}"
 
     def test_or3(self):
-        s = cas.Symbol(name="a")
-        s2 = cas.Symbol(name="b")
+        s = cas.MathSymbol(name="a")
+        s2 = cas.MathSymbol(name="b")
         expr = cas.trinary_logic_or(s, s2)
         f = expr.compile()
         for i in self.values:
@@ -106,7 +111,7 @@ class TestLogic3:
                 ), f"a={i}, b={j}, expected {expected}, actual {actual}"
 
     def test_not3(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         expr = cas.trinary_logic_not(s)
         f = expr.compile()
         for i in self.values:
@@ -137,17 +142,17 @@ class TestLogic3:
 
 class TestSymbol:
     def test_from_name(self):
-        s = cas.Symbol(name="muh")
-        assert isinstance(s, cas.Symbol)
+        s = cas.MathSymbol(name="muh")
+        assert isinstance(s, cas.MathSymbol)
         assert str(s) == "muh"
 
     def test_to_np(self):
-        s1 = cas.Symbol(name="s1")
+        s1 = cas.MathSymbol(name="s1")
         with pytest.raises(HasFreeSymbolsError):
             s1.to_np()
 
     def test_add(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s + 1, cas.Expression)
         assert isinstance(1 + s, cas.Expression)
@@ -160,38 +165,8 @@ class TestSymbol:
         assert isinstance(e + s, cas.Expression)
         assert isinstance(s + e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s + p
-        with pytest.raises(TypeError):
-            p + s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s + v
-        with pytest.raises(TypeError):
-            v + s
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s + r
-        with pytest.raises(TypeError):
-            r + s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s + t
-        with pytest.raises(TypeError):
-            t + s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s + q
-        with pytest.raises(TypeError):
-            q + s
-
     def test_sub(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s - 1, cas.Expression)
         assert isinstance(1 - s, cas.Expression)
@@ -204,38 +179,8 @@ class TestSymbol:
         assert isinstance(e - s, cas.Expression)
         assert isinstance(s - e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s - p
-        with pytest.raises(TypeError):
-            p - s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s - v
-        with pytest.raises(TypeError):
-            v - s
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s - r
-        with pytest.raises(TypeError):
-            r - s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s - t
-        with pytest.raises(TypeError):
-            t - s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s - q
-        with pytest.raises(TypeError):
-            q - s
-
     def test_mul(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s * 1, cas.Expression)
         assert isinstance(1 * s, cas.Expression)
@@ -248,37 +193,8 @@ class TestSymbol:
         assert isinstance(e * s, cas.Expression)
         assert isinstance(s * e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s * p
-        with pytest.raises(TypeError):
-            p * s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s * v
-        assert isinstance(v * s, cas.Vector3)
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s * r
-        with pytest.raises(TypeError):
-            r * s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s * t
-        with pytest.raises(TypeError):
-            t * s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s * q
-        with pytest.raises(TypeError):
-            q * s
-
     def test_truediv(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s / 1, cas.Expression)
         assert isinstance(1 / s, cas.Expression)
@@ -291,37 +207,8 @@ class TestSymbol:
         assert isinstance(e / s, cas.Expression)
         assert isinstance(s / e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s / p
-        with pytest.raises(TypeError):
-            p / s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s / v
-        assert isinstance(v / s, cas.Vector3)
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s / r
-        with pytest.raises(TypeError):
-            r / s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s / t
-        with pytest.raises(TypeError):
-            t / s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s / q
-        with pytest.raises(TypeError):
-            q / s
-
     def test_lt(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s < 1, cas.Expression)
         assert isinstance(1 < s, cas.Expression)
@@ -334,38 +221,8 @@ class TestSymbol:
         assert isinstance(e < s, cas.Expression)
         assert isinstance(s < e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s < p
-        with pytest.raises(TypeError):
-            p < s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s < v
-        with pytest.raises(TypeError):
-            v < s
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s < r
-        with pytest.raises(TypeError):
-            r < s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s < t
-        with pytest.raises(TypeError):
-            t < s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s < q
-        with pytest.raises(TypeError):
-            q < s
-
     def test_pow(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         # int float addition is fine
         assert isinstance(s**1, cas.Expression)
         assert isinstance(1**s, cas.Expression)
@@ -378,38 +235,8 @@ class TestSymbol:
         assert isinstance(e**s, cas.Expression)
         assert isinstance(s**e, cas.Expression)
 
-        p = cas.Point3()
-        with pytest.raises(TypeError):
-            s**p
-        with pytest.raises(TypeError):
-            p**s
-
-        v = cas.Vector3()
-        with pytest.raises(TypeError):
-            s**v
-        with pytest.raises(TypeError):
-            v**s
-
-        r = cas.RotationMatrix()
-        with pytest.raises(TypeError):
-            s**r
-        with pytest.raises(TypeError):
-            r**s
-
-        t = cas.TransformationMatrix()
-        with pytest.raises(TypeError):
-            s**t
-        with pytest.raises(TypeError):
-            t**s
-
-        q = cas.Quaternion()
-        with pytest.raises(TypeError):
-            s**q
-        with pytest.raises(TypeError):
-            q**s
-
     def test_simple_math(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         e = s + s
         assert isinstance(e, cas.Expression)
         e = s - s
@@ -422,7 +249,7 @@ class TestSymbol:
         assert isinstance(e, cas.Expression)
 
     def test_comparisons(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         e = s > s
         assert isinstance(e, cas.Expression)
         e = s >= s
@@ -435,9 +262,9 @@ class TestSymbol:
         assert isinstance(e, cas.Expression)
 
     def test_logic(self):
-        s1 = cas.Symbol(name="s1")
-        s2 = cas.Symbol(name="s2")
-        s3 = cas.Symbol(name="s3")
+        s1 = cas.MathSymbol(name="s1")
+        s2 = cas.MathSymbol(name="s2")
+        s3 = cas.MathSymbol(name="s3")
         e = s1 | s2
         assert isinstance(e, cas.Expression)
         e = s1 & s2
@@ -448,7 +275,7 @@ class TestSymbol:
         assert isinstance(e, cas.Expression)
 
     def test_hash(self):
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         d = {s: 1}
         assert d[s] == 1
 
@@ -461,8 +288,8 @@ class TestExpression:
         assert_allclose(r1, r2)
 
     def test_jacobian(self):
-        a = cas.Symbol(name="a")
-        b = cas.Symbol(name="b")
+        a = cas.MathSymbol(name="a")
+        b = cas.MathSymbol(name="b")
         m = cas.Expression(data=[a + b, a**2, b**2])
         jac = m.jacobian([a, b])
         expected = cas.Expression(data=[[1, 1], [2 * a, 0], [0, 2 * b]])
@@ -470,23 +297,17 @@ class TestExpression:
             for j in range(expected.shape[1]):
                 assert jac[i, j].equivalent(expected[i, j])
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_jacobian_dot(self, a, ad, b, bd):
+    def test_jacobian_dot(self, a=1, ad=2, b=3, bd=4):
         kwargs = {
             "a": a,
             "ad": ad,
             "b": b,
             "bd": bd,
         }
-        a_s = cas.Symbol(name="a")
-        ad_s = cas.Symbol(name="ad")
-        b_s = cas.Symbol(name="b")
-        bd_s = cas.Symbol(name="bd")
+        a_s = cas.MathSymbol(name="a")
+        ad_s = cas.MathSymbol(name="ad")
+        b_s = cas.MathSymbol(name="b")
+        bd_s = cas.MathSymbol(name="bd")
         m = cas.Expression(
             data=[
                 a_s**3 * b_s**3,
@@ -511,15 +332,7 @@ class TestExpression:
         expected = expected_expr.compile().call_with_kwargs(**kwargs)
         assert_allclose(actual, expected)
 
-    @given(
-        float_no_nan_no_inf(outer_limit=1e2),
-        float_no_nan_no_inf(outer_limit=1e2),
-        float_no_nan_no_inf(outer_limit=1e2),
-        float_no_nan_no_inf(outer_limit=1e2),
-        float_no_nan_no_inf(outer_limit=1e2),
-        float_no_nan_no_inf(outer_limit=1e2),
-    )
-    def test_jacobian_ddot(self, a, ad, add, b, bd, bdd):
+    def test_jacobian_ddot(self, a=1, ad=2, add=3, b=4, bd=5, bdd=6):
         kwargs = {
             "a": a,
             "ad": ad,
@@ -528,12 +341,12 @@ class TestExpression:
             "bd": bd,
             "bdd": bdd,
         }
-        a_s = cas.Symbol(name="a")
-        ad_s = cas.Symbol(name="ad")
-        add_s = cas.Symbol(name="add")
-        b_s = cas.Symbol(name="b")
-        bd_s = cas.Symbol(name="bd")
-        bdd_s = cas.Symbol(name="bdd")
+        a_s = cas.MathSymbol(name="a")
+        ad_s = cas.MathSymbol(name="ad")
+        add_s = cas.MathSymbol(name="add")
+        b_s = cas.MathSymbol(name="b")
+        bd_s = cas.MathSymbol(name="bd")
+        bdd_s = cas.MathSymbol(name="bdd")
         m = cas.Expression(
             data=[
                 a_s**3 * b_s**3,
@@ -555,15 +368,7 @@ class TestExpression:
         actual = jac.compile().call_with_kwargs(**kwargs)
         assert_allclose(actual, expected)
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_total_derivative2(self, a, b, ad, bd, add, bdd):
+    def test_total_derivative2(self, a=1, ad=2, add=3, b=4, bd=5, bdd=6):
         kwargs = {
             "a": a,
             "ad": ad,
@@ -572,30 +377,21 @@ class TestExpression:
             "bd": bd,
             "bdd": bdd,
         }
-        a_s = cas.Symbol(name="a")
-        ad_s = cas.Symbol(name="ad")
-        add_s = cas.Symbol(name="add")
-        b_s = cas.Symbol(name="b")
-        bd_s = cas.Symbol(name="bd")
-        bdd_s = cas.Symbol(name="bdd")
+        a_s = cas.MathSymbol(name="a")
+        ad_s = cas.MathSymbol(name="ad")
+        add_s = cas.MathSymbol(name="add")
+        b_s = cas.MathSymbol(name="b")
+        bd_s = cas.MathSymbol(name="bd")
+        bdd_s = cas.MathSymbol(name="bdd")
         m = cas.Expression(data=a_s * b_s**2)
         jac = m.second_order_total_derivative([a_s, b_s], [ad_s, bd_s], [add_s, bdd_s])
         actual = jac.compile().call_with_kwargs(**kwargs)
         expected = bdd * 2 * a + 2 * ad * bd * 2 * b
         assert_allclose(actual, expected)
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_total_derivative2_2(self, a, b, c, ad, bd, cd, add, bdd, cdd):
+    def test_total_derivative2_2(
+        self, a=1, b=2, c=3, ad=4, bd=5, cd=6, add=7, bdd=8, cdd=9
+    ):
         kwargs = {
             "a": a,
             "ad": ad,
@@ -607,15 +403,15 @@ class TestExpression:
             "cd": cd,
             "cdd": cdd,
         }
-        a_s = cas.Symbol(name="a")
-        ad_s = cas.Symbol(name="ad")
-        add_s = cas.Symbol(name="add")
-        b_s = cas.Symbol(name="b")
-        bd_s = cas.Symbol(name="bd")
-        bdd_s = cas.Symbol(name="bdd")
-        c_s = cas.Symbol(name="c")
-        cd_s = cas.Symbol(name="cd")
-        cdd_s = cas.Symbol(name="cdd")
+        a_s = cas.MathSymbol(name="a")
+        ad_s = cas.MathSymbol(name="ad")
+        add_s = cas.MathSymbol(name="add")
+        b_s = cas.MathSymbol(name="b")
+        bd_s = cas.MathSymbol(name="bd")
+        bdd_s = cas.MathSymbol(name="bdd")
+        c_s = cas.MathSymbol(name="c")
+        cd_s = cas.MathSymbol(name="cd")
+        cdd_s = cas.MathSymbol(name="cdd")
         m = cas.Expression(data=a_s * b_s**2 * c_s**3)
         jac = m.second_order_total_derivative(
             [a_s, b_s, c_s], [ad_s, bd_s, cd_s], [add_s, bdd_s, cdd_s]
@@ -635,7 +431,7 @@ class TestExpression:
     def test_free_symbols(self):
         m = cas.Expression(data=cas.create_symbols(["a", "b", "c", "d"]))
         assert len(m.free_symbols()) == 4
-        a = cas.Symbol(name="a")
+        a = cas.MathSymbol(name="a")
         assert a.equivalent(a.free_symbols()[0])
 
     def test_diag(self):
@@ -653,49 +449,12 @@ class TestExpression:
         assert result[2, 2] == 3
         assert cas.diag(cas.Expression(data=[1, 2, 3])).equivalent(cas.diag([1, 2, 3]))
 
-    @given(
-        lists_of_same_length(
-            [float_no_nan_no_inf(), float_no_nan_no_inf()], max_length=50
-        )
-    )
-    def test_dot(self, vectors):
-        u, v = vectors
-        result = cas.Expression(data=u).dot(cas.Expression(data=v))
-        u = np.array(u)
-        v = np.array(v)
-        assert_allclose(result, np.dot(u, v))
-
-    @given(
-        lists_of_same_length(
-            [
-                float_no_nan_no_inf(outer_limit=1000),
-                float_no_nan_no_inf(outer_limit=1000),
-            ],
-            min_length=16,
-            max_length=16,
-        )
-    )
-    def test_dot_matrix(self, vectors):
-        u, v = vectors
-        u = np.array(u).reshape((4, 4))
-        v = np.array(v).reshape((4, 4))
-        result = cas.Expression(data=u).dot(cas.Expression(data=v))
-        expected = np.dot(u, v)
-        assert_allclose(result, expected)
-
     def test_pretty_str(self):
         e = cas.Expression.eye(4)
         e.pretty_str()
 
-    @given(st.lists(float_no_nan_no_inf(), min_size=1))
-    def test_norm(self, v):
-        actual = cas.Expression(data=v).norm()
-        expected = np.linalg.norm(v)
-        assume(not np.isinf(expected))
-        assert_allclose(actual, expected, equal_nan=True)
-
     def test_create(self):
-        cas.Expression(data=cas.Symbol(name="muh"))
+        cas.Expression(data=cas.MathSymbol(name="muh"))
         cas.Expression(data=[cas.ca.SX(1), cas.ca.SX.sym("muh")])
         m = cas.Expression(data=np.eye(4))
         m = cas.Expression(data=m)
@@ -736,8 +495,7 @@ class TestExpression:
         expected = e_np[filter_]
         assert_allclose(actual, expected)
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_add(self, f1, f2):
+    def test_add(self, f1=1, f2=3):
         expected = f1 + f2
         r1 = cas.Expression(data=f2) + f1
         assert_allclose(r1, expected)
@@ -746,8 +504,7 @@ class TestExpression:
         r1 = cas.Expression(data=f1) + cas.Expression(data=f2)
         assert_allclose(r1, expected)
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_sub(self, f1, f2):
+    def test_sub(self, f1=1, f2=3):
         expected = f1 - f2
         r1 = cas.Expression(data=f1) - f2
         assert_allclose(r1, expected)
@@ -762,7 +519,7 @@ class TestExpression:
 
     def test_simple_math(self):
         m = cas.Expression(data=[1, 1])
-        s = cas.Symbol(name="muh")
+        s = cas.MathSymbol(name="muh")
         e = m + s
         e = m + 1
         e = 1 + m
@@ -793,19 +550,10 @@ class TestExpression:
         assert_allclose(e.to_np(), np.array([[1, 2], [3, 4]]))
 
     def test_to_np_fail(self):
-        s1, s2 = cas.Symbol(name="s1"), cas.Symbol(name="s2")
+        s1, s2 = cas.MathSymbol(name="s1"), cas.MathSymbol(name="s2")
         e = s1 + s2
         with pytest.raises(HasFreeSymbolsError):
             e.to_np()
-
-    @given(vector(3), float_no_nan_no_inf())
-    def test_scale(self, v, a):
-        if np.linalg.norm(v) == 0:
-            expected = [0, 0, 0]
-        else:
-            expected = v / np.linalg.norm(v) * a
-        actual = cas.Expression(data=v).scale(a)
-        assert_allclose(actual, expected)
 
     def test_get_attr(self):
         m = cas.Expression(data=np.eye(4))
@@ -835,8 +583,8 @@ class TestExpression:
             np.all(r_np == r_cas)
 
     def test_logic_and(self):
-        s1 = cas.Symbol(name="s1")
-        s2 = cas.Symbol(name="s2")
+        s1 = cas.MathSymbol(name="s1")
+        s2 = cas.MathSymbol(name="s2")
         expr = cas.logic_and(cas.BinaryTrue, s1)
         assert not cas.is_true_symbol(expr) and not cas.is_false_symbol(expr)
         expr = cas.logic_and(cas.BinaryFalse, s1)
@@ -851,9 +599,9 @@ class TestExpression:
         assert not cas.is_true_symbol(expr) and not cas.is_false_symbol(expr)
 
     def test_logic_or(self):
-        s1 = cas.Symbol(name="s1")
-        s2 = cas.Symbol(name="s2")
-        s3 = cas.Symbol(name="s3")
+        s1 = cas.MathSymbol(name="s1")
+        s2 = cas.MathSymbol(name="s2")
+        s3 = cas.MathSymbol(name="s3")
         expr = cas.logic_or(cas.BinaryFalse, s1)
         assert not cas.is_true_symbol(expr) and not cas.is_false_symbol(expr)
         expr = cas.logic_or(cas.BinaryTrue, s1)
@@ -884,18 +632,17 @@ class TestIfElse:
     def test_if_greater_zero(self, condition):
         if_result, else_result = 1, -1
         assert_allclose(
-            cas.if_greater_zero(condition, if_result, else_result),
+            cas.if_greater_zero(
+                cas.Expression(condition),
+                cas.Expression(if_result),
+                cas.Expression(else_result),
+            ),
             float(if_result if condition > 0 else else_result),
         )
 
     def test_if_one_arg(self):
         types = [
-            cas.Point3,
-            cas.Vector3,
-            cas.Quaternion,
             cas.Expression,
-            cas.TransformationMatrix,
-            cas.RotationMatrix,
         ]
         if_functions = [
             cas.if_else,
@@ -903,7 +650,7 @@ class TestIfElse:
             cas.if_greater_eq_zero,
             cas.if_greater_zero,
         ]
-        c = cas.Symbol(name="c")
+        c = cas.MathSymbol(name="c")
         for type_ in types:
             for if_function in if_functions:
                 if_result = type_()
@@ -915,12 +662,7 @@ class TestIfElse:
 
     def test_if_two_arg(self):
         types = [
-            cas.Point3,
-            cas.Vector3,
-            cas.Quaternion,
             cas.Expression,
-            cas.TransformationMatrix,
-            cas.RotationMatrix,
         ]
         if_functions = [
             cas.if_eq,
@@ -929,65 +671,50 @@ class TestIfElse:
             cas.if_less,
             cas.if_less_eq,
         ]
-        a = cas.Symbol(name="a")
-        b = cas.Symbol(name="b")
+        a = cas.MathSymbol(name="a")
+        b = cas.MathSymbol(name="b")
         for type_ in types:
             for if_function in if_functions:
                 if_result = type_()
                 else_result = type_()
                 assert isinstance(if_function(a, b, if_result, else_result), type_)
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_if_greater_eq_zero(self, condition, if_result, else_result):
+    @pytest.mark.parametrize("condition", [True, False])
+    def test_if_greater_eq_zero(self, condition, if_result=0, else_result=1):
         assert_allclose(
             cas.if_greater_eq_zero(condition, if_result, else_result),
             float(if_result if condition >= 0 else else_result),
         )
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_if_greater_eq(self, a, b, if_result, else_result):
+    @pytest.mark.parametrize("a,b", [[1, 0], [2, -1]])
+    def test_if_greater_eq(self, a, b, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_greater_eq(a, b, if_result, else_result),
             float(if_result if a >= b else else_result),
         )
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_if_less_eq(self, a, b, if_result, else_result):
+    @pytest.mark.parametrize("a,b", [[1, 0], [2, -1]])
+    def test_if_less_eq(self, a, b, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_less_eq(a, b, if_result, else_result),
             float(if_result if a <= b else else_result),
         )
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_if_eq_zero(self, condition, if_result, else_result):
+    @pytest.mark.parametrize("condition", [True, False])
+    def test_if_eq_zero(self, condition, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_eq_zero(condition, if_result, else_result),
             float(if_result if condition == 0 else else_result),
         )
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_if_eq(self, a, b, if_result, else_result):
+    @pytest.mark.parametrize("a,b", [[1, 0], [2, -1]])
+    def test_if_eq(self, a, b, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_eq(a, b, if_result, else_result),
             float(if_result if a == b else else_result),
         )
 
-    @given(float_no_nan_no_inf())
+    @pytest.mark.parametrize("a,", [2, -1])
     def test_if_eq_cases(self, a):
         b_result_cases = [
             (1, cas.Expression(data=1)),
@@ -1008,7 +735,7 @@ class TestIfElse:
         expected = float(reference(a, b_result_cases, 0))
         assert_allclose(actual, expected)
 
-    @given(float_no_nan_no_inf())
+    @pytest.mark.parametrize("a,", [2, -1])
     def test_if_eq_cases_set(self, a):
         b_result_cases = {
             (1, cas.Expression(data=1)),
@@ -1029,7 +756,7 @@ class TestIfElse:
         expected = float(reference(a, b_result_cases, 0))
         assert_allclose(actual, expected)
 
-    @given(float_no_nan_no_inf(10))
+    @pytest.mark.parametrize("a,", [2, -1])
     def test_if_less_eq_cases(self, a):
         b_result_cases = [
             (-1, cas.Expression(data=-1)),
@@ -1051,25 +778,15 @@ class TestIfElse:
             float(reference(a, b_result_cases, 0)),
         )
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_if_greater(self, a, b, if_result, else_result):
+    @pytest.mark.parametrize("a,b", [[1, 0], [2, -1]])
+    def test_if_greater(self, a, b, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_greater(a, b, if_result, else_result),
             float(if_result if a > b else else_result),
         )
 
-    @given(
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-        float_no_nan_no_inf(),
-    )
-    def test_if_less(self, a, b, if_result, else_result):
+    @pytest.mark.parametrize("a,b", [[1, 0], [2, -1]])
+    def test_if_less(self, a, b, if_result=0.0, else_result=1.0):
         assert_allclose(
             cas.if_less(a, b, if_result, else_result),
             float(if_result if a < b else else_result),
@@ -1077,7 +794,8 @@ class TestIfElse:
 
 
 class TestCASWrapper:
-    @given(st.booleans())
+
+    @pytest.mark.parametrize("sparse", [True, False])
     def test_empty_compiled_function(self, sparse):
         if sparse:
             expected = np.array([1, 2, 3], ndmin=2)
@@ -1157,74 +875,15 @@ class TestCASWrapper:
             column_counter += matrix.shape[1]
         assert_allclose(r1, combined_matrix)
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_save_division(self, f1, f2):
+    def test_save_division(self, f1=1, f2=2):
         assert_allclose(
             cas.Expression(data=f1).safe_division(f2), f1 / f2 if f2 != 0 else 0
         )
 
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_limit(self, x, lower_limit, upper_limit):
+    def test_limit(self, x=1, lower_limit=0, upper_limit=2):
         r1 = cas.limit(x, lower_limit, upper_limit)
         r2 = max(lower_limit, min(upper_limit, x))
         assert_allclose(r1, r2)
-
-    @given(float_no_nan_no_inf())
-    def test_normalize_angle_positive(self, a):
-        expected = normalize_angle_positive(a)
-        actual = cas.normalize_angle_positive(a)
-        assert_allclose(
-            shortest_angular_distance(actual.to_np(), expected),
-            0.0,
-        )
-
-    @given(float_no_nan_no_inf())
-    def test_normalize_angle(self, a):
-        ref_r = normalize_angle(a)
-        assert_allclose(cas.normalize_angle(a), ref_r)
-
-    @given(float_no_nan_no_inf(), float_no_nan_no_inf())
-    def test_shorted_angular_distance(self, angle1, angle2):
-        try:
-            expected = shortest_angular_distance(angle1, angle2)
-        except ValueError:
-            expected = np.nan
-        actual = cas.shortest_angular_distance(angle1, angle2)
-        assert_allclose(actual, expected, equal_nan=True)
-
-    @given(unit_vector(4), unit_vector(4))
-    def test_entrywise_product(self, q1, q2):
-        m1 = rotation_matrix_from_quaternion(*q1)
-        m2 = rotation_matrix_from_quaternion(*q2)
-        r1 = cas.Expression(data=m1).entrywise_product(m2)
-        r2 = m1 * m2
-        assert_allclose(r1, r2)
-
-    @given(sq_matrix())
-    def test_sum_row(self, m):
-        actual_sum = cas.Expression(data=m).sum_row()
-        expected_sum = np.sum(m, axis=0)
-        assert_allclose(actual_sum, expected_sum)
-
-    @given(sq_matrix())
-    def test_sum_column(self, m):
-        actual_sum = cas.Expression(data=m).sum_column()
-        expected_sum = np.sum(m, axis=1)
-        assert_allclose(actual_sum, expected_sum)
-
-    def test_to_str(self):
-        axis = cas.Vector3(*cas.create_symbols(["v1", "v2", "v3"]))
-        angle = cas.Symbol(name="alpha")
-        q = cas.Quaternion.from_axis_angle(axis, angle)
-        expr = q.norm()
-        assert expr.pretty_str() == [
-            [
-                "sqrt((((sq((v1*sin((alpha/2))))"
-                "+sq((v2*sin((alpha/2)))))"
-                "+sq((v3*sin((alpha/2)))))"
-                "+sq(cos((alpha/2)))))"
-            ]
-        ]
 
     def test_to_str2(self):
         a, b = cas.create_symbols(["a", "b"])

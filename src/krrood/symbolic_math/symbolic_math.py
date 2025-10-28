@@ -4,6 +4,7 @@ import operator
 from abc import abstractmethod, ABC
 from enum import IntEnum
 
+import casadi
 import numpy as np
 import builtins
 import copy
@@ -33,6 +34,10 @@ from typing_extensions import (
 import casadi as ca
 from scipy import sparse as sp
 
+from krrood.entity_query_language.entity import entity, an, let, contains, in_
+from krrood.entity_query_language.predicate import Symbol, Predicate, symbolic_function
+from krrood.entity_query_language.symbol_graph import SymbolGraph
+from krrood.entity_query_language.symbolic import symbolic_mode
 from krrood.symbolic_math.exceptions import HasFreeSymbolsError, NotSquareMatrixError
 
 EPS: float = sys.float_info.epsilon * 4.0
@@ -48,11 +53,11 @@ class CompiledFunction:
     parameter substitution automatically.
     """
 
-    expression: SymbolicType
+    expression: CasadiScalarWrapper
     """
     The symbolic expression to compile.
     """
-    symbol_parameters: Optional[List[List[Symbol]]] = None
+    symbol_parameters: Optional[List[List[MathSymbol]]] = None
     """
     The input parameters for the compiled symbolic expression.
     """
@@ -145,7 +150,7 @@ class CompiledFunction:
         )
         self.zeroes = np.zeros(self.expression.casadi_sx.nnz())
 
-    def _compile_dense_function(self, casadi_parameters: List[Symbol]) -> None:
+    def _compile_dense_function(self, casadi_parameters: List[MathSymbol]) -> None:
         """
         Compile function for dense matrices.
 
@@ -243,6 +248,11 @@ class CompiledFunction:
         return self(filtered_args)
 
 
+@symbolic_function
+def to_string(x):
+    return str(x)
+
+
 @dataclass
 class CompiledFunctionWithViews:
     """
@@ -256,7 +266,7 @@ class CompiledFunctionWithViews:
     The list of expressions to be compiled, the first len(expressions) many results of __call__ correspond to those
     """
 
-    symbol_parameters: List[List[Symbol]]
+    symbol_parameters: List[List[MathSymbol]]
     """
     The input parameters for the compiled symbolic expression.
     """
@@ -312,7 +322,7 @@ def _operation_type_error(arg1: object, operation: str, arg2: object) -> TypeErr
 
 
 @dataclass(eq=False)
-class SymbolicType(ABC):
+class CasadiScalarWrapper(ABC):
     """
     A wrapper around CasADi's ca.SX, with better usability
     """
@@ -324,7 +334,7 @@ class SymbolicType(ABC):
 
     @classmethod
     @abstractmethod
-    def from_expression(cls, expression: Expression) -> Self:
+    def from_casadi_sx(cls, expression: Expression) -> Self:
         """
         Factory to create this class from an existing expression.
 
@@ -383,8 +393,18 @@ class SymbolicType(ABC):
     def __len__(self) -> int:
         return self.shape[0]
 
-    def free_symbols(self) -> List[Symbol]:
-        return [Symbol._registry[str(s)] for s in ca.symvar(self.casadi_sx)]
+    def free_symbols(self) -> List[MathSymbol]:
+        all_symbols = [str(s) for s in ca.symvar(self.casadi_sx)]
+        with symbolic_mode():
+            math_symbols = let(MathSymbol)
+            q = an(
+                entity(
+                    math_symbols,
+                    contains(all_symbols, to_string(math_symbols)),
+                )
+            )
+
+        return list(q.evaluate())
 
     def is_constant(self) -> bool:
         return len(self.free_symbols()) == 0
@@ -404,7 +424,7 @@ class SymbolicType(ABC):
             return np.array(ca.evalf(self.casadi_sx))
 
     def compile(
-        self, parameters: Optional[List[List[Symbol]]] = None, sparse: bool = False
+        self, parameters: Optional[List[List[MathSymbol]]] = None, sparse: bool = False
     ) -> CompiledFunction:
         """
         Compiles the function into a representation that can be executed efficiently. This method
@@ -421,8 +441,8 @@ class SymbolicType(ABC):
 
     def substitute(
         self,
-        old_symbols: List[Symbol],
-        new_symbols: List[Union[Symbol, Expression]],
+        old_symbols: List[MathSymbol],
+        new_symbols: List[Union[MathSymbol, Expression]],
     ) -> Self:
         """
         Replace symbols in an expression with new symbols or expressions.
@@ -556,12 +576,12 @@ class BasicOperatorMixin:
         return logic_not(self.casadi_sx)
 
     def __eq__(self, other: ScalarData) -> Expression:
-        if isinstance(other, SymbolicType):
+        if isinstance(other, CasadiScalarWrapper):
             other = other.casadi_sx
         return Expression(self.casadi_sx.__eq__(other))
 
     def __ne__(self, other):
-        if isinstance(other, SymbolicType):
+        if isinstance(other, CasadiScalarWrapper):
             other = other.casadi_sx
         return Expression(self.casadi_sx.__ne__(other))
 
@@ -685,7 +705,7 @@ class MatrixOperationsMixin:
 
 
 @dataclass(eq=False)
-class Symbol(SymbolicType, BasicOperatorMixin):
+class MathSymbol(CasadiScalarWrapper, Symbol, BasicOperatorMixin):
     """
     A symbolic expression, which should be only a single symbols.
     No matrix and no numbers.
@@ -695,22 +715,12 @@ class Symbol(SymbolicType, BasicOperatorMixin):
 
     casadi_sx: ca.SX = field(kw_only=True, init=False, default=None)
 
-    _registry: ClassVar[Dict[str, Symbol]] = {}
-    """
-    To avoid two symbols with the same name, references to existing symbols are stored on a class level.
-    """
+    def __post_init__(self):
+        self.casadi_sx = ca.SX.sym(self.name)
 
-    def __new__(cls, name: str):
-        """
-        Multiton design pattern prevents two symbol instances with the same name.
-        """
-        if name in cls._registry:
-            return cls._registry[name]
-        instance = super().__new__(cls)
-        instance.casadi_sx = ca.SX.sym(name)
-        instance.name = name
-        cls._registry[name] = instance
-        return instance
+    @classmethod
+    def from_casadi_sx(cls, expression: casadi.SX) -> Self:
+        raise NotImplementedError("You cannot create a symbol from an expression")
 
     def __str__(self):
         return self.name
@@ -724,7 +734,10 @@ class Symbol(SymbolicType, BasicOperatorMixin):
 
 @dataclass(eq=False)
 class Expression(
-    SymbolicType, BasicOperatorMixin, VectorOperationsMixin, MatrixOperationsMixin
+    CasadiScalarWrapper,
+    BasicOperatorMixin,
+    VectorOperationsMixin,
+    MatrixOperationsMixin,
 ):
     """
     Represents symbolic expressions with rich mathematical capabilities, including matrix
@@ -747,7 +760,7 @@ class Expression(
                 NumericalScalar,
                 NumericalArray,
                 Numerical2dMatrix,
-                Iterable[Symbol],
+                Iterable[MathSymbol],
                 Iterable[Expression],
             ]
         ]
@@ -762,7 +775,7 @@ class Expression(
                 NumericalScalar,
                 NumericalArray,
                 Numerical2dMatrix,
-                Iterable[Symbol],
+                Iterable[MathSymbol],
             ]
         ],
     ):
@@ -770,7 +783,7 @@ class Expression(
             return
         if isinstance(data, ca.SX):
             self.casadi_sx = data
-        elif isinstance(data, SymbolicType):
+        elif isinstance(data, CasadiScalarWrapper):
             self.casadi_sx = data.casadi_sx
         elif isinstance(data, Iterable):
             self._from_iterable(data)
@@ -778,11 +791,11 @@ class Expression(
             self.casadi_sx = ca.SX(data)
 
     @classmethod
-    def from_expression(cls, expression: Expression) -> Self:
-        return expression
+    def from_casadi_sx(cls, expression: ca.SX) -> Self:
+        return cls(expression)
 
     def _from_iterable(
-        self, data: Union[NumericalArray, Numerical2dMatrix, Iterable[Symbol]]
+        self, data: Union[NumericalArray, Numerical2dMatrix, Iterable[MathSymbol]]
     ):
         x = len(data)
         if x == 0:
@@ -896,7 +909,7 @@ class Expression(
     def reshape(self, new_shape: Tuple[int, int]) -> Expression:
         return Expression(self.casadi_sx.reshape(new_shape))
 
-    def jacobian(self, symbols: Iterable[Symbol]) -> Expression:
+    def jacobian(self, symbols: Iterable[MathSymbol]) -> Expression:
         """
         Compute the Jacobian matrix of a vector of expressions with respect to a vector of symbols.
 
@@ -911,7 +924,7 @@ class Expression(
         )
 
     def jacobian_dot(
-        self, symbols: Iterable[Symbol], symbols_dot: Iterable[Symbol]
+        self, symbols: Iterable[MathSymbol], symbols_dot: Iterable[MathSymbol]
     ) -> Expression:
         """
         Compute the total derivative of the Jacobian matrix.
@@ -936,9 +949,9 @@ class Expression(
 
     def jacobian_ddot(
         self,
-        symbols: Iterable[Symbol],
-        symbols_dot: Iterable[Symbol],
-        symbols_ddot: Iterable[Symbol],
+        symbols: Iterable[MathSymbol],
+        symbols_dot: Iterable[MathSymbol],
+        symbols_ddot: Iterable[MathSymbol],
     ) -> Expression:
         """
         Compute the second-order total derivative of the Jacobian matrix.
@@ -969,8 +982,8 @@ class Expression(
 
     def total_derivative(
         self,
-        symbols: Iterable[Symbol],
-        symbols_dot: Iterable[Symbol],
+        symbols: Iterable[MathSymbol],
+        symbols_dot: Iterable[MathSymbol],
     ) -> Expression:
         """
         Compute the total derivative of an expression with respect to given symbols and their derivatives
@@ -991,9 +1004,9 @@ class Expression(
 
     def second_order_total_derivative(
         self,
-        symbols: Iterable[Symbol],
-        symbols_dot: Iterable[Symbol],
-        symbols_ddot: Iterable[Symbol],
+        symbols: Iterable[MathSymbol],
+        symbols_dot: Iterable[MathSymbol],
+        symbols_ddot: Iterable[MathSymbol],
     ) -> Expression:
         """
         Computes the second-order total derivative of an expression with respect to a set of symbols.
@@ -1024,7 +1037,7 @@ class Expression(
         H = H.reshape((1, len(H) ** 2))
         return H.dot(v)
 
-    def hessian(self, symbols: Iterable[Symbol]) -> Expression:
+    def hessian(self, symbols: Iterable[MathSymbol]) -> Expression:
         """
         Calculate the Hessian matrix of a given expression with respect to specified symbols.
 
@@ -1071,7 +1084,7 @@ class Expression(
         return Expression(ca.kron(m1, m2))
 
 
-def create_symbols(names: Union[List[str], int]) -> List[Symbol]:
+def create_symbols(names: Union[List[str], int]) -> List[MathSymbol]:
     """
     Generates a list of symbolic objects based on the input names or an integer value.
 
@@ -1086,7 +1099,7 @@ def create_symbols(names: Union[List[str], int]) -> List[Symbol]:
     """
     if isinstance(names, int):
         names = [f"s_{i}" for i in range(names)]
-    return [Symbol(name=x) for x in names]
+    return [MathSymbol(name=x) for x in names]
 
 
 def diag(args: Union[List[ScalarData], Expression]) -> Expression:
@@ -1105,7 +1118,7 @@ def diag_stack(args: Union[List[Expression], Expression]) -> Expression:
     return Expression.diag_stack(args)
 
 
-def abs(x: SymbolicType) -> Expression:
+def abs(x: CasadiScalarWrapper) -> Expression:
     x_sx = to_sx(x)
     result = ca.fabs(x_sx)
     return Expression(result)
@@ -1129,8 +1142,8 @@ def limit(
     return Expression(data=max(lower_limit, min(upper_limit, x)))
 
 
-def to_sx(thing: Union[ca.SX, SymbolicType]) -> ca.SX:
-    if isinstance(thing, SymbolicType):
+def to_sx(thing: Union[ca.SX, CasadiScalarWrapper]) -> ca.SX:
+    if isinstance(thing, CasadiScalarWrapper):
         return thing.casadi_sx
     if isinstance(thing, ca.SX):
         return thing
@@ -1416,7 +1429,7 @@ def trinary_logic_or(a: ScalarData, b: ScalarData) -> ScalarData:
     return max(cas_a, cas_b)
 
 
-def is_trinary_true(expression: Union[Symbol, Expression]) -> Expression:
+def is_trinary_true(expression: Union[MathSymbol, Expression]) -> Expression:
     return expression == TrinaryTrue
 
 
@@ -1427,7 +1440,7 @@ def is_trinary_true_symbol(expression: Expression) -> bool:
         return False
 
 
-def is_trinary_false(expression: Union[Symbol, Expression]) -> Expression:
+def is_trinary_false(expression: Union[MathSymbol, Expression]) -> Expression:
     return expression == TrinaryFalse
 
 
@@ -1438,7 +1451,7 @@ def is_trinary_false_symbol(expression: Expression) -> bool:
         return False
 
 
-def is_trinary_unknown(expression: Union[Symbol, Expression]) -> Expression:
+def is_trinary_unknown(expression: Union[MathSymbol, Expression]) -> Expression:
     return expression == TrinaryUnknown
 
 
@@ -1495,12 +1508,12 @@ def _get_return_type(thing: Any):
         the return type is `Expression`. Otherwise, the return type is the input's type.
     """
     return_type = type(thing)
-    if return_type in (int, float, Symbol):
+    if return_type in (int, float, MathSymbol):
         return Expression
     return return_type
 
 
-T = TypeVar("T", bound=SymbolicType)
+T = TypeVar("T", bound=CasadiScalarWrapper)
 
 
 def if_else(
@@ -1520,10 +1533,12 @@ def if_else(
         if_result = Expression(data=if_result)
     if isinstance(else_result, NumericalScalar):
         else_result = Expression(data=else_result)
-    return_type = _get_return_type(if_result)
+    return_type = type(else_result)
+    if issubclass(return_type, MathSymbol):
+        return_type = Expression
     if_result = to_sx(if_result)
     else_result = to_sx(else_result)
-    return ca.if_else(condition, if_result, else_result), return_type
+    return return_type.from_casadi_sx(ca.if_else(condition, if_result, else_result))
 
 
 def if_greater(
@@ -1680,7 +1695,7 @@ def if_eq_cases(
         b = to_sx(b)
         b_result = to_sx(b_result)
         result = ca.if_else(ca.eq(a, b), b_result, result)
-    return type(else_result).from_expression(result)
+    return type(else_result).from_casadi_sx(result)
 
 
 def if_cases(
@@ -1727,7 +1742,7 @@ def if_less_eq_cases(
         b = to_sx(b_result_cases[i][0])
         b_result = to_sx(b_result_cases[i][1])
         result = ca.if_else(ca.le(a, b), b_result, result)
-    return type(else_result).from_expression(result)
+    return type(else_result).from_casadi_sx(result)
 
 
 # %% type hints
@@ -1737,7 +1752,7 @@ NumericalArray = Union[np.ndarray, Iterable[NumericalScalar]]
 Numerical2dMatrix = Union[np.ndarray, Iterable[NumericalArray]]
 NumericalData = Union[NumericalScalar, NumericalArray, Numerical2dMatrix]
 
-SymbolicScalar = Union[Symbol, Expression]
+SymbolicScalar = Union[MathSymbol, Expression]
 SymbolicArray = Union[Expression]
 Symbolic2dMatrix = Union[Expression]
 SymbolicData = Union[SymbolicScalar, SymbolicArray, Symbolic2dMatrix]

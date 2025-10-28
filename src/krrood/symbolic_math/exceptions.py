@@ -7,7 +7,7 @@ from typing_extensions import Optional, List, Type, TYPE_CHECKING, Callable
 
 
 if TYPE_CHECKING:
-    from .symbolic_math import Symbol
+    from .symbolic_math import MathSymbol
 
 
 class LogicalError(Exception):
@@ -39,7 +39,7 @@ class SymbolResolutionError(SymbolManagerException):
     for the failure.
     """
 
-    symbol: Symbol
+    symbol: MathSymbol
     original_exception: Exception
 
     def __post_init__(self):
@@ -78,7 +78,7 @@ class HasFreeSymbolsError(SymbolicMathError):
     Raised when an operation can't be performed on an expression with free symbols.
     """
 
-    symbols: Iterable[Symbol]
+    symbols: Iterable[MathSymbol]
 
     def __post_init__(self):
         msg = f"Operation can't be performed on expression with free symbols: {list(self.symbols)}."

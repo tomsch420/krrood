@@ -1328,10 +1328,18 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         for child_v in child_val:
             for v in self._apply_mapping_(child_v[self._child_._id_]):
                 values = copy(child_v)
-                if (not self._invert_ and v.value) or (self._invert_ and not v.value):
-                    self._is_false_ = False
+                if (
+                    isinstance(self._parent_, LogicalOperator)
+                    or self is self._conditions_root_
+                ):
+                    if (not self._invert_ and v.value) or (
+                        self._invert_ and not v.value
+                    ):
+                        self._is_false_ = False
+                    else:
+                        self._is_false_ = True
                 else:
-                    self._is_false_ = True
+                    self._is_false_ = False
                 if self._yield_when_false_ or not self._is_false_:
                     values[self._id_] = v
                     yield values
