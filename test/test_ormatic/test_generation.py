@@ -23,7 +23,7 @@ def test_generation_process():
         assert "class Base(DeclarativeBase):" in content
 
     # Verify we can import from the generated file
-    from dataset import sqlalchemy_interface
+    from ..dataset import sqlalchemy_interface
 
     assert hasattr(sqlalchemy_interface, "Base")
 
