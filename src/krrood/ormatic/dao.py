@@ -13,7 +13,7 @@ from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, ONETOMANY, RelationshipProperty
 from typing_extensions import Type, get_args, Dict, Any, TypeVar, Generic, Self
 
-from .utils import recursive_subclasses
+from ..utils import recursive_subclasses
 
 logger = logging.getLogger(__name__)
 _repr_thread_local = threading.local()

@@ -32,7 +32,6 @@ def test_visualize_symbol_graph():
         os.remove("symbol_graph.svg")
 
 
-@pytest.mark.skip("Memory leak not solved yet.")
 def test_memory_leak():
     """
     Test if the SymbolGraph does not artificially keep objects alive that would be garbage collected.
@@ -40,14 +39,14 @@ def test_memory_leak():
 
     def create_data():
         point = Position(1, 2, 3)
+        return point
 
     create_data()
 
-    time.sleep(0.1)
     with symbolic_mode():
         q = an(entity(let(Position)))
     result = list(q.evaluate())
 
-    print(sys.getrefcount(result[0]))
-    print(referrers.get_referrer_graph(result[0]))
     assert result == []
+
+    assert len(SymbolGraph().wrapped_instances) == 0

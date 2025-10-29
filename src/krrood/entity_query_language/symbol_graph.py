@@ -18,10 +18,9 @@ from typing_extensions import (
     DefaultDict,
 )
 
-from .utils import recursive_subclasses
+from ..utils import recursive_subclasses
 from .. import logger
 from ..class_diagrams import ClassDiagram
-from ..class_diagrams.wrapped_field import WrappedField
 from ..singleton import SingletonMeta
 
 if TYPE_CHECKING:
@@ -98,8 +97,15 @@ class WrappedInstance:
     Rather is instance was inferred or constructed.
     """
 
+    instance_type: Type[Symbol] = field(init=False, default=None)
+    """
+    The type of the instance.
+    This is needed to clean it up from the cache after the instance reference died.
+    """
+
     def __post_init__(self, instance: Symbol):
         self.instance_reference = weakref.ref(instance)
+        self.instance_type = type(instance)
 
     @property
     def instance(self) -> Optional[Symbol]:
@@ -205,13 +211,42 @@ class SymbolGraph(metaclass=SingletonMeta):
         Add a wrapped instance to the cache.
 
         :param wrapped_instance: The instance to add.
-        :return:
         """
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
         self._class_to_wrapped_instances[type(wrapped_instance.instance)].append(
             wrapped_instance
+        )
+
+    def remove_node(self, wrapped_instance: WrappedInstance):
+        """
+        Remove a wrapped instance from the cache.
+
+        :param wrapped_instance: The instance to remove.
+        """
+        self._instance_index.pop(id(wrapped_instance.instance), None)
+        self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
+            wrapped_instance,
+        )
+        self._instance_graph.remove_node(wrapped_instance.index)
+
+    def remove_dead_instances(self):
+        for node in self._instance_graph.nodes():
+            if node.instance is None:
+                self.remove_node(node)
+
+    def get_instances_of_type(self, type_: Type[Symbol]) -> Iterable[WrappedInstance]:
+        """
+        Get all wrapped instances of the given type and all its subclasses.
+        :param type_: The symbol type to look for
+        :return: All wrapped instances that refer to an instance of the given type.
+        """
+        yield from itertools.chain.from_iterable(
+            [
+                map(lambda x: x.instance, self._class_to_wrapped_instances[cls])
+                for cls in [type_] + recursive_subclasses(type_)
+            ]
         )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:

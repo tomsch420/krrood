@@ -6,7 +6,6 @@ import sys
 from contextlib import suppress
 from enum import Enum
 
-
 import sqlalchemy
 from sqlalchemy import Engine, text, MetaData
 from typing_extensions import TypeVar, _SpecialForm, Type, List, Iterable, Union
@@ -40,17 +39,6 @@ def classes_of_module(module) -> List[Type]:
 
 
 T = TypeVar("T")
-
-
-def recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
-    """
-    :param cls: The class.
-    :return: A list of the classes subclasses.
-    """
-    return cls.__subclasses__() + [
-        g for s in cls.__subclasses__() for g in recursive_subclasses(s)
-    ]
-
 
 leaf_types = (int, float, str, Enum, datetime.datetime, bool)
 

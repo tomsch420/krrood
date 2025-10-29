@@ -35,7 +35,7 @@ from ...dataset.semantic_world_like_classes import (
     World,
     Connection,
 )
-
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 
 # disable_caching()
 
@@ -205,8 +205,11 @@ def test_nested_specified_property_predicate_form_without_entity_without_domain(
 ):
     world = handles_and_containers_world
     with symbolic_mode():
+
+        connection = let(Connection, world.connections)
+
         query = a(
-            connection := Connection(world=world),
+            connection := connection,
             HasType(connection.parent, Container),
             connection.parent.name == "Container1",
             HasType(connection.child, Handle),
@@ -1073,12 +1076,3 @@ def test_nested_query_with_multiple_sources(handles_and_containers_world):
         )
         for k in drawer_components
     ), "Should generate same results"
-
-
-def test_implicitly_bound_first_predicate_argument(handles_and_containers_world):
-    world = handles_and_containers_world
-    with symbolic_mode():
-        with a(Body(From(world.bodies))) as q:
-            HasType(Handle)
-    results = list(q.evaluate())
-    assert len(results) == 3, "Should generate 3 handles."

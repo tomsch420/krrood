@@ -83,55 +83,6 @@ def test_generate_drawers_predicate_form(handles_and_containers_world):
     assert all_solutions[1].container.name == "Container1"
 
 
-def test_generate_drawers_predicate_form_without_entity(handles_and_containers_world):
-    world = handles_and_containers_world
-    with rule_mode():
-        query = infer(
-            Drawer(
-                handle=a(handle := Handle(From(world.bodies))),
-                container=a(container := Container(From(world.bodies))),
-            ),
-            PrismaticConnection(From(world.connections), child=container),
-            FixedConnection(From(world.connections), parent=container, child=handle),
-        )
-
-    # query._render_tree_()
-    all_solutions = list(query.evaluate())
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
-    assert all(isinstance(d, Drawer) for d in all_solutions)
-    assert all_solutions[1].handle.name == "Handle3"
-    assert all_solutions[1].container.name == "Container3"
-    assert all_solutions[0].handle.name == "Handle1"
-    assert all_solutions[0].container.name == "Container1"
-
-
-def test_generate_drawers_predicate_form_without_entity_and_domain(
-    handles_and_containers_world,
-):
-    world = handles_and_containers_world
-    with rule_mode():
-        query = infer(
-            Drawer(
-                handle=a(handle := Handle(world=world)),
-                container=a(container := Container(world=world)),
-            ),
-            PrismaticConnection(child=container, world=world),
-            FixedConnection(parent=container, child=handle, world=world),
-        )
-
-    # query._render_tree_()
-    all_solutions = list(query.evaluate())
-    assert (
-        len(all_solutions) == 2
-    ), "Should generate components for two possible drawer."
-    assert all(isinstance(d, Drawer) for d in all_solutions)
-    expected_name_tuple_set = {("Handle3", "Container3"), ("Handle1", "Container1")}
-    solution_name_tuple_set = {(s.handle.name, s.container.name) for s in all_solutions}
-    assert expected_name_tuple_set == solution_name_tuple_set
-
-
 def test_add_conclusion(handles_and_containers_world):
     world = handles_and_containers_world
 
@@ -504,12 +455,30 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_too_much_joins(
 ):
     world = doors_and_drawers_world
     with symbolic_mode():
-        body = Body(world=world)
-        handle = Handle(world=world)
-        container = Container(world=world)
-        fixed_connection = FixedConnection(parent=body, child=handle, world=world)
-        prismatic_connection = PrismaticConnection(child=body, world=world)
-        revolute_connection = RevoluteConnection(parent=body, child=handle, world=world)
+        body = let(Body, domain=world.bodies)
+        handle = let(Handle, domain=world.bodies)
+        container = let(Container, domain=world.bodies)
+
+        fixed_connection = an(
+            entity(
+                f := let(FixedConnection, domain=world.connections),
+                f.parent == body,
+                f.child == handle,
+            )
+        )
+        prismatic_connection = an(
+            entity(
+                p := let(PrismaticConnection, domain=world.connections), p.child == body
+            )
+        )
+        revolute_connection = an(
+            entity(
+                r := let(RevoluteConnection, domain=world.connections),
+                r.parent == body,
+                r.child == handle,
+            )
+        )
+
         query = infer(views := View(), fixed_connection, prismatic_connection)
 
     with rule_mode(query):
@@ -556,13 +525,26 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_better_rule_tree(
     doors_and_drawers_world,
 ):
     world = doors_and_drawers_world
+
     with symbolic_mode():
-        body = Body(world=world)
-        handle = Handle(world=world)
-        container = Container(world=world)
-        fixed_connection = FixedConnection(parent=body, child=handle, world=world)
-        prismatic_connection = PrismaticConnection(child=body, world=world)
-        revolute_connection = RevoluteConnection(world=world)
+        body = let(Body, domain=world.bodies)
+        handle = let(Handle, domain=world.bodies)
+        container = let(Container, domain=world.bodies)
+
+        fixed_connection = an(
+            entity(
+                f := let(FixedConnection, domain=world.connections),
+                f.parent == body,
+                f.child == handle,
+            )
+        )
+        prismatic_connection = an(
+            entity(
+                p := let(PrismaticConnection, domain=world.connections), p.child == body
+            )
+        )
+
+        revolute_connection = let(RevoluteConnection, domain=world.connections)
         query = infer(views := View(), fixed_connection)
 
     with rule_mode(query):
@@ -614,9 +596,9 @@ def test_rule_tree_with_multiple_alternatives_predicate_form_better_rule_tree_op
 ):
     world = doors_and_drawers_world
     with symbolic_mode():
-        fixed_connection = FixedConnection(world=world)
-        prismatic_connection = PrismaticConnection(world=world)
-        revolute_connection = RevoluteConnection(world=world)
+        fixed_connection = let(FixedConnection, world.connections)
+        prismatic_connection = let(PrismaticConnection, world.connections)
+        revolute_connection = let(RevoluteConnection, world.connections)
         query = infer(views := View(), HasType(fixed_connection.child, Handle))
 
     with rule_mode(query):

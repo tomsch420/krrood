@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 from dataclasses import is_dataclass
 
 import pytest
@@ -10,18 +10,15 @@ import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import (
-    BinaryPredicate,
     HasTypes,
     HasType,
 )
-from krrood.entity_query_language.symbolic import Variable
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
-from krrood.ormatic.utils import classes_of_module, recursive_subclasses
+from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
-
-from .dataset import example_classes, semantic_world_like_classes
+from krrood.utils import recursive_subclasses
 from .dataset.example_classes import (
     PhysicalObject,
     NotMappedParent,
@@ -29,13 +26,10 @@ from .dataset.example_classes import (
     ConceptType,
 )
 from .dataset.semantic_world_like_classes import *
-from .test_eql.conf.world.doors_and_drawers import World as DoorsAndDrawersWorld
+from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
-    World as HandlesAndContainersWorld,
+    HandlesAndContainersWorld,
 )
-
-# conftest.py
-import logging
 
 
 def generate_sqlalchemy_interface():
@@ -117,7 +111,6 @@ from .dataset.sqlalchemy_interface import *
 @pytest.fixture
 def handles_and_containers_world() -> World:
     world = HandlesAndContainersWorld().create()
-    SymbolGraph()
     return world
 
 
@@ -133,10 +126,6 @@ def cleanup_after_test():
     # Setup: runs before each test
     SymbolGraph()
     yield
-    # Teardown: runs after each test
-    for c in Variable._cache_.values():
-        c.clear()
-    Variable._cache_.clear()
     SymbolGraph().clear()
 
 

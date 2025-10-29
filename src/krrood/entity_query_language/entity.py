@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .symbol_graph import SymbolGraph
+
 """
 User interface (grammar & vocabulary) for entity query language.
 """
@@ -226,9 +228,8 @@ def let(
         )
     with symbolic_mode():
         if domain is None:
-            var = type_()
-        else:
-            var = type_(From(domain))
+            domain = SymbolGraph().get_instances_of_type(type_)
+        var = type_(From(domain))
     if name is not None:
         var._name__ = name
     return var

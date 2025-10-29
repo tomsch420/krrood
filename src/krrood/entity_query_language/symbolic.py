@@ -36,8 +36,10 @@ from typing_extensions import (
     Generic,
     TypeVar,
     TYPE_CHECKING,
+    List,
+    Tuple,
+    Callable,
 )
-from typing_extensions import List, Tuple, Callable
 
 
 from .cache_data import (
@@ -47,12 +49,11 @@ from .cache_data import (
     is_caching_enabled,
     SeenSet,
     IndexedCache,
-    get_cache_keys_for_class_,
     yield_class_values_from_cache,
 )
 from .failures import MultipleSolutionFound, NoSolutionFound
 from .utils import IDGenerator, is_iterable, generate_combinations
-from .hashed_data import HashedValue, HashedIterable, T, HV_TRUE, HV_FALSE
+from .hashed_data import HashedValue, HashedIterable, T
 
 if TYPE_CHECKING:
     from .conclusion import Conclusion
@@ -626,6 +627,7 @@ class An(ResultQuantifier[T]):
     def evaluate(
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        SymbolGraph().remove_dead_instances()
         with symbolic_mode(mode=None):
             results = self._evaluate__()
             assert not in_symbolic_mode()
@@ -923,10 +925,7 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     Whether this variable cache is indexed or flat.
     """
-    _cache_: ClassVar[Dict[Type, IndexedCache]] = defaultdict(IndexedCache)
-    """
-    A mapping from variable type to an indexed cache of all seen inputs and outputs of the variable type. 
-    """
+
     _child_vars_: Optional[Dict[str, SymbolicExpression]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -1169,20 +1168,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         ):
             yield from self._process_output_and_update_values_(value.value, **kwargs)
 
-    @property
-    def _cache_values_(self):
-        for _, value in yield_class_values_from_cache(
-            self._cache_, self._type_, from_index=self._is_indexed_
-        ):
-            yield value
-
-    @property
-    def _cache_keys_(self) -> List[Type]:
-        """
-        Get the cache keys for the given class which are its subclasses and itself.
-        """
-        return get_cache_keys_for_class_(self._cache_, self._type_)
-
     def _process_output_and_update_values_(
         self, function_output: Any, **kwargs
     ) -> Iterable[Dict[int, HashedValue]]:
@@ -1217,18 +1202,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     @property
     def _name_(self):
         return self._name__
-
-    @classmethod
-    def _from_domain_(
-        cls, iterable, clazz: Optional[Type] = None, name: Optional[str] = None
-    ) -> Variable:
-        if not isinstance(iterable, SymbolicExpression) and not is_iterable(iterable):
-            iterable = HashedIterable([iterable])
-        if not clazz:
-            clazz = type(next(iter(iterable)))
-        if name is None:
-            name = clazz.__name__
-        return Variable(name, clazz, _domain_source_=From(iterable))
 
     @property
     @lru_cache(maxsize=None)
