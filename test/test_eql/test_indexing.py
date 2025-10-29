@@ -24,7 +24,7 @@ def test_indexing_on_dict_field():
             return hash(id(self))
 
     SymbolGraph().clear()
-    SymbolGraph.build()
+    SymbolGraph()
 
     world = World(
         [
@@ -55,7 +55,7 @@ def test_indexing_2():
             return hash(id(self))
 
     SymbolGraph().clear()
-    SymbolGraph.build([Body, Shape])
+    SymbolGraph()
 
     world_bodies = [
         Body(shapes=[Shape("shape1", color="red"), Shape("shape2", color="blue")]),

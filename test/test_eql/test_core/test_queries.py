@@ -3,7 +3,6 @@ from math import factorial
 
 import pytest
 
-
 from krrood.entity_query_language.entity import (
     and_,
     not_,
@@ -11,7 +10,6 @@ from krrood.entity_query_language.entity import (
     in_,
     symbolic_mode,
     From,
-    BinaryPredicate,
     an,
     entity,
     set_of,
@@ -20,12 +18,13 @@ from krrood.entity_query_language.entity import (
     or_,
     a,
 )
-from krrood.entity_query_language.cache_data import (
-    cache_search_count,
-    cache_match_count,
-)
 from krrood.entity_query_language.failures import MultipleSolutionFound
-from krrood.entity_query_language.predicate import HasType, symbolic_function, Predicate
+from krrood.entity_query_language.predicate import (
+    HasType,
+    symbolic_function,
+    Predicate,
+    BinaryPredicate,
+)
 from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
@@ -38,9 +37,6 @@ from ...dataset.semantic_world_like_classes import (
     ContainsType,
     Apple,
 )
-
-
-# disable_caching()
 
 
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
@@ -57,7 +53,7 @@ def test_empty_conditions_and_no_domain(
     world = handles_and_containers_world
     world2 = doors_and_drawers_world
     with symbolic_mode():
-        query = an(entity(body := let(type_=Body), body.world == world))
+        query = an(entity(body := let(type_=Body, domain=None), body.world == world))
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
 
 
@@ -208,8 +204,11 @@ def test_nested_specified_property_predicate_form_without_entity_without_domain(
 ):
     world = handles_and_containers_world
     with symbolic_mode():
+
+        connection = let(Connection, world.connections)
+
         query = a(
-            connection := Connection(world=world),
+            connection := connection,
             HasType(connection.parent, Container),
             connection.parent.name == "Container1",
             HasType(connection.child, Handle),
@@ -1078,22 +1077,15 @@ def test_nested_query_with_multiple_sources(handles_and_containers_world):
     ), "Should generate same results"
 
 
-def test_implicitly_bound_first_predicate_argument(handles_and_containers_world):
-    world = handles_and_containers_world
-    with symbolic_mode():
-        with a(Body(From(world.bodies))) as q:
-            HasType(Handle)
-    results = list(q.evaluate())
-    assert len(results) == 3, "Should generate 3 handles."
-
-
 def test_contains_type():
     fb1_fruits = [Apple("apple"), Body("Body1")]
     fb2_fruits = [Body("Body3"), Body("Body2")]
     fb1 = FruitBox("FruitBox1", fb1_fruits)
     fb2 = FruitBox("FruitBox2", fb2_fruits)
     with symbolic_mode():
-        fruit_box_query = a(fb := FruitBox(), ContainsType(fb.fruits, Apple))
+        fruit_box_query = a(
+            fb := let(FruitBox, domain=None), ContainsType(fb.fruits, Apple)
+        )
 
     query_result = list(fruit_box_query.evaluate())
     assert len(query_result) == 1, "Should generate 1 fruit box."

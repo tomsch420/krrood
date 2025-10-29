@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 from dataclasses import fields, Field
-from typing_extensions import List, TypeVar, Generic
 
 from typing_extensions import Type
 
+from krrood.class_diagrams.class_diagram import WrappedClass
+from krrood.class_diagrams.wrapped_field import WrappedField
 from ..dataset.example_classes import (
     Position,
     Orientation,
@@ -11,8 +13,6 @@ from ..dataset.example_classes import (
     Positions,
     PositionTypeWrapper,
 )
-from krrood.class_diagrams.class_diagram import WrappedClass
-from krrood.class_diagrams.wrapped_field import WrappedField
 
 
 def get_field_by_name(cls: Type, name: str) -> Field:

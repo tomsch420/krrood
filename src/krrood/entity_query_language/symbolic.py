@@ -8,7 +8,7 @@ from . import logger
 from .enums import EQLMode, PredicateType
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
-from ..class_diagrams import Relation
+from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 
@@ -36,8 +36,10 @@ from typing_extensions import (
     Generic,
     TypeVar,
     TYPE_CHECKING,
+    List,
+    Tuple,
+    Callable,
 )
-from typing_extensions import List, Tuple, Callable
 
 
 from .cache_data import (
@@ -47,7 +49,6 @@ from .cache_data import (
     is_caching_enabled,
     SeenSet,
     IndexedCache,
-    get_cache_keys_for_class_,
     yield_class_values_from_cache,
 )
 from .failures import MultipleSolutionFound, NoSolutionFound
@@ -376,7 +377,7 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
-    _path_: List[Relation] = field(init=False, default_factory=list)
+    _path_: List[ClassRelation] = field(init=False, default_factory=list)
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
     """
@@ -626,6 +627,7 @@ class An(ResultQuantifier[T]):
     def evaluate(
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        SymbolGraph().remove_dead_instances()
         with symbolic_mode(mode=None):
             results = self._evaluate__()
             assert not in_symbolic_mode()
@@ -923,10 +925,7 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     Whether this variable cache is indexed or flat.
     """
-    _cache_: ClassVar[Dict[Type, IndexedCache]] = defaultdict(IndexedCache)
-    """
-    A mapping from variable type to an indexed cache of all seen inputs and outputs of the variable type. 
-    """
+
     _child_vars_: Optional[Dict[str, SymbolicExpression]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -1019,8 +1018,8 @@ class Variable(CanBehaveLikeAVariable[T]):
             )
         elif self._child_vars_:
             for kwargs in self._generate_combinations_for_child_vars_values_(sources):
-                yield from self._yield_from_cache_or_instantiate_new_values_(
-                    sources, kwargs
+                yield from self._instantiate_new_values_and_yield_results_(
+                    kwargs, sources
                 )
 
     def _evaluate_kwargs_expression_(
@@ -1074,11 +1073,11 @@ class Variable(CanBehaveLikeAVariable[T]):
         # Precompute generators only when we have child vars
         if self._child_vars_:
             for kwargs in self._generate_combinations_for_child_vars_values_(sources):
-                yield from self._yield_from_cache_or_instantiate_new_values_(
-                    sources, kwargs
+                yield from self._instantiate_new_values_and_yield_results_(
+                    kwargs, sources
                 )
         else:
-            yield from self._yield_from_cache_or_instantiate_new_values_(sources)
+            yield from self._instantiate_new_values_and_yield_results_({}, sources)
 
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
@@ -1087,25 +1086,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         yield from generate_combinations(
             {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
         )
-
-    def _yield_from_cache_or_instantiate_new_values_(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        kwargs: Dict[str, Dict[int, HashedValue]] = None,
-    ):
-        kwargs = kwargs or {}
-        # Try cache fast-path first when allowed
-        retrieved = False
-        if not self._is_inferred_ and self._is_indexed_:
-            for v in self._search_and_yield_from_cache_(kwargs):
-                retrieved = True
-                if sources:
-                    v.update(sources)
-                yield v
-
-        # If nothing retrieved and we are allowed to instantiate
-        if (not retrieved) and (self._is_inferred_ or self._predicate_type_):
-            yield from self._instantiate_new_values_and_yield_results_(kwargs, sources)
 
     def _instantiate_new_values_and_yield_results_(
         self,
@@ -1169,20 +1149,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         ):
             yield from self._process_output_and_update_values_(value.value, **kwargs)
 
-    @property
-    def _cache_values_(self):
-        for _, value in yield_class_values_from_cache(
-            self._cache_, self._type_, from_index=self._is_indexed_
-        ):
-            yield value
-
-    @property
-    def _cache_keys_(self) -> List[Type]:
-        """
-        Get the cache keys for the given class which are its subclasses and itself.
-        """
-        return get_cache_keys_for_class_(self._cache_, self._type_)
-
     def _process_output_and_update_values_(
         self, function_output: Any, **kwargs
     ) -> Iterable[Dict[int, HashedValue]]:
@@ -1217,18 +1183,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     @property
     def _name_(self):
         return self._name__
-
-    @classmethod
-    def _from_domain_(
-        cls, iterable, clazz: Optional[Type] = None, name: Optional[str] = None
-    ) -> Variable:
-        if not isinstance(iterable, SymbolicExpression) and not is_iterable(iterable):
-            iterable = HashedIterable([iterable])
-        if not clazz:
-            clazz = type(next(iter(iterable)))
-        if name is None:
-            name = clazz.__name__
-        return Variable(name, clazz, _domain_source_=From(iterable))
 
     @property
     @lru_cache(maxsize=None)

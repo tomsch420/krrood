@@ -1,12 +1,9 @@
 import inspect
 import sys
 from dataclasses import dataclass
+
 from typing_extensions import List, Type, Generic, TYPE_CHECKING
-
 from typing_extensions import TypeVar, get_origin, get_args
-
-if TYPE_CHECKING:
-    from krrood.class_diagrams.class_diagram import Association
 
 
 def classes_of_module(module) -> List[Type]:

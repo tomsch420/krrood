@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .symbol_graph import SymbolGraph
+
 """
 User interface (grammar & vocabulary) for entity query language.
 """
@@ -29,11 +31,12 @@ from .symbolic import (
     ForAll,
     Exists,
 )
-from .symbol_graph import symbols_registry
+
 from .predicate import (
     Predicate,
     symbolic_function,  # type: ignore
-    BinaryPredicate,  # type: ignore
+    BinaryPredicate,
+    Symbol,  # type: ignore
 )
 
 T = TypeVar("T")  # Define type variable "T"
@@ -201,7 +204,7 @@ def _extract_variables_and_expression(
 
 
 def let(
-    type_: Type[T], domain: Optional[Any] = None, name: Optional[str] = None
+    type_: Type[T], domain: Optional[Iterable[T]], name: Optional[str] = None
 ) -> Union[T, CanBehaveLikeAVariable[T], Variable[T]]:
     """
     Declare a symbolic variable or source.
@@ -219,15 +222,14 @@ def let(
     :rtype: T
     :raises ValueError: If the type is not registered as a symbol.
     """
-    if not any(issubclass(type_, t) for t in symbols_registry):
+    if not issubclass(type_, Symbol):
         raise ValueError(
             f"Type {type_} is not registered as symbol, did you forget to decorate it with @symbol?"
         )
     with symbolic_mode():
         if domain is None:
-            var = type_()
-        else:
-            var = type_(From(domain))
+            domain = SymbolGraph().get_instances_of_type(type_)
+        var = type_(From(domain))
     if name is not None:
         var._name__ = name
     return var

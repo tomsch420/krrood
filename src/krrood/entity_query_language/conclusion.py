@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import typing
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing_extensions import Dict
 
 from typing_extensions import Any, Optional, List
+from typing_extensions import Dict
 
 from .enums import RDREdge
 from .hashed_data import HashedValue
 from .rxnode import ColorLegend
-from .symbolic import SymbolicExpression, T, Variable, Attribute
+from .symbolic import SymbolicExpression, T, Variable
 
 
 @dataclass(eq=False)

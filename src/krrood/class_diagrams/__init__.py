@@ -1,1 +1,1 @@
-from .class_diagram import ClassDiagram, Relation
+from .class_diagram import ClassDiagram, ClassRelation

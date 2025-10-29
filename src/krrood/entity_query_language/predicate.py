@@ -2,22 +2,24 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections import deque
 from dataclasses import dataclass
 from functools import wraps
 
-from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
+from typing_extensions import (
+    Callable,
+    Optional,
+    Any,
+    Type,
+    Tuple,
+    ClassVar,
+    Iterable,
+)
 
-from typing_extensions import ClassVar, Iterable
-
-from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
-from .hashed_data import HashedValue
 from .symbol_graph import (
-    PredicateRelation,
+    PredicateClassRelation,
     WrappedInstance,
     SymbolGraph,
-    symbols_registry,
 )
 from .symbolic import (
     T,
@@ -30,10 +32,9 @@ from .symbolic import (
     AND,
     properties_to_expression_tree,
     From,
-    Flatten,
 )
 from .utils import is_iterable, make_list
-from ..class_diagrams.wrapped_field import WrappedField
+from ..utils import recursive_subclasses
 
 cls_args = {}
 """
@@ -87,17 +88,10 @@ class Symbol:
             update_cache(instance)
             return instance
 
-    def __init_subclass__(cls, **kwargs):
-        symbols_registry.add(cls)
-
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
             PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
-        )
-        node = SymbolicExpression._current_parent_()
-        args = bind_first_argument_of_predicate_if_in_query_context(
-            node, predicate_type, *args
         )
         domain, kwargs = update_domain_and_kwargs_from_args(cls, *args, **kwargs)
         # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
@@ -111,7 +105,6 @@ class Symbol:
                 _predicate_type_=predicate_type,
                 _is_indexed_=index_class_cache(cls),
             )
-            update_query_child_expression_if_in_query_context(node, predicate_type, var)
             return var
         else:
             # In this mode, we either have a domain through the `domain` provided here, or through the cache if
@@ -261,7 +254,7 @@ class BinaryPredicate(Predicate, ABC):
         domain_value: Symbol,
         range_value: Symbol,
         inferred: bool = False,
-    ) -> PredicateRelation:
+    ) -> PredicateClassRelation:
         """
         Gets or creates a relation between two symbols, representing the domain and range
         values. The function ensures that the symbols are wrapped in instances, adding
@@ -282,7 +275,7 @@ class BinaryPredicate(Predicate, ABC):
         if not wrapped_range_instance:
             wrapped_range_instance = WrappedInstance(range_value)
             SymbolGraph().add_node(wrapped_range_instance)
-        return PredicateRelation(
+        return PredicateClassRelation(
             wrapped_domain_instance,
             wrapped_range_instance,
             cls(domain_value, range_value),
@@ -434,19 +427,9 @@ def extract_selected_variable_and_expression(
     :param kwargs: Additional properties to define and construct the variable.
     :return: A tuple containing the generated variable and its corresponding expression tree.
     """
-    cache_keys = get_cache_keys_for_class_(Variable._cache_, symbolic_cls)
+    cache_keys = [symbolic_cls] + recursive_subclasses(symbolic_cls)
     if not domain and cache_keys:
-        domain = From(
-            (
-                v
-                for a, v in yield_class_values_from_cache(
-                    Variable._cache_,
-                    symbolic_cls,
-                    from_index=False,
-                    cache_keys=cache_keys,
-                )
-            )
-        )
+        domain = From(lambda: SymbolGraph()._class_to_wrapped_instances[symbolic_cls])
     elif domain and is_iterable(domain.domain):
         domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
 
@@ -474,25 +457,7 @@ def update_cache(instance: Symbol):
         Symbol or BinaryPredicate, among others.
     :return: Returns the updated instance that has been added to the cache.
     """
-    symbolic_cls = type(instance)
-    index = index_class_cache(symbolic_cls)
-    if index:
-        update_cls_args(symbolic_cls)
-        kwargs = {
-            f: HashedValue(getattr(instance, f)) for f in cls_args[symbolic_cls][1:]
-        }
-        if (
-            symbolic_cls not in Variable._cache_
-            or not Variable._cache_[symbolic_cls].keys
-        ):
-            Variable._cache_[symbolic_cls].keys = kwargs.keys()
-    else:
-        kwargs = {}
-    if not isinstance(instance, BinaryPredicate) and isinstance(instance, Symbol):
-        Variable._cache_[symbolic_cls].insert(
-            kwargs, HashedValue(instance), index=index
-        )
-        SymbolGraph().add_node(WrappedInstance(instance))
+    SymbolGraph().add_node(WrappedInstance(instance))
     return instance
 
 
