@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import itertools
 import os
 import weakref
 from collections import defaultdict
-from dataclasses import dataclass, field, fields, InitVar
-from functools import cached_property
+from dataclasses import dataclass, field, InitVar
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -18,10 +18,10 @@ from typing_extensions import (
     DefaultDict,
 )
 
-from ..utils import recursive_subclasses
 from .. import logger
 from ..class_diagrams import ClassDiagram
 from ..singleton import SingletonMeta
+from ..utils import recursive_subclasses
 
 if TYPE_CHECKING:
     from .predicate import BinaryPredicate, Symbol

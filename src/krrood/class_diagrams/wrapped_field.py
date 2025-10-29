@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import enum
-import importlib
 import inspect
 import logging
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
-from collections.abc import Sequence
 
 from typing_extensions import (
     get_type_hints,
@@ -23,7 +22,6 @@ from typing_extensions import (
     Union,
 )
 
-from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 

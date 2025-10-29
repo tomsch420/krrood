@@ -34,8 +34,6 @@ from .symbolic import (
 
 from .predicate import (
     Predicate,
-    symbolic_function,
-    BinaryPredicate,
     Symbol,
 )
 

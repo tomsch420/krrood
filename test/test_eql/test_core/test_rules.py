@@ -1,13 +1,6 @@
-from krrood.entity_query_language.entity import let, an, entity, and_, a, From
-from krrood.entity_query_language.cache_data import (
-    cache_enter_count,
-    cache_search_count,
-    cache_match_count,
-    cache_lookup_time,
-    cache_update_time,
-)
 from krrood.entity_query_language.conclusion import Add
 from krrood.entity_query_language.entity import infer
+from krrood.entity_query_language.entity import let, an, entity, and_, From
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rule import refinement, alternative, next_rule
 from krrood.entity_query_language.symbolic import symbolic_mode, rule_mode

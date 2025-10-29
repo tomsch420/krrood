@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
 from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set

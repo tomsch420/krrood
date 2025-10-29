@@ -13,12 +13,9 @@ from typing_extensions import (
     Tuple,
     ClassVar,
     Iterable,
-    Self,
 )
 
-from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
-from .hashed_data import HashedValue
 from .symbol_graph import (
     PredicateClassRelation,
     WrappedInstance,

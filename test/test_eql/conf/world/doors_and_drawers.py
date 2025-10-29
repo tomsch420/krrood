@@ -9,12 +9,9 @@ from .base_config import (
     ConnectionConf,
     FixedConnectionConf,
     PrismaticConnectionConf,
-    ContainerConf,
     RevoluteConnectionConf,
     HandleConf,
 )
-
-from ...factories.world import create_world
 from .handles_and_containers import (
     Handle1,
     Handle2,
@@ -23,6 +20,7 @@ from .handles_and_containers import (
     Container2,
     Container3,
 )
+from ...factories.world import create_world
 
 
 @dataclass

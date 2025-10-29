@@ -6,12 +6,7 @@ from dataclasses import dataclass
 Utilities for hashing, rendering, and general helpers used by the
 symbolic query engine.
 """
-import codecs
 import itertools
-import os
-import re
-from subprocess import check_call
-from tempfile import NamedTemporaryFile
 
 try:
     import six
@@ -23,7 +18,7 @@ try:
 except ImportError:
     Source = None
 
-from typing_extensions import Callable, Set, Any, Optional, List
+from typing_extensions import Set, Any, List
 
 
 class IDGenerator:

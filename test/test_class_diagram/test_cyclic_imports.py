@@ -1,8 +1,5 @@
-from dataclasses import fields
-
 from krrood.class_diagrams import ClassDiagram
 from ..dataset.cyclic_imports import PoseAnnotation
-from krrood.class_diagrams.class_diagram import WrappedClass
 
 from ..dataset.example_classes import Pose
 

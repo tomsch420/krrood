@@ -4,13 +4,13 @@ import importlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing_extensions import Dict, Any, Sequence
 
 from sqlalchemy import types, TypeDecorator
+from typing_extensions import Dict, Any, Sequence
 from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.predicate import Symbol
-from krrood.ormatic.dao import DataAccessObject, AlternativeMapping, T
+from krrood.ormatic.dao import AlternativeMapping, T
 
 
 # check that custom enums works

@@ -1,16 +1,11 @@
 import os
-import sys
-import time
 
 import pytest
-import referrers
 
+from krrood.entity_query_language.entity import an, entity, let
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.entity_query_language.symbolic import symbolic_mode
-from ..dataset import semantic_world_like_classes
 from ..dataset.example_classes import Position
-from krrood.class_diagrams.utils import classes_of_module
-from krrood.entity_query_language.entity import an, entity, let
 
 try:
     import pydot

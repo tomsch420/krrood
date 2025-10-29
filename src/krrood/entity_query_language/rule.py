@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing_extensions import Union, TYPE_CHECKING
 
-from .hashed_data import T
+from .conclusion_selector import ExceptIf, Alternative, Next
 from .enums import RDREdge
+from .hashed_data import T
 from .symbolic import (
     SymbolicExpression,
     chained_logic,
     AND,
     BinaryOperator,
 )
-from .conclusion_selector import ExceptIf, Alternative, ConclusionSelector, Next
 
 if TYPE_CHECKING:
     from .predicate import BinaryPredicate

@@ -3,7 +3,6 @@ from math import factorial
 
 import pytest
 
-
 from krrood.entity_query_language.entity import (
     and_,
     not_,
@@ -11,7 +10,6 @@ from krrood.entity_query_language.entity import (
     in_,
     symbolic_mode,
     From,
-    BinaryPredicate,
     an,
     entity,
     set_of,
@@ -20,12 +18,13 @@ from krrood.entity_query_language.entity import (
     or_,
     a,
 )
-from krrood.entity_query_language.cache_data import (
-    cache_search_count,
-    cache_match_count,
-)
 from krrood.entity_query_language.failures import MultipleSolutionFound
-from krrood.entity_query_language.predicate import HasType, symbolic_function, Predicate
+from krrood.entity_query_language.predicate import (
+    HasType,
+    symbolic_function,
+    Predicate,
+    BinaryPredicate,
+)
 from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
@@ -35,9 +34,6 @@ from ...dataset.semantic_world_like_classes import (
     World,
     Connection,
 )
-from krrood.entity_query_language.symbol_graph import SymbolGraph
-
-# disable_caching()
 
 
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
