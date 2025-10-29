@@ -1018,8 +1018,8 @@ class Variable(CanBehaveLikeAVariable[T]):
             )
         elif self._child_vars_:
             for kwargs in self._generate_combinations_for_child_vars_values_(sources):
-                yield from self._yield_from_cache_or_instantiate_new_values_(
-                    sources, kwargs
+                yield from self._instantiate_new_values_and_yield_results_(
+                    kwargs, sources
                 )
 
     def _evaluate_kwargs_expression_(
@@ -1073,11 +1073,11 @@ class Variable(CanBehaveLikeAVariable[T]):
         # Precompute generators only when we have child vars
         if self._child_vars_:
             for kwargs in self._generate_combinations_for_child_vars_values_(sources):
-                yield from self._yield_from_cache_or_instantiate_new_values_(
-                    sources, kwargs
+                yield from self._instantiate_new_values_and_yield_results_(
+                    kwargs, sources
                 )
         else:
-            yield from self._yield_from_cache_or_instantiate_new_values_(sources)
+            yield from self._instantiate_new_values_and_yield_results_({}, sources)
 
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
@@ -1086,25 +1086,6 @@ class Variable(CanBehaveLikeAVariable[T]):
         yield from generate_combinations(
             {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
         )
-
-    def _yield_from_cache_or_instantiate_new_values_(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        kwargs: Dict[str, Dict[int, HashedValue]] = None,
-    ):
-        kwargs = kwargs or {}
-        # Try cache fast-path first when allowed
-        retrieved = False
-        if not self._is_inferred_ and self._is_indexed_:
-            for v in self._search_and_yield_from_cache_(kwargs):
-                retrieved = True
-                if sources:
-                    v.update(sources)
-                yield v
-
-        # If nothing retrieved and we are allowed to instantiate
-        if (not retrieved) and (self._is_inferred_ or self._predicate_type_):
-            yield from self._instantiate_new_values_and_yield_results_(kwargs, sources)
 
     def _instantiate_new_values_and_yield_results_(
         self,
