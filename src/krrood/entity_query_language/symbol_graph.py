@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import os
-import weakref
-from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
-from weakref import WeakKeyDictionary
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -16,45 +13,16 @@ from typing_extensions import (
     List,
     Type,
     Dict,
-    ClassVar,
-    Set,
 )
 
 from .utils import recursive_subclasses
 from .. import logger
-from ..class_diagrams import ClassDiagram, ClassRelation
+from ..class_diagrams import ClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
+from ..singleton import SingletonMeta
 
 if TYPE_CHECKING:
     from .predicate import BinaryPredicate, Symbol
-
-
-class SingletonMeta(type):
-    """
-    A metaclass for creating singleton classes.
-    """
-
-    _instances: ClassVar[Dict[Type, Any]] = {}
-    """
-    The available instances of the singleton classes.
-    """
-
-    def __call__(cls, *args, **kwargs):
-        """
-        Intercept the initialization of every class using this metaclass to check if there is an instance registered
-        already.
-        """
-        if cls not in cls._instances:
-            cls._instances[cls] = super().__call__(*args, **kwargs)
-        return cls._instances[cls]
-
-    def clear_instance(cls):
-        """
-        Removes the single, stored instance of this class, allowing a new one
-        to be created on the next call.
-        """
-        if cls in cls._instances:
-            del cls._instances[cls]
 
 
 @dataclass
@@ -96,7 +64,9 @@ class PredicateClassRelation:
 
 @dataclass
 class WrappedInstance:
-    """A node wrapper around a concrete Symbol instance used in the instance graph."""
+    """
+    A node wrapper around a concrete Symbol instance used in the instance graph.
+    """
 
     instance: Symbol
     index: Optional[int] = field(init=False, default=None)
@@ -132,13 +102,12 @@ class WrappedInstance:
 @dataclass
 class SymbolGraph(metaclass=SingletonMeta):
     """
-    A combination of a class and instance diagram.
+    A singleton combination of a class and instance diagram.
     This class tracks the life cycles `Symbol` instance created in the python process.
     Furthermore, relations between instances are also tracked.
 
     Relations are represented as edges where each edge has a relation object attached to it. The relation object
     contains also the Predicate object that represents the relation.
-
 
     The construction of this object will do nothing if a singleton instance of this already exists.
     Make sure to call `clear()` before constructing this object if you want a new one.
