@@ -44,7 +44,7 @@ def generate_sqlalchemy_interface():
     """
 
     # build the symbol graph
-    symbol_graph = SymbolGraph.build()
+    symbol_graph = SymbolGraph()
 
     # collect all classes
     all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
@@ -110,21 +110,21 @@ from .dataset.sqlalchemy_interface import *
 @pytest.fixture
 def handles_and_containers_world() -> World:
     world = HandlesAndContainersWorld().create()
-    SymbolGraph.build()
+    SymbolGraph()
     return world
 
 
 @pytest.fixture
 def doors_and_drawers_world() -> World:
     world = DoorsAndDrawersWorld().create()
-    SymbolGraph.build()
+    SymbolGraph()
     return world
 
 
 @pytest.fixture(autouse=True)
 def cleanup_after_test():
     # Setup: runs before each test
-    SymbolGraph.build()
+    SymbolGraph()
     yield
     # Teardown: runs after each test
     for c in Variable._cache_.values():

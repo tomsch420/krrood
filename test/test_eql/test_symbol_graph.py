@@ -18,10 +18,12 @@ except ImportError:
     pygraphviz = None
 
 
-@pytest.mark.skipif(not (pydot and pygraphviz), reason="pydot not installed")
+@pytest.mark.skipif(
+    not (pydot and pygraphviz), reason="pydot and graphviz not installed"
+)
 def test_visualize_symbol_graph():
     SymbolGraph().clear()
-    symbol_graph = SymbolGraph.build(classes_of_module(semantic_world_like_classes))
+    symbol_graph = SymbolGraph()
     symbol_graph.to_dot("symbol_graph.svg", format="svg", graph_type="type")
     assert len(symbol_graph._type_graph.wrapped_classes) == 14
     if os.path.exists("symbol_graph.svg"):

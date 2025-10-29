@@ -117,16 +117,21 @@ class WrappedInstance:
 @dataclass
 class SymbolGraph(metaclass=SingletonMeta):
     """
-    A more encompassing class diagram that includes relations between classes other than inheritance and associations.
+    A combination of a class and instance diagram.
+    This class tracks the life cycles `Symbol` instance created in the python process.
+    Furthermore, relations between instances are also tracked.
+
     Relations are represented as edges where each edge has a relation object attached to it. The relation object
     contains also the Predicate object that represents the relation.
+
+
+    The construction of this object will do nothing if a singleton instance of this already exists.
+    Make sure to call `clear()` before constructing this object if you want a new one.
     """
 
-    _type_graph: Optional[ClassDiagram] = field(
-        default_factory=lambda: ClassDiagram([])
-    )
+    _type_graph: ClassDiagram = field(default=None)
     """
-    The class diagram of all registered classes in the process.
+    The class diagram of all registered classes.
     """
 
     _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
@@ -142,6 +147,13 @@ class SymbolGraph(metaclass=SingletonMeta):
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
+
+    def __post_init__(self):
+        if self._type_graph is None:
+            # fetch all symbols and construct the graph
+            from .predicate import Symbol
+
+            self._type_graph = ClassDiagram(list(recursive_subclasses(Symbol)))
 
     def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
@@ -300,22 +312,6 @@ class SymbolGraph(metaclass=SingletonMeta):
             self._instance_graph.get_node_data(idx)
             for idx in self._instance_graph.neighbors(wrapped_instance.index)
         )
-
-    @classmethod
-    def build(cls, classes: List[Type] = None) -> SymbolGraph:
-        """
-        Create an instance of this class from a list of classes.
-        This also includes all classes previously seen before in build calls of this method.
-
-        This will do nothing if a singleton instance of this already exists.
-        Make sure to call `clear()` in such a situation before calling this method.
-
-        :param classes: The classes to use
-        :return: The instance.
-        """
-        from .predicate import Symbol
-
-        return SymbolGraph(ClassDiagram(list(recursive_subclasses(Symbol))))
 
     def to_dot(
         self,

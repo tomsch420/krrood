@@ -26,7 +26,7 @@ class SymbolGraphMapping(AlternativeMapping[SymbolGraph]):
         )
 
     def create_from_dao(self) -> T:
-        result = SymbolGraph.build()
+        result = SymbolGraph()
         for instance in self.instances:
             result.add_instance(instance)
         for relation in self.predicate_relations:
