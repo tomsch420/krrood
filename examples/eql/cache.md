@@ -45,7 +45,7 @@ class World:
 world = World(1, [Body("Body1"), Body("Body2")])
 
 with symbolic_mode():
-    body = let(Body)  # no domain here
+    body = let(Body, domain=None)  # no domain here
     query = an(
         entity(
             body,

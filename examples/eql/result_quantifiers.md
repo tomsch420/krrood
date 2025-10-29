@@ -65,7 +65,7 @@ We can also get all results using `an`.
 
 ```{code-cell} ipython3
 with symbolic_mode():
-    query = an(entity(body := let(Body)))
+    query = an(entity(body := let(Body, domain=None)))
 
 print(*query.evaluate(), sep="\n")
 ```
