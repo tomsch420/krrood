@@ -17,7 +17,6 @@ from .symbol_graph import (
     PredicateRelation,
     WrappedInstance,
     SymbolGraph,
-    symbols_registry,
 )
 from .symbolic import (
     T,
@@ -86,9 +85,6 @@ class Symbol:
             instance = super().__new__(cls)
             update_cache(instance)
             return instance
-
-    def __init_subclass__(cls, **kwargs):
-        symbols_registry.add(cls)
 
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):

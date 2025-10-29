@@ -358,6 +358,3 @@ class SymbolGraph(metaclass=SingletonMeta):
                 os.remove(tmp_filepath)
             except Exception as e:
                 logger.error(e)
-
-
-symbols_registry: Set[Type] = set()

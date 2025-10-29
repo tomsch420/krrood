@@ -29,11 +29,12 @@ from .symbolic import (
     ForAll,
     Exists,
 )
-from .symbol_graph import symbols_registry
+
 from .predicate import (
     Predicate,
     symbolic_function,
     BinaryPredicate,
+    Symbol,
 )
 
 T = TypeVar("T")  # Define type variable "T"
@@ -219,7 +220,7 @@ def let(
     :rtype: T
     :raises ValueError: If the type is not registered as a symbol.
     """
-    if not any(issubclass(type_, t) for t in symbols_registry):
+    if not issubclass(type_, Symbol):
         raise ValueError(
             f"Type {type_} is not registered as symbol, did you forget to decorate it with @symbol?"
         )
