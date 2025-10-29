@@ -91,9 +91,7 @@ class Symbol:
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
-            PredicateType.SubClassOfPredicate
-            if issubclass(cls, BinaryPredicate)
-            else None
+            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
         )
         domain, kwargs = update_domain_and_kwargs_from_args(cls, *args, **kwargs)
         # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
@@ -144,14 +142,13 @@ class BinaryPredicate(Predicate, ABC):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        inverse = getattr(cls, "inverse_of", None)
-        if inverse is not None:
-            if not isinstance(inverse, type) or not issubclass(
-                inverse, BinaryPredicate
+        if cls.inverse_of is not None:
+            if not isinstance(cls.inverse_of, type) or not issubclass(
+                cls.inverse_of, BinaryPredicate
             ):
                 raise TypeError("inverse_of must be set to a Predicate subclass")
-            if getattr(inverse, "inverse_of", None) is None:
-                inverse.inverse_of = cls
+            if cls.inverse_of.inverse_of is None:
+                cls.inverse_of.inverse_of = cls
 
     @classmethod
     @abstractmethod

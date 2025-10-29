@@ -1342,17 +1342,23 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_type_(self):
-        return SymbolGraph().type_graph.get_wrapped_class(self._type_)
+        return SymbolGraph().class_diagram.get_wrapped_class(self._type_)
 
     @cached_property
     def _type_(self):
         if self._child_wrapped_cls_:
             return self._wrapped_field_.type_endpoint
         else:
-            return WrappedField(
-                WrappedClass(self._child_type_),
+            wrapped_cls = WrappedClass(self._child_type_)
+            wrapped_cls._class_diagram = SymbolGraph().class_diagram
+            wrapped_field = WrappedField(
+                wrapped_cls,
                 [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
-            ).type_endpoint
+            )
+            try:
+                return wrapped_field.type_endpoint
+            except (AttributeError, RuntimeError):
+                return None
 
     @cached_property
     def _wrapped_field_(self):
@@ -1360,7 +1366,7 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _child_wrapped_cls_(self):
-        return SymbolGraph().type_graph.get_wrapped_class(self._child_type_)
+        return SymbolGraph().class_diagram.get_wrapped_class(self._child_type_)
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         yield HashedValue(id_=value.id_, value=getattr(value.value, self._attr_name_))

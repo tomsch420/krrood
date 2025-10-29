@@ -18,71 +18,53 @@ from .utils import make_list, ALL
 T = TypeVar("T")
 
 
-@dataclass
 class HashedValue(Generic[T]):
-    # Internal registry for boolean singletons
-    _SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
+    """
+    Value wrapper carrying a stable hash identifier.
+    """
 
-    def __new__(cls, value, id_: Optional[int] = None):
-        # If wrapping a HashedValue of a boolean, return the boolean singleton instance
-        if (
-            id_ is None
-            and isinstance(value, HashedValue)
-            and isinstance(value.value, (bool, type(None)))
-        ):
-            existing = cls._SINGLETONS.get(value.value)
-            if existing is not None:
-                return existing
-        # Return singletons for booleans when available
-        if id_ is None and isinstance(value, bool):
+    _SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
+    """
+    Registry for hashed values of True/False/None
+    """
+    # value: T
+    # """
+    # The wrapped value.
+    # """
+    # id_: Optional[int] = field(default=None)
+    # """
+    # Optional explicit identifier; if omitted, derived from value.
+    # """
+
+    def __new__(cls, value: T, id_: Optional[int] = None):
+        # If wrapping a HashedValue of a boolean/None, return the singleton instance
+        if isinstance(value, HashedValue):
+            return value
+        if id_ is None and isinstance(value, (bool, type(None))):
             existing = cls._SINGLETONS.get(value)
             if existing is not None:
                 return existing
         return super().__new__(cls)
 
-    """
-    Value wrapper carrying a stable hash identifier.
-
-    :param value: The wrapped value.
-    :param id_: Optional explicit identifier; if omitted, derived from value.
-    :ivar value: The wrapped value.
-    :ivar id_: The stable identifier used for hashing and equality.
-    """
-
-    value: T
-    id_: Optional[int] = field(default=None)
-
-    def __post_init__(self) -> None:
+    def __init__(self, value: T, id_: Optional[int] = None) -> None:
         """
         Initialize the identifier from the wrapped value when not provided.
         """
-        # Intern common immutable values to avoid reallocation on hot paths
-        if self.id_ is None:
-            if isinstance(self.value, bool):
-                # Use fixed ids for booleans for stable hashing and object reuse
-                self.id_ = 1 if self.value else 0
-                # ensure singleton registry populated on first construction
-                if type(self)._SINGLETONS.get(self.value) is None:
-                    type(self)._SINGLETONS[self.value] = self
-                return
-            if isinstance(self.value, HashedValue):
-                # Handle the case where __new__ returned a boolean singleton and dataclass __init__
-                # temporarily set value to self (self-referential); restore proper boolean payload.
-                singletons = type(self)._SINGLETONS
-                if self is singletons.get(True) or self is singletons.get(False):
-                    # Map back to the corresponding boolean
-                    is_true = self is singletons.get(True)
-                    self.value = True if is_true else False
-                    self.id_ = 1 if is_true else 0
-                    return
-                # General nested HashedValue: unwrap
-                self.id_ = self.value.id_
-                self.value = self.value.value
-                return
-            if hasattr(self.value, "_id_"):
-                self.id_ = self.value._id_
-            else:
-                self.id_ = id(self.value)
+        if isinstance(value, HashedValue):
+            return
+        self.value = value
+        self.id_ = id_
+        if self.id_ is not None:
+            return
+        if isinstance(self.value, HashedValue):
+            # General nested HashedValue: unwrap
+            self.id_ = self.value.id_
+            self.value = self.value.value
+            return
+        if hasattr(self.value, "_id_"):
+            self.id_ = self.value._id_
+        else:
+            self.id_ = id(self.value)
 
     def __hash__(self) -> int:
         """Hash of the identifier."""
@@ -100,11 +82,10 @@ class HashedValue(Generic[T]):
 
 
 # Initialize boolean singletons after class definition
-# We create them by constructing HashedValue once for True and False; subsequent
-# HashedValue(True/False) constructions will return these singletons via __new__.
-HV_TRUE = HashedValue(True)
-HV_FALSE = HashedValue(False)
-HV_NONE = HashedValue(None)
+# We create them by constructing HashedValue once for True, False, and None; subsequent
+# HashedValue(True/False/None) constructions will return these singletons via __new__.
+for value in (True, False, None):
+    HashedValue._SINGLETONS[value] = HashedValue(value)
 
 
 @dataclass

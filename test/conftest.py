@@ -44,7 +44,7 @@ def generate_sqlalchemy_interface():
     symbol_graph = SymbolGraph()
 
     # collect all classes
-    all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+    all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
     all_classes |= {
         am.original_class() for am in recursive_subclasses(AlternativeMapping)
     }

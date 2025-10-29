@@ -34,7 +34,8 @@ from .symbolic import (
 
 from .predicate import (
     Predicate,
-    Symbol,
+    symbolic_function,  # type: ignore
+    BinaryPredicate,  # type: ignore
 )
 
 T = TypeVar("T")  # Define type variable "T"
