@@ -242,11 +242,10 @@ class SymbolGraph(metaclass=SingletonMeta):
         :param type_: The symbol type to look for
         :return: All wrapped instances that refer to an instance of the given type.
         """
-        yield from itertools.chain.from_iterable(
-            [
-                map(lambda x: x.instance, self._class_to_wrapped_instances[cls])
-                for cls in [type_] + recursive_subclasses(type_)
-            ]
+        yield from (
+            instance.instance
+            for cls in [type_] + recursive_subclasses(type_)
+            for instance in self._class_to_wrapped_instances[cls]
         )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:

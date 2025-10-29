@@ -204,7 +204,7 @@ def _extract_variables_and_expression(
 
 
 def let(
-    type_: Type[T], domain: Optional[Any] = None, name: Optional[str] = None
+    type_: Type[T], domain: Optional[Iterable[T]], name: Optional[str] = None
 ) -> Union[T, CanBehaveLikeAVariable[T], Variable[T]]:
     """
     Declare a symbolic variable or source.
