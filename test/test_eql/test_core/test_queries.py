@@ -1076,13 +1076,14 @@ def test_nested_query_with_multiple_sources(handles_and_containers_world):
         for k in drawer_components
     ), "Should generate same results"
 
+
 def test_contains_type():
     fb1_fruits = [Apple("apple"), Body("Body1")]
     fb2_fruits = [Body("Body3"), Body("Body2")]
     fb1 = FruitBox("FruitBox1", fb1_fruits)
     fb2 = FruitBox("FruitBox2", fb2_fruits)
     with symbolic_mode():
-        fruit_box_query = a(fb := FruitBox(), ContainsType(fb.fruits, Apple))
+        fruit_box_query = a(fb := let(FruitBox), ContainsType(fb.fruits, Apple))
 
     query_result = list(fruit_box_query.evaluate())
     assert len(query_result) == 1, "Should generate 1 fruit box."

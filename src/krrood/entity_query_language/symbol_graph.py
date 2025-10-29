@@ -147,7 +147,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     Make sure to call `clear()` before constructing this object if you want a new one.
     """
 
-    _type_graph: ClassDiagram = field(default=None)
+    _class_diagram: ClassDiagram = field(default=None)
     """
     The class diagram of all registered classes.
     """
@@ -180,11 +180,11 @@ class SymbolGraph(metaclass=SingletonMeta):
     )
 
     def __post_init__(self):
-        if self._type_graph is None:
+        if self._class_diagram is None:
             # fetch all symbols and construct the graph
             from .predicate import Symbol
 
-            self._type_graph = ClassDiagram(list(recursive_subclasses(Symbol)))
+            self._class_diagram = ClassDiagram(list(recursive_subclasses(Symbol)))
 
     def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
@@ -195,7 +195,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance = self.get_wrapped_instance(instance)
         if not wrapped_instance:
             raise ValueError(f"Instance {instance} not found in graph.")
-        role_taker_assoc = self.type_graph.get_role_taker_associations_of_cls(
+        role_taker_assoc = self.class_diagram.get_role_taker_associations_of_cls(
             type(wrapped_instance.instance)
         )
         if not role_taker_assoc:
@@ -203,8 +203,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         return getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
 
     @property
-    def type_graph(self) -> ClassDiagram:
-        return self._type_graph
+    def class_diagram(self) -> ClassDiagram:
+        return self._class_diagram
 
     def add_node(self, wrapped_instance: WrappedInstance):
         """
@@ -383,11 +383,13 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         if graph_type == "type":
             if without_inherited_associations:
-                graph = self._type_graph.to_subdiagram_without_inherited_associations(
-                    True
-                )._dependency_graph
+                graph = (
+                    self._class_diagram.to_subdiagram_without_inherited_associations(
+                        True
+                    )._dependency_graph
+                )
             else:
-                graph = self._type_graph._dependency_graph
+                graph = self._class_diagram._dependency_graph
         else:
             graph = self._instance_graph
         if not filepath.endswith(f".{format}"):
