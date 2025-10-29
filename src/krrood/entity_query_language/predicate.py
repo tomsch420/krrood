@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections import deque
 from dataclasses import dataclass
 from functools import wraps
 
-from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
-
-from typing_extensions import ClassVar, Iterable
+from typing_extensions import Callable, Optional, Any, Type, Tuple, ClassVar, Iterable
 
 from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
@@ -29,10 +26,8 @@ from .symbolic import (
     AND,
     properties_to_expression_tree,
     From,
-    Flatten,
 )
 from .utils import is_iterable, make_list
-from ..class_diagrams.wrapped_field import WrappedField
 
 cls_args = {}
 """

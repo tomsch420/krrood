@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import weakref
+from collections import defaultdict
 from dataclasses import dataclass, field, fields, InitVar
 from functools import cached_property
 
@@ -14,6 +15,7 @@ from typing_extensions import (
     List,
     Type,
     Dict,
+    DefaultDict,
 )
 
 from .utils import recursive_subclasses
@@ -159,6 +161,14 @@ class SymbolGraph(metaclass=SingletonMeta):
     Used for faster access when only the WrappedInstance.instance is available.
     """
 
+    _class_to_wrapped_instances: DefaultDict[Type, List[WrappedInstance]] = field(
+        init=False, default_factory=lambda: defaultdict(lambda: [])
+    )
+    """
+    A dictionary that sorts the wrapped instances by the type inside them.
+    This enables quick behavior similar to selecting everything from an entire table in SQL.
+    """
+
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -190,25 +200,24 @@ class SymbolGraph(metaclass=SingletonMeta):
     def type_graph(self) -> ClassDiagram:
         return self._type_graph
 
-    def add_node(self, wrapped_instance: WrappedInstance) -> None:
-        if not isinstance(wrapped_instance, WrappedInstance):
-            wrapped_instance = WrappedInstance(wrapped_instance)
+    def add_node(self, wrapped_instance: WrappedInstance):
+        """
+        Add a wrapped instance to the cache.
+
+        :param wrapped_instance: The instance to add.
+        :return:
+        """
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
+        self._class_to_wrapped_instances[type(wrapped_instance.instance)].append(
+            wrapped_instance
+        )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
         if isinstance(instance, WrappedInstance):
             return instance
         return self._instance_index.get(id(instance), None)
-
-    def get_cls_associations(self, cls: Type) -> List[WrappedField]:
-        if self._type_graph is None:
-            return []
-        wrapped_cls = self._type_graph.get_wrapped_class(cls)
-        if wrapped_cls is None:
-            return []
-        return self._type_graph.g
 
     def clear(self) -> None:
         SingletonMeta.clear_instance(type(self))
