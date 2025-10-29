@@ -1401,9 +1401,9 @@ class Attribute(DomainMapping):
                 wrapped_cls,
                 [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
             )
-            if wrapped_field:
+            try:
                 return wrapped_field.type_endpoint
-            else:
+            except (AttributeError, RuntimeError):
                 return None
 
     @cached_property
