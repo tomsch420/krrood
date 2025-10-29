@@ -14,7 +14,7 @@ from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
 from .hashed_data import HashedValue
 from .symbol_graph import (
-    PredicateRelation,
+    PredicateClassRelation,
     WrappedInstance,
     SymbolGraph,
 )
@@ -260,7 +260,7 @@ class BinaryPredicate(Predicate, ABC):
         domain_value: Symbol,
         range_value: Symbol,
         inferred: bool = False,
-    ) -> PredicateRelation:
+    ) -> PredicateClassRelation:
         """
         Gets or creates a relation between two symbols, representing the domain and range
         values. The function ensures that the symbols are wrapped in instances, adding
@@ -281,7 +281,7 @@ class BinaryPredicate(Predicate, ABC):
         if not wrapped_range_instance:
             wrapped_range_instance = WrappedInstance(range_value)
             SymbolGraph().add_node(wrapped_range_instance)
-        return PredicateRelation(
+        return PredicateClassRelation(
             wrapped_domain_instance,
             wrapped_range_instance,
             cls(domain_value, range_value),

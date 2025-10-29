@@ -33,11 +33,12 @@ class Base(DeclarativeBase):
     type_mappings = {}
 
 
-class PredicateRelationDAO(
-    Base, DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateRelation]
+class PredicateClassRelationDAO(
+    Base,
+    DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateClassRelation],
 ):
 
-    __tablename__ = "PredicateRelationDAO"
+    __tablename__ = "PredicateClassRelationDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         Integer, primary_key=True, use_existing_column=True
@@ -935,9 +936,9 @@ class SymbolGraphMappingDAO(
         foreign_keys="[WrappedInstanceDAO.symbolgraphmappingdao_instances_id]",
         post_update=True,
     )
-    predicate_relations: Mapped[typing.List[PredicateRelationDAO]] = relationship(
-        "PredicateRelationDAO",
-        foreign_keys="[PredicateRelationDAO.symbolgraphmappingdao_predicate_relations_id]",
+    predicate_relations: Mapped[typing.List[PredicateClassRelationDAO]] = relationship(
+        "PredicateClassRelationDAO",
+        foreign_keys="[PredicateClassRelationDAO.symbolgraphmappingdao_predicate_relations_id]",
         post_update=True,
     )
 

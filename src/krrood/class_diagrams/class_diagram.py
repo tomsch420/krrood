@@ -21,7 +21,7 @@ from .wrapped_field import WrappedField
 
 
 @dataclass
-class Relation(ABC):
+class ClassRelation(ABC):
     """
     Abstract base class representing a relationship between two classes in a UML class diagram.
     """
@@ -43,7 +43,7 @@ class Relation(ABC):
 
 
 @dataclass
-class Inheritance(Relation):
+class Inheritance(ClassRelation):
     """
     Represents an inheritance (generalization) relationship in UML.
 
@@ -56,7 +56,7 @@ class Inheritance(Relation):
 
 
 @dataclass(unsafe_hash=True)
-class Association(Relation):
+class Association(ClassRelation):
     """
     Represents a general association relationship between two classes.
 
@@ -163,7 +163,7 @@ class ClassDiagram:
         default_factory=DataclassOnlyIntrospector, init=True, repr=False
     )
 
-    _dependency_graph: rx.PyDiGraph[WrappedClass, Relation] = field(
+    _dependency_graph: rx.PyDiGraph[WrappedClass, ClassRelation] = field(
         default_factory=rx.PyDiGraph, init=False
     )
     _cls_wrapped_cls_map: Dict[Type, WrappedClass] = field(
@@ -218,7 +218,7 @@ class ClassDiagram:
     def get_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
-        relation_type: Type[Relation],
+        relation_type: Type[ClassRelation],
     ) -> Tuple[WrappedClass, ...]:
         """Return all neighbors of a class whose connecting edge matches the relation type.
 
@@ -239,7 +239,7 @@ class ClassDiagram:
     def get_outgoing_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
-        relation_type: Type[Relation],
+        relation_type: Type[ClassRelation],
     ) -> Tuple[WrappedClass, ...]:
         """
         Caches and retrieves the outgoing neighbors of a given class with a specific relation type
@@ -259,7 +259,7 @@ class ClassDiagram:
     def get_incoming_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
-        relation_type: Type[Relation],
+        relation_type: Type[ClassRelation],
     ) -> Tuple[WrappedClass, ...]:
         wrapped_cls = self.get_wrapped_class(cls)
         edge_filter_func = lambda edge: isinstance(edge, relation_type)
@@ -267,7 +267,9 @@ class ClassDiagram:
         return tuple(find_predecessors_by_edge(wrapped_cls.index, edge_filter_func))
 
     @lru_cache(maxsize=None)
-    def get_out_edges(self, cls: Union[Type, WrappedClass]) -> Tuple[Relation, ...]:
+    def get_out_edges(
+        self, cls: Union[Type, WrappedClass]
+    ) -> Tuple[ClassRelation, ...]:
         """
         Caches and retrieves the outgoing edges (relations) for the provided class in a
         dependency graph.
@@ -432,7 +434,7 @@ class ClassDiagram:
         clazz._class_diagram = self
         self._cls_wrapped_cls_map[clazz.clazz] = clazz
 
-    def add_relation(self, relation: Relation):
+    def add_relation(self, relation: ClassRelation):
         """
         Adds a relation to the internal dependency graph.
 

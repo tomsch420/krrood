@@ -18,7 +18,7 @@ from .utils import InheritanceStrategy, module_and_class_name
 from .wrapped_table import WrappedTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,
-    Relation,
+    ClassRelation,
     WrappedClass,
 )
 from ..class_diagrams.wrapped_field import WrappedField
@@ -26,7 +26,7 @@ from ..class_diagrams.wrapped_field import WrappedField
 logger = logging.getLogger(__name__)
 
 
-class AlternativelyMaps(Relation):
+class AlternativelyMaps(ClassRelation):
     """
     Edge type that says that the source alternativly maps the target, e. g.
     `AlternativeMaps(source=PointMapping, target=Point)` means that PointMapping is the mapping for Point.

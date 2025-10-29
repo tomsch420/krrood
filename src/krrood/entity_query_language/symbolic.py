@@ -8,7 +8,7 @@ from . import logger
 from .enums import EQLMode, PredicateType
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
-from ..class_diagrams import Relation
+from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 
@@ -376,7 +376,7 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
     variable.
     """
-    _path_: List[Relation] = field(init=False, default_factory=list)
+    _path_: List[ClassRelation] = field(init=False, default_factory=list)
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
     """

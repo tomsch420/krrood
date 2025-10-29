@@ -22,7 +22,7 @@ from typing_extensions import (
 
 from .utils import recursive_subclasses
 from .. import logger
-from ..class_diagrams import ClassDiagram, Relation
+from ..class_diagrams import ClassDiagram, ClassRelation
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
@@ -58,17 +58,32 @@ class SingletonMeta(type):
 
 
 @dataclass
-class PredicateRelation(Relation):
-    """Edge data representing a predicate-based relation between two wrapped instances.
+class PredicateClassRelation:
+    """
+    Edge data representing a predicate-based relation between two wrapped instances.
 
     The relation carries the predicate instance that asserted the edge and a flag indicating
     whether it was inferred transitively or added directly.
     """
 
     source: WrappedInstance
+    """
+    The source of the predicate
+    """
+
     target: WrappedInstance
+    """
+    The target of the predicate
+    """
+
     predicate: BinaryPredicate
+    """
+    The asserted Predicate"""
+
     inferred: bool = False
+    """
+    Rather it was inferred or not.
+    """
 
     def __str__(self):
         """Return the predicate type name for labeling the edge."""
@@ -134,7 +149,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     The class diagram of all registered classes.
     """
 
-    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
+    _instance_graph: PyDiGraph[WrappedInstance, PredicateClassRelation] = field(
         default_factory=PyDiGraph, init=False
     )
     """
@@ -207,7 +222,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         self.add_node(wrapped_instance)
 
-    def add_relation(self, relation: PredicateRelation) -> None:
+    def add_relation(self, relation: PredicateClassRelation) -> None:
         """Add a relation edge to the instance graph.
 
         This is an adapter that delegates to add_edge to keep API compatibility with
@@ -222,7 +237,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             predicate_type, set()
         )
 
-    def add_edge(self, relation: PredicateRelation) -> None:
+    def add_edge(self, relation: PredicateClassRelation) -> None:
         source_out_edges = self._instance_graph.out_edges(relation.source.index)
         for _, child_idx, e in source_out_edges:
             if (
@@ -239,7 +254,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             (relation.source.index, relation.target.index)
         )
 
-    def relations(self) -> Iterable[PredicateRelation]:
+    def relations(self) -> Iterable[PredicateClassRelation]:
         yield from self._instance_graph.edges()
 
     @property
