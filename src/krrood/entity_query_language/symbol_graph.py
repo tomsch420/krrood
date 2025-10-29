@@ -29,6 +29,34 @@ if TYPE_CHECKING:
     from .predicate import BinaryPredicate, Symbol
 
 
+class SingletonMeta(type):
+    """
+    A metaclass for creating singleton classes.
+    """
+
+    _instances: ClassVar[Dict[Type, Any]] = {}
+    """
+    The available instances of the singleton classes.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        """
+        Intercept the initialization of every class using this metaclass to check if there is an instance registered
+        already.
+        """
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+    def clear_instance(cls):
+        """
+        Removes the single, stored instance of this class, allowing a new one
+        to be created on the next call.
+        """
+        if cls in cls._instances:
+            del cls._instances[cls]
+
+
 @dataclass
 class PredicateRelation(Relation):
     """Edge data representing a predicate-based relation between two wrapped instances.
@@ -87,39 +115,33 @@ class WrappedInstance:
 
 
 @dataclass
-class SymbolGraph:
+class SymbolGraph(metaclass=SingletonMeta):
     """
     A more encompassing class diagram that includes relations between classes other than inheritance and associations.
     Relations are represented as edges where each edge has a relation object attached to it. The relation object
     contains also the Predicate object that represents the relation.
     """
 
-    _type_graph: Optional[ClassDiagram] = field(default=None)
-    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
-        default_factory=PyDiGraph
+    _type_graph: Optional[ClassDiagram] = field(
+        default_factory=lambda: ClassDiagram([])
     )
-    _instance_index: WeakKeyDictionary[Symbol, WrappedInstance] = field(
-        default_factory=WeakKeyDictionary, init=False, repr=False
+    """
+    The class diagram of all registered classes in the process.
+    """
+
+    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
+        default_factory=PyDiGraph, init=False
+    )
+    """
+    A directed graph that stores all instances of `Symbol` and how they relate to each other.
+    """
+
+    _instance_index: Dict[Symbol, WrappedInstance] = field(
+        default_factory=dict, init=False, repr=False
     )
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
-    _current_graph: ClassVar[Optional[SymbolGraph]] = None
-    _initialized: ClassVar[bool] = False
-
-    def __new__(cls, *args, **kwargs):
-        """Ensure a singleton instance is used for the symbol graph."""
-        if cls._current_graph is None:
-            cls._current_graph = super().__new__(cls)
-        return cls._current_graph
-
-    def __init__(self, type_graph: Optional[ClassDiagram] = None):
-        if not self._initialized:
-            self._type_graph = type_graph or ClassDiagram([])
-            self._instance_graph = PyDiGraph()
-            self._instance_index = {}
-            self._relation_index = {}
-            self.__class__._initialized = True
 
     def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
@@ -139,7 +161,7 @@ class SymbolGraph:
 
     @property
     def type_graph(self) -> ClassDiagram:
-        return self._current_graph._type_graph
+        return self._type_graph
 
     def add_node(self, wrapped_instance: WrappedInstance) -> None:
         if not isinstance(wrapped_instance, WrappedInstance):
@@ -161,12 +183,8 @@ class SymbolGraph:
             return []
         return self._type_graph.g
 
-    def clear(self):
-        self._type_graph.clear()
-        self._instance_graph.clear()
-        self._instance_index.clear()
-        self.__class__._current_graph = None
-        self.__class__._initialized = False
+    def clear(self) -> None:
+        SingletonMeta.clear_instance(type(self))
 
     # Adapters to align with ORM alternative mapping expectations
     def add_instance(self, wrapped_instance: WrappedInstance) -> None:
@@ -285,11 +303,19 @@ class SymbolGraph:
 
     @classmethod
     def build(cls, classes: List[Type] = None) -> SymbolGraph:
-        if not classes:
-            for cls_ in copy(symbols_registry):
-                symbols_registry.update(recursive_subclasses(cls_))
-            classes = symbols_registry
-        return SymbolGraph(ClassDiagram(list(classes)))
+        """
+        Create an instance of this class from a list of classes.
+        This also includes all classes previously seen before in build calls of this method.
+
+        This will do nothing if a singleton instance of this already exists.
+        Make sure to call `clear()` in such a situation before calling this method.
+
+        :param classes: The classes to use
+        :return: The instance.
+        """
+        from .predicate import Symbol
+
+        return SymbolGraph(ClassDiagram(list(recursive_subclasses(Symbol))))
 
     def to_dot(
         self,
