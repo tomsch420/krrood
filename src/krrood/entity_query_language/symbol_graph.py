@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field, fields
+import weakref
+from dataclasses import dataclass, field, fields, InitVar
 from functools import cached_property
 
 from rustworkx import PyDiGraph
@@ -68,17 +69,42 @@ class WrappedInstance:
     A node wrapper around a concrete Symbol instance used in the instance graph.
     """
 
-    instance: Symbol
+    instance: InitVar[Symbol]
+    """
+    The instance to wrap. Only passed as initialization variable.
+    """
+
+    instance_reference: weakref.ReferenceType[Symbol] = field(init=False, default=None)
+    """
+    A weak reference to the symbol instance this wraps.
+    """
+
     index: Optional[int] = field(init=False, default=None)
+    """
+    Index in the instance graph of the symbol graph that manages this object.
+    """
+
     _symbol_graph_: Optional[SymbolGraph] = field(
         init=False, hash=False, default=None, repr=False
     )
-    inferred: bool = False
+    """
+    The symbol graph that manages this object.
+    """
 
-    @cached_property
-    def fields(self) -> List[WrappedField]:
-        """Wrap dataclass fields of the instance with metadata for graph use."""
-        return [WrappedField(self.instance, f) for f in fields(self.instance)]
+    inferred: bool = False
+    """
+    Rather is instance was inferred or constructed.
+    """
+
+    def __post_init__(self, instance: Symbol):
+        self.instance_reference = weakref.ref(instance)
+
+    @property
+    def instance(self) -> Optional[Symbol]:
+        """
+        :return: The symbol that is referenced to. Can return None if this symbol is garbage collected already.
+        """
+        return self.instance_reference()
 
     @property
     def name(self):
@@ -93,9 +119,9 @@ class WrappedInstance:
         return self.instance == other.instance
 
     def __hash__(self):
-        try:
+        if self.instance:
             return hash(self.instance)
-        except TypeError:
+        else:
             return id(self.instance)
 
 
@@ -125,9 +151,14 @@ class SymbolGraph(metaclass=SingletonMeta):
     A directed graph that stores all instances of `Symbol` and how they relate to each other.
     """
 
-    _instance_index: Dict[Symbol, WrappedInstance] = field(
+    _instance_index: Dict[int, WrappedInstance] = field(
         default_factory=dict, init=False, repr=False
     )
+    """
+    Dictionary that maps the ids of objects to wrapped instances.
+    Used for faster access when only the WrappedInstance.instance is available.
+    """
+
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )

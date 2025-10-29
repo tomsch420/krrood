@@ -34,6 +34,9 @@ from .test_eql.conf.world.handles_and_containers import (
     World as HandlesAndContainersWorld,
 )
 
+# conftest.py
+import logging
+
 
 def generate_sqlalchemy_interface():
     """
@@ -91,9 +94,13 @@ def pytest_configure(config):
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
     """
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("numpy").setLevel(logging.WARNING)
 
+
+def pytest_sessionstart(session):
     try:
-        generate_sqlalchemy_interface()
+        ...  # generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 

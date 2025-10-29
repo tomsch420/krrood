@@ -1,7 +1,9 @@
 import os
+import sys
 import time
 
 import pytest
+import referrers
 
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.entity_query_language.symbolic import symbolic_mode
@@ -30,7 +32,7 @@ def test_visualize_symbol_graph():
         os.remove("symbol_graph.svg")
 
 
-@pytest.mark.skip
+@pytest.mark.skip("Memory leak not solved yet.")
 def test_memory_leak():
     """
     Test if the SymbolGraph does not artificially keep objects alive that would be garbage collected.
@@ -40,7 +42,12 @@ def test_memory_leak():
         point = Position(1, 2, 3)
 
     create_data()
-    time.sleep(1)
+
+    time.sleep(0.1)
     with symbolic_mode():
         q = an(entity(let(Position)))
-    assert list(q.evaluate()) == []
+    result = list(q.evaluate())
+
+    print(sys.getrefcount(result[0]))
+    print(referrers.get_referrer_graph(result[0]))
+    assert result == []

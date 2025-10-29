@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing_extensions import List
 
-from ..predicate import BinaryPredicate
+from typing_extensions import List, Optional
+
+from ..predicate import Symbol
 from ..symbol_graph import SymbolGraph, WrappedInstance, PredicateClassRelation
-from ..symbolic import Variable
 from ...ormatic.dao import AlternativeMapping, T
 
 
@@ -32,3 +32,15 @@ class SymbolGraphMapping(AlternativeMapping[SymbolGraph]):
         for relation in self.predicate_relations:
             result.add_relation(relation)
         return result
+
+
+@dataclass
+class WrappedInstanceMapping(AlternativeMapping[WrappedInstance]):
+    instance: Optional[Symbol]
+
+    @classmethod
+    def create_instance(cls, obj: WrappedInstance):
+        return cls(obj.instance)
+
+    def create_from_dao(self) -> T:
+        return WrappedInstance(self.instance)

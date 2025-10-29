@@ -47,12 +47,12 @@ class PredicateClassRelationDAO(
     inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
 
     source_id: Mapped[int] = mapped_column(
-        ForeignKey("WrappedInstanceDAO.database_id", use_alter=True),
+        ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
     target_id: Mapped[int] = mapped_column(
-        ForeignKey("WrappedInstanceDAO.database_id", use_alter=True),
+        ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
@@ -69,11 +69,17 @@ class PredicateClassRelationDAO(
         use_existing_column=True,
     )
 
-    source: Mapped[WrappedInstanceDAO] = relationship(
-        "WrappedInstanceDAO", uselist=False, foreign_keys=[source_id], post_update=True
+    source: Mapped[WrappedInstanceMappingDAO] = relationship(
+        "WrappedInstanceMappingDAO",
+        uselist=False,
+        foreign_keys=[source_id],
+        post_update=True,
     )
-    target: Mapped[WrappedInstanceDAO] = relationship(
-        "WrappedInstanceDAO", uselist=False, foreign_keys=[target_id], post_update=True
+    target: Mapped[WrappedInstanceMappingDAO] = relationship(
+        "WrappedInstanceMappingDAO",
+        uselist=False,
+        foreign_keys=[target_id],
+        post_update=True,
     )
     predicate: Mapped[BinaryPredicateDAO] = relationship(
         "BinaryPredicateDAO",
@@ -931,9 +937,9 @@ class SymbolGraphMappingDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    instances: Mapped[typing.List[WrappedInstanceDAO]] = relationship(
-        "WrappedInstanceDAO",
-        foreign_keys="[WrappedInstanceDAO.symbolgraphmappingdao_instances_id]",
+    instances: Mapped[typing.List[WrappedInstanceMappingDAO]] = relationship(
+        "WrappedInstanceMappingDAO",
+        foreign_keys="[WrappedInstanceMappingDAO.symbolgraphmappingdao_instances_id]",
         post_update=True,
     )
     predicate_relations: Mapped[typing.List[PredicateClassRelationDAO]] = relationship(
@@ -1416,20 +1422,16 @@ class WardrobeDAO(
     }
 
 
-class WrappedInstanceDAO(
-    Base, DataAccessObject[krrood.entity_query_language.symbol_graph.WrappedInstance]
+class WrappedInstanceMappingDAO(
+    Base,
+    DataAccessObject[krrood.entity_query_language.orm.model.WrappedInstanceMapping],
 ):
 
-    __tablename__ = "WrappedInstanceDAO"
+    __tablename__ = "WrappedInstanceMappingDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         Integer, primary_key=True, use_existing_column=True
     )
-
-    index: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        use_existing_column=True
-    )
-    inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
 
     symbolgraphmappingdao_instances_id: Mapped[typing.Optional[builtins.int]] = (
         mapped_column(
@@ -1438,7 +1440,7 @@ class WrappedInstanceDAO(
             use_existing_column=True,
         )
     )
-    instance_id: Mapped[int] = mapped_column(
+    instance_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
         ForeignKey("SymbolDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,

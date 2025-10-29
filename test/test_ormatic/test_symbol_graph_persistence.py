@@ -7,10 +7,12 @@ from ..dataset.sqlalchemy_interface import *
 
 
 def test_symbol_graph_persistence(session, database):
+
     p1 = Position(1, 2, 3)
 
     symbol_graph = SymbolGraph()
     symbol_graph_dao = to_dao(symbol_graph)
+
     session.add(symbol_graph_dao)
     session.commit()
 
