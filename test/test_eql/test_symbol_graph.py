@@ -39,7 +39,7 @@ def test_memory_leak():
     create_data()
 
     with symbolic_mode():
-        q = an(entity(let(Position)))
+        q = an(entity(let(Position, domain=None)))
     result = list(q.evaluate())
 
     assert result == []
