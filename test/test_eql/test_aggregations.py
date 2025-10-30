@@ -1,4 +1,4 @@
-from dataset.example_classes import VectorsWithProperty
+from ..dataset.example_classes import VectorsWithProperty
 from krrood.entity_query_language.symbolic import symbolic_mode, From
 from krrood.entity_query_language.entity import (
     flatten,
