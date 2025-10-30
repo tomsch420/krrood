@@ -1,3 +1,4 @@
+from ..dataset.example_classes import VectorsWithProperty
 from krrood.entity_query_language.symbolic import symbolic_mode, From
 from krrood.entity_query_language.entity import (
     flatten,
@@ -123,3 +124,11 @@ def test_for_all(handles_and_containers_world):
 
     # We should get one row for each drawer and the parent view preserved
     assert len(results) == 0
+
+
+def test_property_selection():
+    """
+    Test that properties can be selected from entities in a query.
+    """
+    with symbolic_mode():
+        q = an(entity(v := let(VectorsWithProperty, None), v.vectors[0].x == 1))
