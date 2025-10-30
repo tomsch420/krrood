@@ -1347,6 +1347,7 @@ class Attribute(DomainMapping):
     @cached_property
     def _type_(self):
         if self._child_wrapped_cls_:
+            # try to get the type endpoint from a field
             try:
                 return self._wrapped_field_.type_endpoint
             except (KeyError, AttributeError):
