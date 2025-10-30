@@ -1347,7 +1347,10 @@ class Attribute(DomainMapping):
     @cached_property
     def _type_(self):
         if self._child_wrapped_cls_:
-            return self._wrapped_field_.type_endpoint
+            try:
+                return self._wrapped_field_.type_endpoint
+            except (KeyError, AttributeError):
+                return None
         else:
             wrapped_cls = WrappedClass(self._child_type_)
             wrapped_cls._class_diagram = SymbolGraph().class_diagram
@@ -1361,8 +1364,10 @@ class Attribute(DomainMapping):
                 return None
 
     @cached_property
-    def _wrapped_field_(self):
-        return self._child_wrapped_cls_._wrapped_field_name_map_[self._attr_name_]
+    def _wrapped_field_(self) -> Optional[WrappedField]:
+        return self._child_wrapped_cls_._wrapped_field_name_map_.get(
+            self._attr_name_, None
+        )
 
     @cached_property
     def _child_wrapped_cls_(self):
