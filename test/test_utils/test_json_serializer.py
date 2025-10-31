@@ -1,7 +1,15 @@
 from dataclasses import dataclass
 import pytest
 
-from krrood.utils import SubclassJSONSerializer, get_full_class_name
+from krrood.utils import (
+    SubclassJSONSerializer,
+    get_full_class_name,
+    MissingTypeError,
+    InvalidTypeFormatError,
+    UnknownModuleError,
+    ClassNotFoundError,
+    InvalidSubclassError,
+)
 
 
 @dataclass
@@ -153,6 +161,29 @@ def test_kwargs_are_forwarded_to_from_json():
     assert result.breed == "Beagle"
 
 
-def test_unknown_type_raises_value_error():
-    with pytest.raises(ValueError):
+def test_unknown_module_raises_unknown_module_error():
+    with pytest.raises(UnknownModuleError):
         SubclassJSONSerializer.from_json({"type": "non.existent.Class"})
+
+
+def test_missing_type_raises_missing_type_error():
+    with pytest.raises(MissingTypeError):
+        SubclassJSONSerializer.from_json({})
+
+
+def test_invalid_type_format_raises_invalid_type_format_error():
+    with pytest.raises(InvalidTypeFormatError):
+        SubclassJSONSerializer.from_json({"type": "NotAQualifiedName"})
+
+
+essential_existing_module = "krrood.utils"
+
+
+def test_class_not_found_raises_class_not_found_error():
+    with pytest.raises(ClassNotFoundError):
+        SubclassJSONSerializer.from_json({"type": f"{essential_existing_module}.DoesNotExist"})
+
+
+def test_invalid_subclass_raises_invalid_subclass_error():
+    with pytest.raises(InvalidSubclassError):
+        SubclassJSONSerializer.from_json({"type": "builtins.object"})
