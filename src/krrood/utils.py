@@ -38,7 +38,7 @@ class SubclassJSONSerializer:
     """
 
     def to_json(self) -> Dict[str, Any]:
-        return {"type": f"{self.__class__.__module__}.{self.__class__.__name__}"}
+        return {"type": get_full_class_name(self.__class__)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
