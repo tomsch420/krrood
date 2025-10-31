@@ -1,20 +1,5 @@
-from __future__ import annotations
-
-from functools import lru_cache
-from typing import Type, List
-from typing_extensions import Dict, Any, Self
 from abc import abstractmethod
-
-
-@lru_cache(maxsize=None)
-def recursive_subclasses(cls: Type) -> List[Type]:
-    """
-    :param cls: The class.
-    :return: A list of the classes subclasses without the class itself.
-    """
-    return cls.__subclasses__() + [
-        g for s in cls.__subclasses__() for g in recursive_subclasses(s)
-    ]
+from typing_extensions import Dict, Any, Self
 
 
 def get_full_class_name(cls):
@@ -25,6 +10,14 @@ def get_full_class_name(cls):
     :return: The full name of the class
     """
     return cls.__module__ + "." + cls.__name__
+
+
+def recursive_subclasses(cls):
+    """
+    :param cls: The class.
+    :return: A list of the classes subclasses.
+    """
+    return cls.__subclasses__() + [g for s in cls.__subclasses__() for g in recursive_subclasses(s)]
 
 
 class SubclassJSONSerializer:
@@ -39,7 +32,7 @@ class SubclassJSONSerializer:
 
     @classmethod
     @abstractmethod
-    def _from_json(cls, data: Dict[str, Any], *args, **kwargs) -> Self:
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         """
         Create a variable from a json dict.
         This method is called from the from_json method after the correct subclass is determined and should be
@@ -52,7 +45,7 @@ class SubclassJSONSerializer:
         raise NotImplementedError()
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], *args, **kwargs) -> Self:
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         """
         Create the correct instanceof the subclass from a json dict.
 
@@ -62,6 +55,6 @@ class SubclassJSONSerializer:
         """
         for subclass in recursive_subclasses(SubclassJSONSerializer):
             if get_full_class_name(subclass) == data["type"]:
-                return subclass._from_json(data, *args, **kwargs)
+                return subclass._from_json(data, **kwargs)
 
         raise ValueError("Unknown type {}".format(data["type"]))
