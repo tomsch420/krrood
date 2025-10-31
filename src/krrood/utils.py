@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import importlib
+from abc import abstractmethod
 from functools import lru_cache
 from typing import Type, List
+
 from typing_extensions import Dict, Any, Self
-from abc import abstractmethod
 
 
 @lru_cache(maxsize=None)
@@ -29,39 +31,43 @@ def get_full_class_name(cls):
 
 class SubclassJSONSerializer:
     """
-    Class for automatic (de)serialization of subclasses.
-    Classes that inherit from this class can be serialized and deserialized automatically by calling this classes
-    'from_json' method.
+    Class for automatic (de)serialization of subclasses using importlib.
+
+    Stores the fully qualified class name in `type` during serialization and
+    imports that class during deserialization.
     """
 
     def to_json(self) -> Dict[str, Any]:
-        return {"type": get_full_class_name(self.__class__)}
+        return {"type": f"{self.__class__.__module__}.{self.__class__.__name__}"}
 
     @classmethod
-    @abstractmethod
-    def _from_json(cls, data: Dict[str, Any], *args, **kwargs) -> Self:
-        """
-        Create a variable from a json dict.
-        This method is called from the from_json method after the correct subclass is determined and should be
-        overwritten by the respective subclass.
-
-        :param data: The json dict
-        :param kwargs: Additional keyword arguments that the subclass may need to create the instance from the json dict.
-        :return: The deserialized object
-        """
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         raise NotImplementedError()
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any], *args, **kwargs) -> Self:
-        """
-        Create the correct instanceof the subclass from a json dict.
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        fqcn = data.get("type")
+        if not fqcn:
+            raise ValueError("Missing 'type' in JSON data")
 
-        :param data: The json dict
-        :param kwargs: Additional keyword arguments that the subclass may need to create the instance from the json dict.
-        :return: The correct instance of the subclass
-        """
-        for subclass in recursive_subclasses(SubclassJSONSerializer):
-            if get_full_class_name(subclass) == data["type"]:
-                return subclass._from_json(data, *args, **kwargs)
+        try:
+            module_name, class_name = fqcn.rsplit(".", 1)
+        except ValueError as exc:
+            raise ValueError(f"Invalid type format: {fqcn}") from exc
 
-        raise ValueError("Unknown type {}".format(data["type"]))
+        try:
+            module = importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            raise ValueError(f"Unknown module in type: {module_name}") from exc
+
+        try:
+            target_cls = getattr(module, class_name)
+        except AttributeError as exc:
+            raise ValueError(
+                f"Class '{class_name}' not found in module '{module_name}'"
+            ) from exc
+
+        if not issubclass(target_cls, SubclassJSONSerializer):
+            raise TypeError(f"Resolved type {fqcn} is not a SubclassJSONSerializer")
+
+        return target_cls._from_json(data, **kwargs)
