@@ -42,10 +42,26 @@ class SubclassJSONSerializer:
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        """
+        Create an instance from a json dict.
+        This method is called from the from_json method after the correct subclass is determined and should be
+        overwritten by the subclass.
+
+        :param data: The json dict
+        :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
+        :return: The deserialized object
+        """
         raise NotImplementedError()
 
     @classmethod
     def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        """
+        Create the correct instanceof the subclass from a json dict.
+
+        :param data: The json dict
+        :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
+        :return: The correct instance of the subclass
+        """
         fqcn = data.get("type")
         if not fqcn:
             raise ValueError("Missing 'type' in JSON data")
