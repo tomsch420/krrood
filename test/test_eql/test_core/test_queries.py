@@ -9,7 +9,6 @@ from krrood.entity_query_language.entity import (
     contains,
     in_,
     symbolic_mode,
-    From,
     an,
     entity,
     set_of,
@@ -78,7 +77,7 @@ def test_filtering_connections_without_joining_with_parent_or_child_queries(
     world = handles_and_containers_world
     with symbolic_mode():
         query = a(
-            connection := Connection(From(world.connections)),
+            connection := let(Connection, world.connections),
             HasType(connection.parent, Container),
             connection.parent.name == "Container1",
             HasType(connection.child, Handle),

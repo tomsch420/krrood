@@ -62,7 +62,7 @@ def test_indexing_2():
         Body(shapes=[Shape("shape1", color="green"), Shape("shape2", color="black")]),
     ]
     with symbolic_mode():
-        body = Body(From(world_bodies))
+        body = let(Body, world_bodies)
         body_tha_has_red_shape = an(
             entity(body, body.shapes[0].color == "red")
         ).evaluate()
