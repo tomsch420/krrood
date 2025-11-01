@@ -25,7 +25,7 @@ def test_flatten_iterable_attribute(handles_and_containers_world):
     world = handles_and_containers_world
 
     with symbolic_mode():
-        views = Cabinet(From(world.views))
+        views = let(Cabinet, world.views)
         drawers = flatten(views.drawers)
         query = an(entity(drawers))
 
@@ -56,9 +56,9 @@ def test_concatenate(handles_and_containers_world):
     world = handles_and_containers_world
 
     with symbolic_mode():
-        cabinets = Cabinet(From(world.views))
+        cabinets = let(Cabinet, world.views)
         my_drawers = an(
-            entity(d := Drawer(From(world.views)), d.handle.name == "Handle1")
+            entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
         )
         drawers = concatenate(cabinets.drawers)
         query = an(entity(my_drawers, not_(in_(my_drawers, drawers))))
@@ -69,9 +69,9 @@ def test_concatenate(handles_and_containers_world):
     assert len(results) == 0
 
     with symbolic_mode():
-        cabinets = Cabinet(From(world.views))
+        cabinets = let(Cabinet, world.views)
         my_drawers = an(
-            entity(d := Drawer(From(world.views)), d.handle.name == "Handle1")
+            entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
         )
         drawers = concatenate(cabinets.drawers)
         query = an(entity(my_drawers, in_(my_drawers, drawers)))
@@ -87,9 +87,9 @@ def test_for_all(handles_and_containers_world):
     world = handles_and_containers_world
 
     with symbolic_mode():
-        cabinets = Cabinet(From(world.views))
+        cabinets = let(Cabinet, world.views)
         the_cabinet_container = the(
-            entity(c := Container(From(world.bodies)), c.name == "Container2")
+            entity(c := let(Container, world.bodies), c.name == "Container2")
         )
         query = an(
             entity(
@@ -107,9 +107,9 @@ def test_for_all(handles_and_containers_world):
     assert results[0].name == "Container2"
 
     with symbolic_mode():
-        cabinets = Cabinet(From(world.views))
+        cabinets = let(Cabinet, world.views)
         the_cabinet_container = the(
-            entity(c := Container(From(world.bodies)), c.name == "Container2")
+            entity(c := let(Container, world.bodies), c.name == "Container2")
         )
         query = an(
             entity(

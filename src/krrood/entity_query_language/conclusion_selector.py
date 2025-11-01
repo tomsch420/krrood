@@ -98,18 +98,18 @@ class ExceptIf(ConclusionSelector):
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
         """
         Evaluate the ExceptIf condition and yield the results.
         """
-
+        self._eval_parent_ = parent
         # init an empty source if none is provided
         sources = sources or HashedIterable()
-        self._yield_when_false_ = yield_when_false
 
         # constrain left values by available sources
         left_values = self.left._evaluate__(
-            sources, yield_when_false=self._yield_when_false_
+            sources, yield_when_false=yield_when_false, parent=self
         )
         for left_value in left_values:
 
@@ -117,9 +117,8 @@ class ExceptIf(ConclusionSelector):
 
             self._is_false_ = self.left._is_false_
             if self._is_false_:
-                if self._yield_when_false_:
-                    if not self._is_duplicate_output_(left_value):
-                        yield left_value
+                if yield_when_false and not self._is_duplicate_output_(left_value):
+                    yield left_value
                 continue
 
             if is_caching_enabled() and self.right_cache.check(left_value):
@@ -130,7 +129,7 @@ class ExceptIf(ConclusionSelector):
 
             right_yielded = False
             for right_value in self.right._evaluate__(
-                left_value, yield_when_false=False
+                left_value, yield_when_false=False, parent=self
             ):
                 right_yielded = True
                 self._conclusion_.update(self.right._conclusion_)
@@ -162,8 +161,11 @@ class Alternative(ElseIf, ConclusionSelector):
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
-        outputs = super()._evaluate__(sources, yield_when_false=yield_when_false)
+        outputs = super()._evaluate__(
+            sources, yield_when_false=yield_when_false, parent=parent
+        )
         for output in outputs:
             left_is_true = not self.left._is_false_
             right_is_true = not self.right._is_false_
@@ -185,8 +187,11 @@ class Next(EQLUnion, ConclusionSelector):
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
-        outputs = super()._evaluate__(sources, yield_when_false=yield_when_false)
+        outputs = super()._evaluate__(
+            sources, yield_when_false=yield_when_false, parent=parent
+        )
         for output in outputs:
             if self.left_evaluated:
                 self.update_conclusion(output, self.left._conclusion_)
