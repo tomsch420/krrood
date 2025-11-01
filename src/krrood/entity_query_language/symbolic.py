@@ -4,8 +4,6 @@ from collections import UserDict, defaultdict
 from contextlib import contextmanager
 from copy import copy
 
-from sympy.physics.units import yocto
-
 from . import logger
 from .enums import EQLMode, PredicateType
 from .rxnode import RWXNode, ColorLegend
