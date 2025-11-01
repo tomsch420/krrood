@@ -1103,7 +1103,7 @@ class Variable(CanBehaveLikeAVariable[T]):
             else:
                 hv = HashedValue(function_output)
             # kwargs is a mapping from name -> {var_id: HashedValue};
-            # we need a single dict {var_id: HashedValue};
+            # we need a single dict {var_id: HashedValue}
             values = {self._id_: hv}
             for d in kwargs.values():
                 values.update(d)
