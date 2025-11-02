@@ -877,15 +877,12 @@ class Variable(CanBehaveLikeAVariable[T]):
 
     def _update_domain_(self, domain):
         if domain:
-            new_domain = None
             if isinstance(domain, HashedIterable):
                 self._domain_ = domain
-            if isinstance(domain, SymbolicExpression):
-                new_domain = (v[domain._id_] for v in domain._evaluate__())
+                return
             elif not is_iterable(domain):
-                new_domain = [HashedValue(domain)]
-            new_domain = new_domain or domain
-            self._domain_.set_iterable(new_domain)
+                domain = [HashedValue(domain)]
+            self._domain_.set_iterable(domain)
 
     def _update_child_vars_from_kwargs_(self):
         if self._kwargs_:
