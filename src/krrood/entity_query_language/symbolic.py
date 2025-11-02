@@ -601,7 +601,7 @@ class The(ResultQuantifier[T]):
 
     def evaluate(
         self,
-    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
         all_results = []
         for result in super().evaluate():
             all_results.append(result)
