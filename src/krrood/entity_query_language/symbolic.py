@@ -885,13 +885,12 @@ class Variable(CanBehaveLikeAVariable[T]):
             self._domain_.set_iterable(domain)
 
     def _update_child_vars_from_kwargs_(self):
-        if self._kwargs_:
-            for k, v in self._kwargs_.items():
-                if isinstance(v, SymbolicExpression):
-                    self._child_vars_[k] = v
-                else:
-                    self._child_vars_[k] = Literal(v, name=k)
-            self._update_children_(*self._child_vars_.values())
+        for k, v in self._kwargs_.items():
+            if isinstance(v, SymbolicExpression):
+                self._child_vars_[k] = v
+            else:
+                self._child_vars_[k] = Literal(v, name=k)
+        self._update_children_(*self._child_vars_.values())
 
     def _evaluate__(
         self,
@@ -907,8 +906,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._eval_parent_ = parent
         sources = sources or {}
         if self._id_ in sources:
-            if not self._is_false_ or yield_when_false:
-                yield sources
+            yield sources
         elif self._domain_:
             yield from self
         elif self._should_be_instantiated_:
@@ -955,10 +953,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         :param kwargs: The keyword arguments of the predicate/variable.
         :return: The results' dictionary.
         """
-        if isinstance(instance, HashedValue):
-            hv = instance
-        else:
-            hv = HashedValue(instance)
+        hv = HashedValue(instance)
         # kwargs is a mapping from name -> {var_id: HashedValue};
         # we need a single dict {var_id: HashedValue}
         values = {self._id_: hv}
