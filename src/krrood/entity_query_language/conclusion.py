@@ -70,16 +70,18 @@ class Set(Conclusion[T]):
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Dict[int, HashedValue]:
+        self._eval_parent_ = parent
         self._yield_when_false_ = False
         if self.var._var_._id_ not in sources:
-            parent_value = next(iter(self.var._evaluate__(sources)))[
+            parent_value = next(iter(self.var._evaluate__(sources, parent=self)))[
                 self.var._var_._id_
             ]
             sources[self.var._var_._id_] = parent_value
-        sources[self.var._var_._id_] = next(iter(self.value._evaluate__(sources)))[
-            self.value._id_
-        ]
+        sources[self.var._var_._id_] = next(
+            iter(self.value._evaluate__(sources, parent=self))
+        )[self.value._id_]
         return sources
 
 
@@ -91,8 +93,10 @@ class Add(Conclusion[T]):
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Dict[int, HashedValue]:
+        self._eval_parent_ = parent
         self._yield_when_false_ = False
-        v = next(iter(self.value._evaluate__(sources)))[self.value._id_]
+        v = next(iter(self.value._evaluate__(sources, parent=self)))[self.value._id_]
         sources[self.var._var_._id_] = v
         return sources
