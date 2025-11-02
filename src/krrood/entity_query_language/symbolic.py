@@ -459,7 +459,12 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
 
     def __post_init__(self):
         super().__post_init__()
-        self._var_ = self._child_._var_
+        self._var_ = (
+            self._child_._var_
+            if isinstance(self._child_, CanBehaveLikeAVariable)
+            else None
+        )
+        self._node_.wrap_subtree = True
 
     @cached_property
     def _type_(self):
@@ -472,14 +477,35 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     def _name_(self) -> str:
         return f"{self.__class__.__name__}()"
 
-    @abstractmethod
     def evaluate(
         self,
-    ) -> TypingUnion[Iterable[T], T, Iterable[Dict[SymbolicExpression[T], T]]]:
-        """
-        This is the method called by the user to evaluate the full query.
-        """
-        ...
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        SymbolGraph().remove_dead_instances()
+        with symbolic_mode(mode=None):
+            results = self._evaluate__()
+            assert not in_symbolic_mode()
+            yield from map(self._process_result_, results)
+        self._reset_cache_()
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[T]:
+        sources = sources or {}
+        self._eval_parent_ = parent
+        if self._id_ in sources:
+            yield sources
+            return
+        values = self._child_._evaluate__(
+            sources, yield_when_false=yield_when_false, parent=self
+        )
+        for value in values:
+            self._is_false_ = self._child_._is_false_
+            if self._var_:
+                value[self._id_] = value[self._var_._id_]
+            yield value
 
     @lru_cache(maxsize=None)
     def _required_variables_from_child_(
@@ -573,102 +599,28 @@ class The(ResultQuantifier[T]):
     Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
     """
 
-    def evaluate(self) -> TypingUnion[Iterable[T], T, UnificationDict]:
-        result = self._evaluate_()
-        result = self._process_result_(result)
-        self._reset_cache_()
-        return result
-
-    def _evaluate__(
+    def evaluate(
         self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-        parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        self._eval_parent_ = parent
-        v = self._evaluate_(sources, yield_when_false=yield_when_false)
-        yield v
-        return
-
-    def _evaluate_(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-    ) -> Dict[int, HashedValue]:
-        sources = sources or {}
-        if self._id_ in sources:
-            return sources
-        sol_gen = self._child_._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=self
-        )
-        result = None
-        for sol in sol_gen:
-            if result is None:
-                result = sol
-                result.update(sources)
-            else:
-                raise MultipleSolutionFound(result, sol)
-        if result is None:
-            self._is_false_ = True
-        if self._is_false_:
-            if yield_when_false:
-                result = sources
-            else:
-                raise NoSolutionFound(self._child_)
-        else:
-            result[self._id_] = result[self._var_._id_]
-        return result
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        all_results = []
+        for result in super().evaluate():
+            all_results.append(result)
+            if len(all_results) > 1:
+                raise MultipleSolutionFound(all_results[0], all_results[1])
+        if len(all_results) == 0:
+            raise NoSolutionFound(self._child_)
+        return all_results[0]
 
 
 @dataclass(eq=False, repr=False)
 class An(ResultQuantifier[T]):
     """Quantifier that yields all matching results one by one."""
 
-    def __post_init__(self):
-        super().__post_init__()
-        self._node_.wrap_subtree = True
-
-    def evaluate(
-        self,
-    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
-        SymbolGraph().remove_dead_instances()
-        with symbolic_mode(mode=None):
-            results = self._evaluate__()
-            assert not in_symbolic_mode()
-            yield from map(self._process_result_, results)
-        self._reset_cache_()
-
-    def _evaluate__(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-        parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[T]:
-        sources = sources or {}
-        self._eval_parent_ = parent
-        if self._id_ in sources:
-            if (
-                isinstance(self._parent_, LogicalOperator)
-                or self is self._conditions_root_
-            ):
-                if not self._is_false_ or yield_when_false:
-                    yield sources
-            else:
-                yield sources
-        else:
-            values = self._child_._evaluate__(
-                sources, yield_when_false=yield_when_false, parent=self
-            )
-            for value in values:
-                self._is_false_ = self._child_._is_false_
-                if yield_when_false or not self._is_false_:
-                    if self._var_:
-                        value[self._id_] = value[self._var_._id_]
-                    yield value
+    ...
 
 
 @dataclass(eq=False)
-class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
+class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     """
     Describes the queried object(s), could be a query over a single variable or a set of variables,
     also describes the condition(s)/properties of the queried object(s).
@@ -706,12 +658,14 @@ class QueryObjectDescriptor(CanBehaveLikeAVariable[T], ABC):
                 required_vars.update(conc._unique_variables_)
         return required_vars
 
-    def _evaluate_(
+    def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
         yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
         sources = sources or {}
+        self._eval_parent_ = parent
         if self._id_ in sources:
             yield sources
         for values in self.get_constrained_values(sources, yield_when_false):
@@ -815,18 +769,11 @@ class SetOf(QueryObjectDescriptor[T]):
     A query over a set of variables.
     """
 
-    def _evaluate__(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-        parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        self._eval_parent_ = parent
-        yield from self._evaluate_(sources, yield_when_false=yield_when_false)
+    ...
 
 
 @dataclass(eq=False)
-class Entity(QueryObjectDescriptor[T]):
+class Entity(QueryObjectDescriptor[T], CanBehaveLikeAVariable[T]):
     """
     A query over a single variable.
     """
@@ -838,15 +785,6 @@ class Entity(QueryObjectDescriptor[T]):
     @property
     def selected_variable(self):
         return self.selected_variables[0] if self.selected_variables else None
-
-    def _evaluate__(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-        parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[T]:
-        self._eval_parent_ = parent
-        yield from self._evaluate_(sources, yield_when_false=yield_when_false)
 
 
 @dataclass(eq=False)
