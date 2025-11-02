@@ -43,13 +43,9 @@ from typing_extensions import (
 
 
 from .cache_data import (
-    cache_enter_count,
-    cache_search_count,
-    cache_match_count,
     is_caching_enabled,
     SeenSet,
     IndexedCache,
-    yield_class_values_from_cache,
 )
 from .failures import MultipleSolutionFound, NoSolutionFound
 from .utils import IDGenerator, is_iterable, generate_combinations
@@ -112,11 +108,6 @@ class SymbolicExpression(Generic[T], ABC):
     _symbolic_expression_stack_: ClassVar[List[SymbolicExpression]] = []
     _yield_when_false_: bool = field(init=False, repr=False, default=False)
     _is_false_: bool = field(init=False, repr=False, default=False)
-    _seen_parent_values_: Dict[bool, SeenSet] = field(
-        default_factory=lambda: {True: SeenSet(), False: SeenSet()},
-        init=False,
-        repr=False,
-    )
     _seen_parent_values_by_parent_: Dict[int, Dict[bool, SeenSet]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -164,7 +155,6 @@ class SymbolicExpression(Generic[T], ABC):
         """
         Reset only the cache of this symbolic expression.
         """
-        self._seen_parent_values_ = {True: SeenSet(), False: SeenSet()}
         # Also reset per-parent duplicate tracking and runtime eval parent to ensure reevaluation works
         self._seen_parent_values_by_parent_ = {}
         self._eval_parent_ = None
@@ -1397,31 +1387,11 @@ class BinaryOperator(SymbolicExpression, ABC):
         self, variables_sources, cache: Optional[IndexedCache] = None
     ) -> Iterable[Dict[int, HashedValue]]:
         cache = self._cache_ if cache is None else cache
-        entered = False
         for output, is_false in cache.retrieve(variables_sources):
-            entered = True
             self._is_false_ = is_false
-            cache_match_count.values[self._node_.name] += 1
             if is_false and self._is_duplicate_output_(output):
                 continue
             yield output
-        if not entered:
-            cache_match_count.values[self._node_.name] += 1
-        cache_enter_count.values[self._node_.name] = cache.enter_count
-        cache_search_count.values[self._node_.name] = cache.search_count
-
-    def yield_from_cache(
-        self, variables_sources, cache: IndexedCache
-    ) -> Iterable[Tuple[Dict[int, HashedValue], bool]]:
-        entered = False
-        for output, is_false in cache.retrieve(variables_sources):
-            entered = True
-            cache_match_count.values[self._node_.name] += 1
-            yield output, is_false
-        if not entered:
-            cache_match_count.values[self._node_.name] += 1
-        cache_enter_count.values[self._node_.name] = cache.enter_count
-        cache_search_count.values[self._node_.name] = cache.search_count
 
     def update_cache(
         self, values: Dict[int, HashedValue], cache: Optional[IndexedCache] = None
@@ -1690,8 +1660,7 @@ class Comparator(BinaryOperator):
             return
 
         if is_caching_enabled():
-            # Use exact fast-path before coverage check to avoid trie walk when fully bound
-            if self._cache_.exact_contains(sources) or self._cache_.check(sources):
+            if self._cache_.check(sources):
                 yield from self.yield_final_output_from_cache(sources)
                 return
 

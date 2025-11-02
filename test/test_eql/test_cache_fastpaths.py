@@ -10,10 +10,10 @@ class TestIndexedCacheFastPaths:
         cache.insert({1: "a", 2: "b"}, output="ab", index=True)
 
         # exact_contains should be True only when all keys are present and match exactly
-        assert cache.exact_contains({1: "a", 2: "b"}) is True
-        assert cache.exact_contains({1: "a"}) is False
-        assert cache.exact_contains({2: "b"}) is False
-        assert cache.exact_contains({1: "a", 2: "x"}) is False
+        assert cache.seen_set.exact_contains({1: "a", 2: "b"}) is True
+        assert cache.seen_set.exact_contains({1: "a"}) is False
+        assert cache.seen_set.exact_contains({2: "b"}) is False
+        assert cache.seen_set.exact_contains({1: "a", 2: "x"}) is False
 
     def test_check_with_bitmask_and_exact(self):
         cache = IndexedCache([1, 2])
