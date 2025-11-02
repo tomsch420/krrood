@@ -197,5 +197,6 @@ class Next(EQLUnion, ConclusionSelector):
                 self.update_conclusion(output, self.left._conclusion_)
             if self.right_evaluated:
                 self.update_conclusion(output, self.right._conclusion_)
-            yield output
+            if self._conclusion_ or yield_when_false:
+                yield output
             self._conclusion_.clear()

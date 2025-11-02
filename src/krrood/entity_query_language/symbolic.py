@@ -858,17 +858,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     A dictionary mapping child variable names to variables, these are from the _kwargs_ dictionary. 
     """
-    _kwargs_expression_: Optional[SymbolicExpression] = field(
-        default=None, init=False, repr=False
-    )
-    """
-    An expression of the constraints added from the keyword arguments of the variable.
-    """
-    _evaluating_kwargs_expression_: bool = field(default=False, init=False, repr=False)
-    """
-    A flag indicating that the kwargs expression is currently being evaluated so do not evaluate them again, and instead
-    yield from the domain.
-    """
 
     def __post_init__(self):
         self._validate_inputs_and_fill_missing_ones_()
@@ -919,82 +908,33 @@ class Variable(CanBehaveLikeAVariable[T]):
         or will yield from current domain if exists.
         """
         self._eval_parent_ = parent
-        self._yield_when_false_ = yield_when_false
         sources = sources or {}
         if self._id_ in sources:
-            if (
-                isinstance(self._parent_, LogicalOperator)
-                or self is self._conditions_root_
-            ):
-                if not self._is_false_ or yield_when_false:
-                    yield sources
-            else:
+            if not self._is_false_ or yield_when_false:
                 yield sources
-        elif self._domain_ and not self._is_inferred_:
-            if self._kwargs_expression_ and not self._evaluating_kwargs_expression_:
-                # because when kwargs expression exists,
-                # it will constrain the domain further to fit the kwargs provided.
-                yield from self._evaluate_kwargs_expression_(sources, yield_when_false)
-            else:
-                # If no kwargs expression, or is currently being evaluated then yield from the domain directly,
-                # if the kwargs is being evaluated, it will want to take the domain from here and constrain it further.
-                yield from self
-        elif not self._is_inferred_ and not self._predicate_type_:
-            self._update_domain_and_kwargs_expression_()
-            yield from self._evaluate__(
-                sources, yield_when_false=yield_when_false, parent=parent
+        elif self._domain_:
+            yield from self
+        elif self._is_inferred_ or self._predicate_type_:
+            yield from self._instantiate_using_child_vars_and_yield_results_(
+                sources, yield_when_false
             )
-        elif self._child_vars_:
-            for kwargs in self._generate_combinations_for_child_vars_values_(sources):
-                instance = self._instantiate_new_values_and_yield_results_(kwargs)
-                yield from self._process_output_and_update_values_(
-                    instance, kwargs, yield_when_false
-                )
+        else:
+            raise ValueError("Cannot evaluate variable.")
 
-    def _evaluate_kwargs_expression_(
-        self, sources: Optional[Dict[int, HashedValue]], yield_when_false: bool
-    ):
-        self._evaluating_kwargs_expression_ = True
-        for v in self._kwargs_expression_._evaluate__(
-            sources, yield_when_false=yield_when_false
-        ):
-            if self is self._conditions_root_ or isinstance(
-                self._parent_, LogicalOperator
-            ):
-                self._is_false_ = self._kwargs_expression_._is_false_
-                if not self._is_false_ or yield_when_false:
-                    yield v
-            else:
-                yield v
-        self._evaluating_kwargs_expression_ = False
-
-    def _update_domain_and_kwargs_expression_(self):
-        self._domain_source_ = From(self._cache_values_)
-        self._update_domain_(self._domain_source_.domain)
-        if self._kwargs_:
-            parents = [p for p in self._node_.parents]
-            self._kwargs_expression_, attributes = properties_to_expression_tree(
-                self, self._child_vars_
-            )
-            self._kwargs_expression_ = An(Entity(self._kwargs_expression_, [self]))
-            self._replace_expression_with_(self._kwargs_expression_, parents)
-
-    def _replace_expression_with_(
-        self, new_expression: SymbolicExpression, parents: Optional[List] = None
-    ):
-        if not parents:
-            parents = [
-                p
-                for p in self._node_.parents
-                if new_expression._node_ not in p.ancestors
-            ]
-        for child in self._node_.children:
-            self._node_.remove_child(child)
-        for parent in parents:
-            new_expression._parent_ = parent.data
-            self._node_.remove_parent(parent)
-        self._node_.remove()
-        self._node_ = new_expression._node_
+    def _instantiate_using_child_vars_and_yield_results_(
+        self, sources: Dict[int, HashedValue], yield_when_false: bool
+    ) -> Iterable[Dict[int, HashedValue]]:
+        for kwargs in self._generate_combinations_for_child_vars_values_(sources):
+            # Build once: unwrapped hashed kwargs for already provided child vars
+            bound_kwargs = {k: v[self._child_vars_[k]._id_] for k, v in kwargs.items()}
+            instance = self._type_(**{k: hv.value for k, hv in bound_kwargs.items()})
+            if self._predicate_type_ == PredicateType.SubClassOfPredicate:
+                instance = instance()
+            # Compute truth considering inversion
+            result_truthy = bool(instance)
+            self._is_false_ = result_truthy if self._invert_ else not result_truthy
+            if not self._is_false_ or yield_when_false:
+                yield self._process_output_and_update_values_(instance, kwargs)
 
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
@@ -1004,43 +944,26 @@ class Variable(CanBehaveLikeAVariable[T]):
             {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
         )
 
-    def _instantiate_new_values_and_yield_results_(
-        self,
-        kwargs: Dict[str, Dict[int, HashedValue]],
-    ) -> Symbol:
-        # Build once: unwrapped hashed kwargs for already provided child vars
-        bound_kwargs = {k: v[self._child_vars_[k]._id_] for k, v in kwargs.items()}
-        instance = self._type_(**{k: hv.value for k, hv in bound_kwargs.items()})
-        if self._predicate_type_ == PredicateType.SubClassOfPredicate:
-            return instance()
-        else:
-            return instance
-
     def _process_output_and_update_values_(
-        self, function_output: Any, kwargs: Dict[str, Any], yield_when_false: bool
-    ) -> Iterable[Dict[int, HashedValue]]:
+        self, instance: Any, kwargs: Dict[str, Any]
+    ) -> Dict[int, HashedValue]:
         """
-        Process the output of the predicate/variable and get the results.
+        Process the predicate/variable instance and get the results.
 
-        :param function_output: The output of the predicate.
+        :param instance: The created instance.
         :param kwargs: The keyword arguments of the predicate/variable.
         :return: The results' dictionary.
         """
-        # Compute truth considering inversion
-        result_truthy = bool(function_output)
-        self._is_false_ = result_truthy if self._invert_ else not result_truthy
-
-        if yield_when_false or not self._is_false_:
-            if isinstance(function_output, HashedValue):
-                hv = function_output
-            else:
-                hv = HashedValue(function_output)
-            # kwargs is a mapping from name -> {var_id: HashedValue};
-            # we need a single dict {var_id: HashedValue}
-            values = {self._id_: hv}
-            for d in kwargs.values():
-                values.update(d)
-            yield values
+        if isinstance(instance, HashedValue):
+            hv = instance
+        else:
+            hv = HashedValue(instance)
+        # kwargs is a mapping from name -> {var_id: HashedValue};
+        # we need a single dict {var_id: HashedValue}
+        values = {self._id_: hv}
+        for d in kwargs.values():
+            values.update(d)
+        return values
 
     @property
     def _name_(self):
