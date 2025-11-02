@@ -1,14 +1,14 @@
 from dataclasses import dataclass
 import pytest
 
-from krrood.utils import (
-    SubclassJSONSerializer,
+from krrood.adapters.json_serializer import (
     get_full_class_name,
     MissingTypeError,
     InvalidTypeFormatError,
     UnknownModuleError,
     ClassNotFoundError,
     InvalidSubclassError,
+    SubclassJSONSerializer,
 )
 
 
@@ -181,7 +181,9 @@ essential_existing_module = "krrood.utils"
 
 def test_class_not_found_raises_class_not_found_error():
     with pytest.raises(ClassNotFoundError):
-        SubclassJSONSerializer.from_json({"type": f"{essential_existing_module}.DoesNotExist"})
+        SubclassJSONSerializer.from_json(
+            {"type": f"{essential_existing_module}.DoesNotExist"}
+        )
 
 
 def test_invalid_subclass_raises_invalid_subclass_error():
