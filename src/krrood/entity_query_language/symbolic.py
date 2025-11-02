@@ -186,24 +186,24 @@ class SymbolicExpression(Generic[T], ABC):
         self._conclusion_.add(conclusion)
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(
-        self, child: Optional[SymbolicExpression] = None, when_true: bool = True
-    ):
+    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
+        """
+        Return the set of variable ids that uniquely identify an output of this node
+        for its parent, on the given truth branch.
+
+        The default implementation asks the parent for its projection, and augments it
+        with variables referenced by this node's conclusions when the branch can yield.
+        """
         if self._parent_:
-            vars = self._parent_._required_variables_from_child_(
-                self, when_true=when_true
-            )
+            projection = self._parent_._projection_(when_true=when_true)
         else:
-            vars = HashedIterable()
+            projection = HashedIterable()
+
         if when_true or (when_true is None):
             for child in self._children_:
-                for conc in child._conclusion_:
-                    vars.update(conc._unique_variables_)
-        return vars
-
-    @property
-    def _conclusions_of_all_descendants_(self) -> List[Conclusion]:
-        return [conc for child in self._descendants_ for conc in child._conclusion_]
+                for conclusion in child._conclusion_:
+                    projection.update(conclusion._unique_variables_)
+        return projection
 
     @property
     def _parent_(self) -> Optional[SymbolicExpression]:
@@ -247,10 +247,6 @@ class SymbolicExpression(Generic[T], ABC):
     @property
     def _all_nodes_(self) -> List[SymbolicExpression]:
         return [self] + self._descendants_
-
-    @property
-    def _all_node_names_(self) -> List[str]:
-        return [node._node_.name for node in self._all_nodes_]
 
     @property
     def _descendants_(self) -> List[SymbolicExpression]:
@@ -304,25 +300,28 @@ class SymbolicExpression(Generic[T], ABC):
         ...
 
     def _is_duplicate_output_(self, output: Dict[int, HashedValue]) -> bool:
-        required_vars = self._parent_._required_variables_from_child_(
-            self, when_true=not self._is_false_
-        )
-        if not required_vars:
+        """
+        Check if the output has been seen before for the current parent and truth branch.
+        """
+        projection = self._projection_(when_true=not self._is_false_)
+        if not projection:
             return False
-        required_output = {k: v for k, v in output.items() if k in required_vars}
+
+        required_output = {k: v for k, v in output.items() if k in projection}
         if not required_output:
             return False
+
         # Use a per-parent seen set to avoid suppressing outputs across different parent contexts
-        parent_id = self._parent_._id_
+        parent_id = self._parent_._id_ if self._parent_ else self._id_
         seen_by_truth = self._seen_parent_values_by_parent_.setdefault(
             parent_id, {True: SeenSet(), False: SeenSet()}
         )
         seen_set = seen_by_truth[not self._is_false_]
+
         if seen_set.check(required_output):
             return True
-        else:
-            seen_set.add(required_output)
-            return False
+        seen_set.add(required_output)
+        return False
 
     @property
     def _plot_color_(self) -> ColorLegend:
@@ -508,23 +507,25 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             yield value
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(
-        self, child: Optional[SymbolicExpression] = None, when_true: bool = True
-    ):
-        child = self._child_ if child is None else child
-        if self._parent_:
-            vars = self._parent_._required_variables_from_child_(
-                self, when_true=when_true
-            )
-        else:
-            vars = HashedIterable()
+    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
+        """
+        Return the projection for result quantifiers.
+
+        Includes selected variables from the child and conclusion variables when applicable.
+        """
+        projection = (
+            self._parent_._projection_(when_true=when_true)
+            if self._parent_
+            else HashedIterable()
+        )
+        child = self._child_
         for var in child.selected_variables:
-            vars.add(var)
-            vars.update(var._unique_variables_)
+            projection.add(var)
+            projection.update(var._unique_variables_)
         if when_true or (when_true is None):
-            for conc in child._conclusion_:
-                vars.update(conc._unique_variables_)
-        return vars
+            for conclusion in child._conclusion_:
+                projection.update(conclusion._unique_variables_)
+        return projection
 
     @property
     @lru_cache(maxsize=None)
@@ -643,20 +644,24 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             raise ValueError("No type available as _var_ is None")
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(
-        self, child: Optional[SymbolicExpression] = None, when_true: bool = True
-    ):
-        child = self._child_ if not child else child
-        required_vars = self._parent_._required_variables_from_child_(
-            self, when_true=when_true
+    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
+        """
+        Return the projection for query object descriptors.
+
+        Includes selected variables and conclusion variables when applicable.
+        """
+        projection = (
+            self._parent_._projection_(when_true=when_true)
+            if self._parent_
+            else HashedIterable()
         )
-        required_vars.update(self.selected_variables)
+        projection.update(self.selected_variables)
         for var in self.selected_variables:
-            required_vars.update(var._unique_variables_)
-        if child and (when_true or (when_true is None)):
-            for conc in child._conclusion_:
-                required_vars.update(conc._unique_variables_)
-        return required_vars
+            projection.update(var._unique_variables_)
+        if self._child_ and (when_true or (when_true is None)):
+            for conclusion in self._child_._conclusion_:
+                projection.update(conclusion._unique_variables_)
+        return projection
 
     def _evaluate__(
         self,
@@ -1437,22 +1442,22 @@ class BinaryOperator(SymbolicExpression, ABC):
         return self.left._all_variable_instances_ + self.right._all_variable_instances_
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(
-        self, child: Optional[SymbolicExpression] = None, when_true: bool = True
-    ):
-        if not child:
-            child = self.left
-        required_vars = HashedIterable()
-        if child is self.left:
-            required_vars.update(self.right._unique_variables_)
+    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
+        """
+        Return the projection for binary operators.
+
+        Includes variables from both operands symmetrically to ensure non-empty dedup keys.
+        """
+        projection = HashedIterable()
+        # Include variables from both left and right operands symmetrically
+        projection.update(self.left._unique_variables_)
+        projection.update(self.right._unique_variables_)
         if when_true or (when_true is None):
-            for conc in self._conclusion_:
-                required_vars.update(conc._unique_variables_)
+            for conclusion in self._conclusion_:
+                projection.update(conclusion._unique_variables_)
         if self._parent_:
-            required_vars.update(
-                self._parent_._required_variables_from_child_(self, when_true)
-            )
-        return required_vars
+            projection.update(self._parent_._projection_(when_true))
+        return projection
 
 
 @dataclass(eq=False)
@@ -1846,37 +1851,24 @@ class OR(LogicalOperator, ABC):
     """
 
     @lru_cache(maxsize=None)
-    def _required_variables_from_child_(
-        self,
-        child: Optional[SymbolicExpression] = None,
-        when_true: Optional[bool] = None,
-    ):
-        if not child:
-            child = self.left
-        required_vars = HashedIterable()
-        when_false = not when_true if when_true is not None else None
-        if child is self.left:
-            if when_false or (when_false is None):
-                required_vars.update(self.right._unique_variables_)
-                when_iam = None
-            else:
-                when_iam = True
-            if self._parent_:
-                required_vars.update(
-                    self._parent_._required_variables_from_child_(self, when_iam)
-                )
-            if when_true or (when_true is None):
-                for conc in self.left._conclusion_:
-                    required_vars.update(conc._unique_variables_)
-        elif child is self.right:
-            if when_true or (when_true is None):
-                for conc in self.right._conclusion_:
-                    required_vars.update(conc._unique_variables_)
-            if self._parent_:
-                required_vars.update(
-                    self._parent_._required_variables_from_child_(self, when_true)
-                )
-        return required_vars
+    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
+        """
+        Return the projection for OR operators.
+
+        Includes variables from both operands symmetrically to ensure non-empty dedup keys.
+        """
+        projection = HashedIterable()
+        # Include variables from both left and right operands symmetrically
+        projection.update(self.left._unique_variables_)
+        projection.update(self.right._unique_variables_)
+        if when_true or (when_true is None):
+            for conclusion in self.left._conclusion_:
+                projection.update(conclusion._unique_variables_)
+            for conclusion in self.right._conclusion_:
+                projection.update(conclusion._unique_variables_)
+        if self._parent_:
+            projection.update(self._parent_._projection_(when_true))
+        return projection
 
 
 @dataclass(eq=False)
