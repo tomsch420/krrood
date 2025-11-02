@@ -901,8 +901,8 @@ class Variable(CanBehaveLikeAVariable[T]):
     ) -> Iterable[Dict[int, HashedValue]]:
         """
         A variable either is already bound in sources by other constraints (Symbolic Expressions).,
-        or has no domain and will instantiate new values by constructing the type if the type is given,
-        or will yield from current domain if exists.
+        or will yield from current domain if exists,
+        or has no domain and will instantiate new values by constructing the type if the type is given.
         """
         self._eval_parent_ = parent
         sources = sources or {}
@@ -911,12 +911,16 @@ class Variable(CanBehaveLikeAVariable[T]):
                 yield sources
         elif self._domain_:
             yield from self
-        elif self._is_inferred_ or self._predicate_type_:
+        elif self._should_be_instantiated_:
             yield from self._instantiate_using_child_vars_and_yield_results_(
                 sources, yield_when_false
             )
         else:
             raise ValueError("Cannot evaluate variable.")
+
+    @cached_property
+    def _should_be_instantiated_(self):
+        return self._is_inferred_ or self._predicate_type_
 
     def _instantiate_using_child_vars_and_yield_results_(
         self, sources: Dict[int, HashedValue], yield_when_false: bool
