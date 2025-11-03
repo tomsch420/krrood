@@ -98,33 +98,27 @@ class HasGeneric(Generic[T]):
     @lru_cache(maxsize=None)
     def original_class(cls) -> Type:
         """
-        :return: The original class of this DAO.
+        :return:The concrete generic argument for DAO-like bases. Raises and Error if None are found.
         """
-        # Fall back to the original method for manually created classes
-        try:
-            # Look for DataAccessObject in the class's MRO (Method Resolution Order)
-            for base_cls in cls.__mro__:
-                if base_cls is DataAccessObject:
-                    # Found DataAccessObject, now find the generic parameter
-                    for base in cls.__orig_bases__:
-                        if (
-                            hasattr(base, "__origin__")
-                            and base.__origin__ is DataAccessObject
-                        ):
-                            type_args = get_args(base)
-                            if type_args:
-                                return type_args[0]
-
-            # If we get here, we didn't find a DataAccessObject base with a generic parameter
-            # Try the original approach as a fallback
-            for base in getattr(cls, "__orig_bases__", []):
-                type_args = get_args(base)
-                if type_args:
-                    return type_args[0]
-
+        tp = cls._dao_like_argument()
+        if tp is None:
             raise NoGenericError(cls)
-        except (AttributeError, IndexError):
-            raise NoGenericError(cls)
+        return tp
+
+    @classmethod
+    def _dao_like_argument(cls) -> Optional[Type]:
+        """
+        :return: The concrete generic argument for DAO-like bases.
+        """
+        # Prefer an explicit DAO origin if present
+        for base in getattr(cls, "__orig_bases__", []):
+            origin = getattr(base, "__origin__", None)
+            if origin is DataAccessObject or origin is AlternativeMapping:
+                args = get_args(base)
+                if args:
+                    return args[0]
+        # No acceptable base found
+        return None
 
 
 class DataAccessObject(HasGeneric[T]):
