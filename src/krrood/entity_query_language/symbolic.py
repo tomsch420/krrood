@@ -828,18 +828,25 @@ class From:
 
 @dataclass(eq=False)
 class Variable(CanBehaveLikeAVariable[T]):
+    """
+    A Variable that queries will assign. The Variable produces results of type `T`.
+    """
+
     _type_: Type = field(default=MISSING, repr=False)
     """
-    The class that this variable represents.
+    The result type of the variable. (The value of `T`)
     """
+
     _name__: str
     """
     The name of the variable.
     """
+
     _kwargs_: Dict[str, Any] = field(default_factory=dict)
     """
     The properties of the variable as keyword arguments.
     """
+
     _domain_source_: Optional[From] = field(default=None, kw_only=True, repr=False)
     """
     An optional source for the variable domain. If not given, the global cache of the variable class type will be used
