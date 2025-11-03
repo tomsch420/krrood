@@ -96,7 +96,7 @@ class HasGeneric(Generic[T]):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def original_class(cls) -> Type:
+    def original_class(cls) -> T:
         """
         :return:The concrete generic argument for DAO-like bases. Raises and Error if None are found.
         """
