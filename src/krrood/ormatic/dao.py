@@ -4,6 +4,7 @@ import abc
 import inspect
 import logging
 import threading
+from dataclasses import dataclass
 from functools import lru_cache
 from typing_extensions import Optional, List
 
@@ -22,6 +23,7 @@ T = TypeVar("T")
 _DAO = TypeVar("_DAO", bound="DataAccessObject")
 
 
+@dataclass
 class NoGenericError(TypeError):
     """
     Exception raised when the original class for a DataAccessObject subclass cannot
@@ -32,13 +34,16 @@ class NoGenericError(TypeError):
     associated with it.
     """
 
-    def __init__(self, cls):
+    clazz: Type
+
+    def __post_init__(self):
         super().__init__(
-            f"Cannot determine original class for {cls.__name__!r}. "
+            f"Cannot determine original class for {self.clazz}. "
             "Did you forget to parameterise the DataAccessObject subclass?"
         )
 
 
+@dataclass
 class NoDAOFoundError(TypeError):
     """
     Represents an error raised when no DAO (Data Access Object) class is found for a given class.
@@ -52,23 +57,24 @@ class NoDAOFoundError(TypeError):
     The class that no dao was found for
     """
 
-    def __init__(self, obj: Any):
-        self.obj = obj
-        super().__init__(f"Class {type(obj)} does not have a DAO.")
+    def __post_init__(self):
+        super().__init__(f"Class {type(self.obj)} does not have a DAO.")
 
 
+@dataclass
 class NoDAOFoundDuringParsingError(NoDAOFoundError):
+
     dao: Type
     """
     The DAO class that tried to convert the cls to a DAO if any.
     """
 
     relationship: RelationshipProperty
+    """
+    The relationship that tried to create the DAO.
+    """
 
     def __init__(self, obj: Any, dao: Type, relationship: RelationshipProperty = None):
-        self.obj = obj
-        self.dao = dao
-        self.relationship = relationship
         TypeError.__init__(
             self,
             f"Class {type(obj)} does not have a DAO. This happened when trying"
