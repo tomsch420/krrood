@@ -6,6 +6,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import _GenericAlias
 
 import sqlalchemy.inspection
 import sqlalchemy.orm
@@ -23,7 +24,6 @@ from typing_extensions import (
     List,
     Iterable,
 )
-from typing import _GenericAlias
 
 from ..utils import recursive_subclasses
 
@@ -867,6 +867,6 @@ def to_dao(obj: Any, state: Optional[ToDAOState] = None) -> DataAccessObject:
     """
     dao_class = get_dao_class(type(obj))
     if dao_class is None:
-        raise NoDAOFoundError(type(obj))
+        raise NoDAOFoundError(obj)
     state = state or ToDAOState()
     return dao_class.to_dao(obj, state)
