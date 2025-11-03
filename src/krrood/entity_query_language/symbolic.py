@@ -913,7 +913,8 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             yield sources
         elif self._domain_:
-            yield from self
+            for v in self:
+                yield {**sources, **v}
         elif self._should_be_instantiated_:
             yield from self._instantiate_using_child_vars_and_yield_results_(
                 sources, yield_when_false
@@ -1235,50 +1236,6 @@ class Flatten(DomainMapping):
 
 
 @dataclass(eq=False)
-class Concatenate(CanBehaveLikeAVariable[T]):
-    _child_: CanBehaveLikeAVariable[T]
-    _invert_: bool = field(init=False, default=False)
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._var_ = self
-
-    def _evaluate__(
-        self,
-        sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
-        parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        sources = sources or {}
-        self._eval_parent_ = parent
-        if self._id_ in sources:
-            yield sources
-            return
-        all_values = defaultdict(list)
-        for child_v in self._child_._evaluate__(sources, yield_when_false, self):
-            child_v = copy(child_v)
-            for id_, val in child_v.items():
-                if id_ == self._child_._id_:
-                    child_v_unwrapped = val.value
-                    if not is_iterable(child_v_unwrapped):
-                        child_v_unwrapped = [child_v_unwrapped]
-                    all_values[self._id_].extend(child_v_unwrapped)
-                all_values[id_].append(val)
-            for s_id, s_val in sources.items():
-                all_values[s_id].append(s_val)
-        yield {k: HashedValue(v) for k, v in all_values.items()}
-
-    @property
-    def _name_(self):
-        return f"{self.__class__.__name__}({self._child_._name_})"
-
-    @property
-    @lru_cache(maxsize=None)
-    def _all_variable_instances_(self) -> List[Variable]:
-        return self._child_._all_variable_instances_
-
-
-@dataclass(eq=False)
 class BinaryOperator(SymbolicExpression, ABC):
     """
     A base class for binary operators that can be used to combine symbolic expressions.
@@ -1575,44 +1532,37 @@ class Comparator(BinaryOperator):
         """
         sources = sources or {}
         self._eval_parent_ = parent
+        self._yield_when_false_ = yield_when_false
 
         if self._id_ in sources:
             yield sources
             return
 
-        if is_caching_enabled():
-            if self._cache_.check(sources):
-                yield from self.yield_final_output_from_cache(sources)
-                return
+        if is_caching_enabled() and self._cache_.check(sources):
+            yield from self.yield_final_output_from_cache(sources)
+            return
 
         first_operand, second_operand = self.get_first_second_operands(sources)
-        operand_value_map = {
-            first_operand._id_: HashedValue(False),
-            second_operand._id_: HashedValue(False),
-        }
-        first_values = first_operand._evaluate__(sources, parent=self)
-        for first_value in first_values:
-            first_value.update(sources)
-            operand_value_map[first_operand._id_] = first_value[first_operand._id_]
-            second_values = second_operand._evaluate__(first_value, parent=self)
-            for second_value in second_values:
-                operand_value_map[second_operand._id_] = second_value[
-                    second_operand._id_
-                ]
-                res = self.apply_operation(operand_value_map)
-                self._is_false_ = not res
-                if res or yield_when_false:
-                    values = copy(first_value)
-                    values.update(second_value)
-                    values.update(operand_value_map)
-                    values[self._id_] = HashedValue(res)
-                    self.update_cache(values)
-                    yield values
 
-    def apply_operation(self, operand_values: Dict[int, HashedValue]):
-        return self.operation(
+        yield from filter(
+            self.apply_operation,
+            (
+                second_val
+                for first_val in first_operand._evaluate__(sources, parent=self)
+                for second_val in second_operand._evaluate__(first_val, parent=self)
+            ),
+        )
+
+    def apply_operation(self, operand_values: Dict[int, HashedValue]) -> bool:
+        res = self.operation(
             operand_values[self.left._id_].value, operand_values[self.right._id_].value
         )
+        self._is_false_ = not res
+        if res or self._yield_when_false_:
+            operand_values[self._id_] = HashedValue(res)
+            self.update_cache(operand_values)
+            return True
+        return False
 
     def get_first_second_operands(
         self, sources: Dict[int, HashedValue]
@@ -1623,18 +1573,6 @@ class Comparator(BinaryOperator):
             return self.right, self.left
         else:
             return self.left, self.right
-
-    def get_result_domain(
-        self, operand_value_map: Dict[CanBehaveLikeAVariable, HashedValue]
-    ) -> HashedIterable:
-        left_leaf_value = self.left._var_._domain_[operand_value_map[self.left].id_]
-        right_leaf_value = self.right._var_._domain_[operand_value_map[self.right].id_]
-        return HashedIterable(
-            values={
-                self.left._var_._id_: left_leaf_value,
-                self.right._var_._id_: right_leaf_value,
-            }
-        )
 
     @property
     def _plot_color_(self) -> ColorLegend:
@@ -1907,8 +1845,6 @@ def Not(operand: Any) -> SymbolicExpression:
         operand = ElseIf(Not(operand.left), Not(operand.right))
     elif isinstance(operand, OR):
         operand = AND(Not(operand.left), Not(operand.right))
-    elif isinstance(operand, Concatenate):
-        operand = Not(operand._child_)
     else:
         operand._invert_ = True
     return operand

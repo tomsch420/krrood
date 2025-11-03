@@ -6,10 +6,10 @@ from krrood.entity_query_language.entity import (
     an,
     not_,
     in_,
-    concatenate,
     the,
     for_all,
     let,
+    exists,
 )
 from ..dataset.semantic_world_like_classes import View, Drawer, Container, Cabinet
 
@@ -52,7 +52,7 @@ def test_flatten_iterable_attribute_and_use_not_equal(handles_and_containers_wor
     assert {row.handle.name for row in results} == {"Handle2", "Handle3"}
 
 
-def test_concatenate(handles_and_containers_world):
+def test_exists_and_for_all(handles_and_containers_world):
     world = handles_and_containers_world
 
     with symbolic_mode():
@@ -60,8 +60,8 @@ def test_concatenate(handles_and_containers_world):
         my_drawers = an(
             entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
         )
-        drawers = concatenate(cabinets.drawers)
-        query = an(entity(my_drawers, not_(in_(my_drawers, drawers))))
+        drawers = cabinets.drawers
+        query = an(entity(my_drawers, for_all(drawers, not_(in_(my_drawers, drawers)))))
 
     results = list(query.evaluate())
 
@@ -73,8 +73,8 @@ def test_concatenate(handles_and_containers_world):
         my_drawers = an(
             entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
         )
-        drawers = concatenate(cabinets.drawers)
-        query = an(entity(my_drawers, in_(my_drawers, drawers)))
+        drawers = cabinets.drawers
+        query = an(entity(my_drawers, exists(drawers, in_(my_drawers, drawers))))
 
     results = list(query.evaluate())
 
