@@ -87,7 +87,7 @@ rows2 = list(query2.evaluate())
 assert len(rows2) == 0
 ```
 
-## Example 1: Test membership using in_/not_ with nested iterables
+## Example 2: Test membership using in_/not_ with nested iterables
 
 ```python
 with symbolic_mode():
