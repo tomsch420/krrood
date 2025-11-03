@@ -329,7 +329,8 @@ class SymbolicExpression(Generic[T], ABC):
         return _optimize_or(self, other)
 
     def __invert__(self):
-        return Not(self)
+        self._invert_ = True
+        return self
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
@@ -544,6 +545,14 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         else:
             raise NotImplementedError(f"Unknown child type {type(self._child_)}")
 
+    def __invert__(self):
+        raise NotImplementedError(
+            f"Symbolic NOT operations on {ResultQuantifier} operands "
+            f"are not allowed, you can negate the conditions or {QueryObjectDescriptor}"
+            f" instead as negating quantifiers is most likely not what you want"
+            f" as it is ambiguous."
+        )
+
     def visualize(
         self,
         figsize=(35, 30),
@@ -750,6 +759,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         if self._child_:
             vars.extend(self._child_._all_variable_instances_)
         return vars
+
+    def __invert__(self):
+        return self.__class__(self._child_.__invert__(), self.selected_variables)
 
     def __repr__(self):
         return self._name_
@@ -1640,6 +1652,9 @@ class AND(LogicalOperator):
             self.update_cache(right_value, self.right_cache)
             yield output
 
+    def __invert__(self):
+        return ElseIf(self.left.__invert__(), self.right.__invert__())
+
 
 @dataclass(eq=False)
 class OR(LogicalOperator, ABC):
@@ -1666,6 +1681,9 @@ class OR(LogicalOperator, ABC):
         if self._parent_:
             projection.update(self._parent_._projection_(when_true))
         return projection
+
+    def __invert__(self):
+        return AND(self.left.__invert__(), self.right.__invert__())
 
 
 @dataclass(eq=False)
@@ -1783,32 +1801,6 @@ class ElseIf(OR):
                 continue
             self.update_cache(right_value, self.right_cache)
             yield right_value
-
-
-def Not(operand: Any) -> SymbolicExpression:
-    """
-    A symbolic NOT operation that can be used to negate symbolic expressions.
-    """
-    if not isinstance(operand, SymbolicExpression):
-        operand = Literal(operand)
-    if isinstance(operand, ResultQuantifier):
-        raise NotImplementedError(
-            f"Symbolic NOT operations on {ResultQuantifier} operands "
-            f"are not allowed, you can negate the conditions or {QueryObjectDescriptor}"
-            f" instead as negating quantifiers is most likely not what you want"
-            f" as it is ambiguous."
-        )
-    elif isinstance(operand, Entity):
-        operand = operand.__class__(Not(operand._child_), operand.selected_variables)
-    elif isinstance(operand, SetOf):
-        operand = operand.__class__(Not(operand._child_), operand.selected_variables)
-    elif isinstance(operand, AND):
-        operand = ElseIf(Not(operand.left), Not(operand.right))
-    elif isinstance(operand, OR):
-        operand = AND(Not(operand.left), Not(operand.right))
-    else:
-        operand._invert_ = True
-    return operand
 
 
 OperatorOptimizer = Callable[[SymbolicExpression, SymbolicExpression], LogicalOperator]
