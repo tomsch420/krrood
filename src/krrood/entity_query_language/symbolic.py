@@ -388,7 +388,7 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
 
     @cached_property
     def _type__(self):
-        return self._type_
+        return self._var_._type_ if self._var_ else None
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
         self._if_not_in_symbolic_mode_raise_error_("__getitem__")
@@ -1062,14 +1062,17 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         )
         for child_v in child_val:
             for v in self._apply_mapping_(child_v[self._child_._id_]):
-                values = copy(child_v)
-                if (not self._invert_ and v.value) or (self._invert_ and not v.value):
-                    self._is_false_ = False
-                else:
-                    self._is_false_ = True
+                self._update_truth_value_(v)
                 if yield_when_false or not self._is_false_:
-                    values[self._id_] = v
-                    yield values
+                    yield {**child_v, self._id_: v}
+
+    def _update_truth_value_(self, current_value: HashedValue):
+        if (not self._invert_ and current_value.value) or (
+            self._invert_ and not current_value.value
+        ):
+            self._is_false_ = False
+        else:
+            self._is_false_ = True
 
     @abstractmethod
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
@@ -1218,16 +1221,10 @@ class Flatten(DomainMapping):
         self._path_ = self._child_._path_
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
-        inner = value.value
-        # Treat non-iterables as singletons
-        if not is_iterable(inner):
-            inner_iter = [inner]
-        else:
-            inner_iter = inner
-        for inner_v in inner_iter:
+        for inner_v in value.value:
             yield HashedValue(inner_v)
 
-    @property
+    @cached_property
     def _name_(self):
         return f"Flatten({self._child_._name_})"
 
@@ -1905,6 +1902,8 @@ def Not(operand: Any) -> SymbolicExpression:
         operand = ElseIf(Not(operand.left), Not(operand.right))
     elif isinstance(operand, OR):
         operand = AND(Not(operand.left), Not(operand.right))
+    elif isinstance(operand, Concatenate):
+        operand = Not(operand._child_)
     else:
         operand._invert_ = True
     return operand
