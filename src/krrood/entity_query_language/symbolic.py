@@ -1410,6 +1410,9 @@ class ForAll(QuantifiedConditional):
             return not self.condition._is_false_
         return False
 
+    def __invert__(self):
+        return Exists(self.variable, self.condition.__invert__())
+
 
 @dataclass(eq=False)
 class Exists(QuantifiedConditional):
@@ -1440,6 +1443,9 @@ class Exists(QuantifiedConditional):
                 yield condition_val
             if not self._is_false_:
                 break
+
+    def __invert__(self):
+        return ForAll(self.variable, self.condition.__invert__())
 
 
 @dataclass(eq=False)
