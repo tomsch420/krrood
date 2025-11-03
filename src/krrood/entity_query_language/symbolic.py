@@ -1553,9 +1553,7 @@ class Comparator(BinaryOperator):
             ),
         )
 
-    def apply_operation(
-        self, operand_values: Dict[int, HashedValue]
-    ) -> Dict[int, HashedValue]:
+    def apply_operation(self, operand_values: Dict[int, HashedValue]) -> bool:
         res = self.operation(
             operand_values[self.left._id_].value, operand_values[self.right._id_].value
         )
@@ -1563,8 +1561,8 @@ class Comparator(BinaryOperator):
         if res or self._yield_when_false_:
             operand_values[self._id_] = HashedValue(res)
             self.update_cache(operand_values)
-            return operand_values
-        return {}
+            return True
+        return False
 
     def get_first_second_operands(
         self, sources: Dict[int, HashedValue]
