@@ -22,7 +22,7 @@ import contextvars
 import operator
 import typing
 from abc import abstractmethod, ABC
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, MISSING
 from functools import lru_cache, cached_property
 
 from typing_extensions import (
@@ -371,6 +371,11 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     _path_: List[ClassRelation] = field(init=False, default_factory=list)
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
+    """
+
+    _type_: Type = field(init=False, default=None)
+    """
+    The type of the variable.
     """
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
@@ -811,13 +816,13 @@ class From:
 
 @dataclass(eq=False)
 class Variable(CanBehaveLikeAVariable[T]):
+    _type_: Type = field(default=MISSING, repr=False)
+    """
+    The class that this variable represents.
+    """
     _name__: str
     """
     The name of the variable.
-    """
-    _type_: Type
-    """
-    The class that this variable represents.
     """
     _kwargs_: Dict[str, Any] = field(default_factory=dict)
     """
@@ -993,7 +998,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         return self._name_
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, init=False)
 class Literal(Variable[T]):
     """
     Literals are variables that are not constructed by their type but by their given data.
@@ -1014,7 +1019,7 @@ class Literal(Variable[T]):
                 name = type_.__name__
             else:
                 name = type(original_data).__name__
-        super().__init__(name, type_, _domain_source_=From(data))
+        super().__init__(_name__=name, _type_=type_, _domain_source_=From(data))
 
     @property
     def _plot_color_(self) -> ColorLegend:

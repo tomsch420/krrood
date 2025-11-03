@@ -66,8 +66,8 @@ def symbolic_function(
             ]
             kwargs.update(dict(zip(function_arg_names, args)))
             return Variable(
-                function.__name__,
-                function,
+                _name__=function.__name__,
+                _type_=function,
                 _kwargs_=kwargs,
                 _predicate_type_=PredicateType.DecoratedMethod,
             )
@@ -99,8 +99,8 @@ class Symbol:
         # we need to infer new values.
         if not domain and (in_symbolic_mode(EQLMode.Rule) or predicate_type):
             var = Variable(
-                cls.__name__,
-                cls,
+                _name__=cls.__name__,
+                _type_=cls,
                 _kwargs_=kwargs,
                 _predicate_type_=predicate_type,
                 _is_indexed_=index_class_cache(cls),
@@ -434,8 +434,8 @@ def extract_selected_variable_and_expression(
         domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
 
     var = Variable(
-        symbolic_cls.__name__,
-        symbolic_cls,
+        _name__=symbolic_cls.__name__,
+        _type_=symbolic_cls,
         _domain_source_=domain,
         _predicate_type_=predicate_type,
         _is_indexed_=index_class_cache(symbolic_cls),
