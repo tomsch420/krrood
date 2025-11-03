@@ -27,7 +27,6 @@ from .symbolic import (
     Infer,
     _optimize_or,
     Flatten,
-    Concatenate,
     ForAll,
     Exists,
 )
@@ -299,16 +298,6 @@ def flatten(
     (similar to SQL UNNEST), keeping existing variable bindings intact.
     """
     return Flatten(var)
-
-
-def concatenate(
-    var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
-) -> Union[CanBehaveLikeAVariable[T], Iterable[T]]:
-    """
-    Concatenate a nested iterable domain into a one-element domain that is still a nested iterable that contains all
-    the values of the sub iterables.
-    """
-    return Concatenate(var)
 
 
 def for_all(
