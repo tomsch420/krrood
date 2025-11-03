@@ -1386,6 +1386,7 @@ class ForAll(QuantifiedConditional):
                     if self.evaluate_condition({**sol, **var_val})
                 ]
             if not solution_set:
+                solution_set = []
                 break
 
         # Yield the remaining bindings (non-universal) merged with the incoming sources
