@@ -279,7 +279,8 @@ class HasGeneric(Generic[T]):
     @lru_cache(maxsize=None)
     def original_class(cls) -> T:
         """
-        :return:The concrete generic argument for DAO-like bases. Raises and Error if None are found.
+        :return: The concrete generic argument for DAO-like bases.
+        :raises NoGenericError: If no generic argument is found.
         """
         tp = cls._dao_like_argument()
         if tp is None:
