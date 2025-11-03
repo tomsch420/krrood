@@ -1757,40 +1757,32 @@ class ElseIf(OR):
         any_left = False
         for left_value in left_values:
             any_left = True
-            left_value.update(sources)
             if self.left._is_false_:
                 if is_caching_enabled() and self.right_cache.check(left_value):
                     yield from self.yield_final_output_from_cache(
                         left_value, self.right_cache
                     )
                     continue
-                right_values = self.right._evaluate__(
-                    left_value, yield_when_false=yield_when_false, parent=self
-                )
-                for right_value in right_values:
-                    self._is_false_ = self.right._is_false_
-                    output = copy(left_value)
-                    output.update(right_value)
-                    if self._is_false_ and not yield_when_false:
-                        continue
-                    if not self._is_false_ and self._is_duplicate_output_(output):
-                        continue
-                    self.update_cache(right_value, self.right_cache)
-                    yield output
+                yield from self.evaluate_right(left_value, yield_when_false)
             else:
                 self._is_false_ = False
                 yield left_value
         # If left produced no values at all, evaluate right against sources
         if not any_left:
-            right_values = self.right._evaluate__(
-                sources, yield_when_false=yield_when_false, parent=self
-            )
-            for right_value in right_values:
-                self._is_false_ = self.right._is_false_
-                if self._is_false_ and not yield_when_false:
-                    continue
-                self.update_cache(right_value, self.right_cache)
-                yield right_value
+            yield from self.evaluate_right(sources, yield_when_false)
+
+    def evaluate_right(self, sources: Dict[int, HashedValue], yield_when_false: bool):
+        right_values = self.right._evaluate__(
+            sources, yield_when_false=yield_when_false, parent=self
+        )
+        for right_value in right_values:
+            self._is_false_ = self.right._is_false_
+            if self._is_false_ and not yield_when_false:
+                continue
+            if self._is_duplicate_output_(right_value):
+                continue
+            self.update_cache(right_value, self.right_cache)
+            yield right_value
 
 
 def Not(operand: Any) -> SymbolicExpression:
