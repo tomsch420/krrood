@@ -1,4 +1,3 @@
-import pytest
 
 from krrood.ormatic.dao import HasGeneric, NoGenericError
 from ..dataset.example_classes import Position
