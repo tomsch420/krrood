@@ -6,12 +6,14 @@ import logging
 import threading
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import _GenericAlias
 
 import sqlalchemy.inspection
 import sqlalchemy.orm
+from sphinx.util.inspect import isclass
 from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, ONETOMANY, RelationshipProperty
-from typing_extensions import Optional, List
+from typing_extensions import Optional, List, get_type_hints, get_origin
 from typing_extensions import Type, get_args, Dict, Any, TypeVar, Generic, Self
 
 from ..utils import recursive_subclasses
@@ -112,13 +114,13 @@ class HasGeneric(Generic[T]):
         """
         :return: The concrete generic argument for DAO-like bases.
         """
-        # Prefer an explicit DAO origin if present
-        for base in getattr(cls, "__orig_bases__", []):
-            origin = getattr(base, "__origin__", None)
-            if origin is DataAccessObject or origin is AlternativeMapping:
-                args = get_args(base)
-                if args:
-                    return args[0]
+        # filter for instances of generic aliases in the superclasses
+        for base in filter(
+            lambda x: isinstance(x, _GenericAlias),
+            cls.__orig_bases__,
+        ):
+            return get_args(base)[0]
+
         # No acceptable base found
         return None
 
