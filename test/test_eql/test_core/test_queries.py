@@ -16,6 +16,8 @@ from krrood.entity_query_language.entity import (
     the,
     or_,
     a,
+    exists,
+    flatten,
 )
 from krrood.entity_query_language.failures import MultipleSolutionFound
 from krrood.entity_query_language.predicate import (
@@ -901,6 +903,21 @@ def test_contains_type():
     with symbolic_mode():
         fruit_box_query = a(
             fb := let(FruitBox, domain=None), ContainsType(fb.fruits, Apple)
+        )
+
+    query_result = list(fruit_box_query.evaluate())
+    assert len(query_result) == 1, "Should generate 1 fruit box."
+
+
+def test_equivalent_to_contains_type_using_exists():
+    fb1_fruits = [Apple("apple"), Body("Body1")]
+    fb2_fruits = [Body("Body3"), Body("Body2")]
+    fb1 = FruitBox("FruitBox1", fb1_fruits)
+    fb2 = FruitBox("FruitBox2", fb2_fruits)
+    with symbolic_mode():
+        fruit_box_query = a(
+            fb := let(FruitBox, domain=None),
+            exists(fb, HasType(flatten(fb.fruits), Apple)),
         )
 
     query_result = list(fruit_box_query.evaluate())

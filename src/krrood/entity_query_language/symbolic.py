@@ -1336,8 +1336,6 @@ class QuantifiedConditional(BinaryOperator, ABC):
 @dataclass(eq=False)
 class ForAll(QuantifiedConditional):
 
-    solution_set: List[Dict[int, HashedValue]] = field(init=False, default_factory=list)
-
     @property
     @lru_cache(maxsize=None)
     def condition_unique_variable_ids(self) -> List[int]:
@@ -1357,54 +1355,41 @@ class ForAll(QuantifiedConditional):
         sources = sources or {}
         self._eval_parent_ = parent
 
-        # Always reset per evaluation
-        self.solution_set = []
-
-        var_val_index = 0
+        solution_set = None
 
         for var_val in self.variable._evaluate__(sources, parent=self):
-            ctx = {**sources, **var_val}
-            current = []
-
-            # Evaluate the condition under this particular universal value
-            for condition_val in self.condition._evaluate__(ctx, parent=self):
-                if self.condition._is_false_:
-                    continue
-                # Keep only the non-universal variables from the condition bindings
-                filtered = {
-                    k: v
-                    for k, v in condition_val.items()
-                    if k in self.condition_unique_variable_ids
-                }
-                current.append(filtered)
-
-            # If the condition yields no satisfying bindings for this universal value, the universal fails
-            if not current:
-                self.solution_set = []
-                break
-
-            if var_val_index == 0:
-                # seed with all satisfying non-universal bindings
-                self.solution_set = current
+            if solution_set is None:
+                solution_set = self.get_all_candidate_solutions(var_val)
             else:
-                # Intersect with previously accumulated satisfying bindings
-                current_set = {tuple(sorted(d.items())) for d in current}
-                self.solution_set = [
-                    d
-                    for d in self.solution_set
-                    if tuple(sorted(d.items())) in current_set
+                solution_set = [
+                    sol
+                    for sol in solution_set
+                    if self.evaluate_condition({**sol, **var_val})
                 ]
-
-            var_val_index += 1
-
-            # Early exit if the intersection is empty
-            if not self.solution_set:
+            if not solution_set:
                 break
 
         # Yield the remaining bindings (non-universal) merged with the incoming sources
-        for sol in self.solution_set or []:
-            sol.update(sources)
-            yield sol
+        yield from [{**sources, **sol} for sol in solution_set]
+
+    def get_all_candidate_solutions(self, sources: Dict[int, HashedValue]):
+        values_that_satisfy_condition = []
+        # Evaluate the condition under this particular universal value
+        for condition_val in self.condition._evaluate__(sources, parent=self):
+            if self.condition._is_false_:
+                continue
+            condition_val = {
+                k: v
+                for k, v in condition_val.items()
+                if k in self.condition_unique_variable_ids
+            }
+            values_that_satisfy_condition.append(condition_val)
+        return values_that_satisfy_condition
+
+    def evaluate_condition(self, sources: Dict[int, HashedValue]) -> bool:
+        for _ in self.condition._evaluate__(sources, parent=self):
+            return not self.condition._is_false_
+        return False
 
 
 @dataclass(eq=False)
@@ -1424,15 +1409,17 @@ class Exists(QuantifiedConditional):
         sources = sources or {}
         self._eval_parent_ = parent
         for var_val in self.variable._evaluate__(sources, parent=self):
-            ctx = {**sources, **var_val}
+            yield from self.evaluate_condition(var_val, yield_when_false)
 
-            # Evaluate the condition under this particular universal value
-            for condition_val in self.condition._evaluate__(ctx, parent=self):
-                if self.condition._is_false_ and not yield_when_false:
-                    continue
-                self._is_false_ = self.condition._is_false_
-                condition_val = {**ctx, **condition_val}
+    def evaluate_condition(
+        self, sources: Dict[int, HashedValue], yield_when_false: bool
+    ) -> Iterable[Dict[int, HashedValue]]:
+        # Evaluate the condition under this particular universal value
+        for condition_val in self.condition._evaluate__(sources, parent=self):
+            self._is_false_ = self.condition._is_false_
+            if not self._is_false_ or yield_when_false:
                 yield condition_val
+            if not self._is_false_:
                 break
 
 
