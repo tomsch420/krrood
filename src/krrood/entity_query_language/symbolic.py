@@ -911,7 +911,8 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._eval_parent_ = parent
         sources = sources or {}
         if self._id_ in sources:
-            yield sources
+            if yield_when_false or not self._is_false_:
+                yield sources
         elif self._domain_:
             for v in self:
                 yield {**sources, **v}
@@ -1309,9 +1310,7 @@ class BinaryOperator(SymbolicExpression, ABC):
 
 
 @dataclass(eq=False)
-class ForAll(BinaryOperator):
-
-    solution_set: List[Dict[int, HashedValue]] = field(init=False, default_factory=list)
+class QuantifiedConditional(BinaryOperator, ABC):
 
     @property
     def _name_(self) -> str:
@@ -1332,6 +1331,12 @@ class ForAll(BinaryOperator):
     @condition.setter
     def condition(self, value):
         self.right = value
+
+
+@dataclass(eq=False)
+class ForAll(QuantifiedConditional):
+
+    solution_set: List[Dict[int, HashedValue]] = field(init=False, default_factory=list)
 
     @property
     @lru_cache(maxsize=None)
@@ -1398,38 +1403,17 @@ class ForAll(BinaryOperator):
 
         # Yield the remaining bindings (non-universal) merged with the incoming sources
         for sol in self.solution_set or []:
-            out = copy(sol)
-            out.update(sources)
-            yield out
+            sol.update(sources)
+            yield sol
 
 
 @dataclass(eq=False)
-class Exists(BinaryOperator):
+class Exists(QuantifiedConditional):
     """
     An existential checker that checks if a condition holds for any value of the variable given, the benefit
     of this is that this short circuits the condition and returns True if the condition holds for any value without
     getting all the condition values that hold for one specific value of the variable.
     """
-
-    @property
-    def _name_(self) -> str:
-        return self.__class__.__name__
-
-    @property
-    def variable(self):
-        return self.left
-
-    @variable.setter
-    def variable(self, value):
-        self.left = value
-
-    @property
-    def condition(self):
-        return self.right
-
-    @condition.setter
-    def condition(self, value):
-        self.right = value
 
     def _evaluate__(
         self,
@@ -1444,8 +1428,9 @@ class Exists(BinaryOperator):
 
             # Evaluate the condition under this particular universal value
             for condition_val in self.condition._evaluate__(ctx, parent=self):
-                if self.condition._is_false_:
+                if self.condition._is_false_ and not yield_when_false:
                     continue
+                self._is_false_ = self.condition._is_false_
                 condition_val = {**ctx, **condition_val}
                 yield condition_val
                 break
@@ -1526,9 +1511,8 @@ class Comparator(BinaryOperator):
 
         :param sources: Dictionary of symbolic variable id to a value of that variable, the left and right values
         will retrieve values from sources if they exist, otherwise will directly retrieve them from the original
-        sources.
-        :return: Yields a HashedIterable mapping a symbolic variable id to a value of that variable, it will contain
-         only two values, the left and right symbolic values.
+        variables.
+        :return: Yields a Dictionary mapping a symbolic variable id to a value of that variable.
         """
         sources = sources or {}
         self._eval_parent_ = parent
@@ -1619,7 +1603,6 @@ class AND(LogicalOperator):
         yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
-        # init an empty source if none is provided
         sources = sources or {}
         self._eval_parent_ = parent
         left_values = self.left._evaluate__(
@@ -1633,7 +1616,7 @@ class AND(LogicalOperator):
                 self._is_false_ = True
                 if yield_when_false and not self._is_duplicate_output_(left_value):
                     yield left_value
-            elif self.cache_enabled_and_right_has_values(left_value):
+            elif self.check_right_cache(left_value):
                 yield from self.yield_from_right_cache(left_value, yield_when_false)
             else:
                 yield from self.evaluate_right(left_value, yield_when_false)
@@ -1646,10 +1629,9 @@ class AND(LogicalOperator):
                 continue
             yield _out
 
-    def cache_enabled_and_right_has_values(self, left_value: Dict[int, HashedValue]):
+    def check_right_cache(self, left_value: Dict[int, HashedValue]):
         return (
             is_caching_enabled()
-            and not in_symbolic_mode(EQLMode.Rule)
             and self.right_cache.cache
             and self.right_cache.check(left_value)
         )
