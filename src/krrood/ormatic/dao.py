@@ -128,17 +128,6 @@ class ToDAOState:
     Dictionary that prevents objects from being garbage collected.
     """
 
-    @classmethod
-    def ensure(
-        cls,
-        memo: Optional[InstanceDict] = None,
-        keep_alive: Optional[InstanceDict] = None,
-    ) -> ToDAOState:
-        """
-        Create a state instance ensuring both dictionaries are present.
-        """
-        return cls(memo or {}, keep_alive or {})
-
     def get_existing(self, obj: Any) -> Any:
         """
         Return an existing DAO for the given object if it was already created.
@@ -384,15 +373,6 @@ class DataAccessObject(HasGeneric[T]):
         return issubclass(class_to_check, DataAccessObject) and issubclass(
             class_to_check.original_class(), AlternativeMapping
         )
-
-    @classmethod
-    def _apply_alternative_mapping_if_needed(cls, obj: T, state: ToDAOState) -> Any:
-        """
-        :return: An object or its alternative mapped DAO if required by the class.
-        """
-        if issubclass(cls.original_class(), AlternativeMapping):
-            return cls.original_class().to_dao(obj, state=state)
-        return obj
 
     def to_dao_default(self, obj: T, state: ToDAOState):
         """
@@ -669,40 +649,6 @@ class DataAccessObject(HasGeneric[T]):
             else:
                 raise UnsupportedRelationshipError(relationship)
         return rel_kwargs, circular_refs
-
-    @classmethod
-    def _parse_single_relationship_value(
-        cls, value: Any, memo: InstanceDict, in_progress: InProgressDict
-    ) -> tuple[Any, bool]:
-        """
-        Parse a single-valued relationship DAO into a domain object.
-
-        :return: The parsed object and whether a circular reference placeholder was detected.
-        """
-        if value is None:
-            return None, False
-        parsed = value.from_dao(memo=memo, in_progress=in_progress)
-        return parsed, parsed is memo.get(id(value))
-
-    @classmethod
-    def _parse_collection_relationship(
-        cls, value: Any, memo: InstanceDict, in_progress: InProgressDict
-    ) -> tuple[Any, List[Any]]:
-        """
-        Parse a collection-valued relationship DAO list into domain objects.
-
-        :return: A tuple of (parsed_collection_of_same_type_as_input, circular_values_list).
-        """
-        if not value:
-            return value, []
-        instances = []
-        circular_values: List[Any] = []
-        for v in value:
-            instance = v.from_dao(memo=memo, in_progress=in_progress)
-            if instance is memo.get(id(v)):
-                circular_values.append(v)
-            instances.append(instance)
-        return type(value)(instances), circular_values
 
     def _build_base_kwargs_for_alternative_parent(
         self,
