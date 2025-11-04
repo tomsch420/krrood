@@ -173,6 +173,19 @@ class SymbolicExpression(Generic[T], ABC):
         """
         pass
 
+    @staticmethod
+    def get_operand_truth_value(operand, operand_value) -> bool:
+        if isinstance(
+            operand,
+            (LogicalOperator, Comparator, ResultQuantifier, Not, QuantifiedConditional),
+        ):
+            return not operand._is_false_
+        else:
+            try:
+                return bool(operand_value[operand._id_])
+            except KeyError:
+                pass
+
     def _add_conclusion_(self, conclusion: Conclusion):
         self._conclusion_.add(conclusion)
 
@@ -330,8 +343,7 @@ class SymbolicExpression(Generic[T], ABC):
         return _optimize_or(self, other)
 
     def __invert__(self):
-        self._invert_ = not self._invert_
-        return self
+        return Not(self)
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
@@ -690,7 +702,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
     def update_data_from_child(self, sources: Optional[Dict[int, HashedValue]]):
         if self._child_:
-            self._is_false_ = self._child_._is_false_
+            self._is_false_ = not self.get_operand_truth_value(self._child_, sources)
             if self._is_false_:
                 return sources
             for conclusion in self._child_._conclusion_:
@@ -933,7 +945,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             if yield_when_false or not self._is_false_:
                 yield sources
-        elif self._domain_:
+        elif self._domain_source_:
             for v in self:
                 yield {**sources, **v}
         elif self._should_be_instantiated_:
@@ -1088,17 +1100,7 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         )
         for child_v in child_val:
             for v in self._apply_mapping_(child_v[self._child_._id_]):
-                self._update_truth_value_(v)
-                if yield_when_false or not self._is_false_:
-                    yield {**child_v, self._id_: v}
-
-    def _update_truth_value_(self, current_value: HashedValue):
-        if (not self._invert_ and current_value.value) or (
-            self._invert_ and not current_value.value
-        ):
-            self._is_false_ = False
-        else:
-            self._is_false_ = True
+                yield {**child_v, self._id_: v}
 
     @abstractmethod
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
@@ -1189,7 +1191,10 @@ class Attribute(DomainMapping):
 
     @property
     def _name_(self):
-        return f"{self._child_._var_._name_}.{self._attr_name_}"
+        name = f"{self._child_._var_._name_}.{self._attr_name_}"
+        if self._invert_:
+            name = f"~{name}"
+        return name
 
 
 @dataclass(eq=False)
@@ -1205,7 +1210,10 @@ class Index(DomainMapping):
 
     @property
     def _name_(self):
-        return f"{self._child_._var_._name_}[{self._key_}]"
+        name = f"{self._child_._var_._name_}[{self._key_}]"
+        if self._invert_:
+            name = f"~{name}"
+        return name
 
 
 @dataclass(eq=False)
@@ -1227,7 +1235,10 @@ class Call(DomainMapping):
 
     @property
     def _name_(self):
-        return f"{self._child_._var_._name_}()"
+        name = f"{self._child_._var_._name_}()"
+        if self._invert_:
+            name = f"~{name}"
+        return name
 
 
 @dataclass(eq=False)
@@ -1252,7 +1263,10 @@ class Flatten(DomainMapping):
 
     @cached_property
     def _name_(self):
-        return f"Flatten({self._child_._name_})"
+        name = f"Flatten({self._child_._name_})"
+        if self._invert_:
+            name = f"~{name}"
+        return name
 
 
 @dataclass(eq=False)
@@ -1478,33 +1492,30 @@ class Comparator(BinaryOperator):
     }
 
     def __invert__(self):
-        prev_operation = self.operation
+        new_operation = None
         match self.operation:
             case operator.lt:
-                self.operation = operator.ge
+                new_operation = operator.ge
             case operator.gt:
-                self.operation = operator.le
+                new_operation = operator.le
             case operator.le:
-                self.operation = operator.gt
+                new_operation = operator.gt
             case operator.ge:
-                self.operation = operator.lt
+                new_operation = operator.lt
             case operator.eq:
-                self.operation = operator.ne
+                new_operation = operator.ne
             case operator.ne:
-                self.operation = operator.eq
+                new_operation = operator.eq
             case operator.contains:
-                self.operation = not_contains
+                new_operation = not_contains
             case _:
                 if self.operation is not_contains:
-                    self.operation = operator.contains
+                    new_operation = operator.contains
                 else:
                     raise ValueError(
                         f"Unsupported operation: {self.operation.__name__}"
                     )
-        self._node_.name = self._node_.name.replace(
-            prev_operation.__name__, self.operation.__name__
-        )
-        return self
+        return Comparator(self.left, self.right, new_operation)
 
     @property
     def _name_(self):
@@ -1580,6 +1591,55 @@ class Comparator(BinaryOperator):
 
 
 @dataclass(eq=False)
+class Not(CanBehaveLikeAVariable[T]):
+
+    _child_: SymbolicExpression[T]
+
+    def __post_init__(self):
+        self._var_ = self
+        super().__post_init__()
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        yield_when_false: bool = False,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[Dict[int, HashedValue]]:
+        sources = sources or {}
+        self._eval_parent_ = parent
+        if self._id_ in sources:
+            yield sources
+            return
+        yield from (
+            {**v, self._id_: HashedValue(not self._is_false_)}
+            for v in self._child_._evaluate__(sources, yield_when_false, parent=self)
+            if self.should_yield(yield_when_false, v)
+        )
+
+    def should_yield(
+        self, yield_when_false: bool, child_value: Dict[int, HashedValue]
+    ) -> bool:
+        self.update_truth_value(child_value)
+        return yield_when_false or not self._is_false_
+
+    def update_truth_value(self, child_value: Dict[int, HashedValue]) -> None:
+        truth_value = not self.get_operand_truth_value(self._child_, child_value)
+        self._is_false_ = not truth_value
+
+    @property
+    def _name_(self) -> str:
+        return "NOT"
+
+    @property
+    def _all_variable_instances_(self) -> List[Variable]:
+        return self._child_._all_variable_instances_
+
+    @property
+    def _plot_color_(self) -> ColorLegend:
+        return ColorLegend("LogicalOperator", "#2ca02c")
+
+
+@dataclass(eq=False)
 class LogicalOperator(BinaryOperator, ABC):
     """
     A symbolic operation that can be used to combine multiple symbolic expressions.
@@ -1625,10 +1685,8 @@ class AND(LogicalOperator):
             sources, yield_when_false=yield_when_false, parent=self
         )
         for left_value in left_values:
-
-            left_value.update(sources)
-
-            if self.left._is_false_:
+            left_is_true = self.get_operand_truth_value(self.left, left_value)
+            if not left_is_true:
                 self._is_false_ = True
                 if yield_when_false and not self._is_duplicate_output_(left_value):
                     yield left_value
@@ -1659,18 +1717,13 @@ class AND(LogicalOperator):
         right_values = self.right._evaluate__(
             left_value, yield_when_false=yield_when_false, parent=self
         )
-
-        # For the found left value, find all right values,
-        # and yield the (left, right) results found.
         for right_value in right_values:
-            output = copy(right_value)
-            output.update(left_value)
-            self._is_false_ = self.right._is_false_
+            self._is_false_ = not self.get_operand_truth_value(self.right, right_value)
             self.update_cache(right_value, self.right_cache)
-            yield output
+            yield right_value
 
     def __invert__(self):
-        return ElseIf(self.left.__invert__(), self.right.__invert__())
+        return _optimize_or(self.left.__invert__(), self.right.__invert__())
 
 
 @dataclass(eq=False)
@@ -1705,7 +1758,6 @@ class OR(LogicalOperator, ABC):
 
 @dataclass(eq=False)
 class Union(OR):
-    left_cache: IndexedCache = field(default_factory=IndexedCache, init=False)
     left_evaluated: bool = field(default=False, init=False)
     right_evaluated: bool = field(default=False, init=False)
 
@@ -1727,22 +1779,27 @@ class Union(OR):
             sources, yield_when_false=yield_when_false, parent=self
         )
 
+        left_is_false = True
         for left_value in left_values:
             output = copy(sources)
             output.update(left_value)
             self.left_evaluated = True
-            if self.left._is_false_ and yield_when_false:
-                yield from self.evaluate_right(output, yield_when_false)
+            left_is_false = not self.get_operand_truth_value(self.left, left_value)
+            if left_is_false and yield_when_false:
+                yield from self.evaluate_right(output, yield_when_false, left_is_false)
                 continue
             if self._is_duplicate_output_(output):
                 continue
             self.update_cache(output, self._cache_)
             yield output
         self.left_evaluated = False
-        yield from self.evaluate_right(sources, yield_when_false)
+        yield from self.evaluate_right(sources, yield_when_false, left_is_false)
 
     def evaluate_right(
-        self, sources: Optional[Dict[int, HashedValue]], yield_when_false: bool
+        self,
+        sources: Optional[Dict[int, HashedValue]],
+        yield_when_false: bool,
+        left_is_false: bool,
     ) -> Iterable[Dict[int, HashedValue]]:
         # For the found left value, find all right values,
         # and yield the (left, right) results found.
@@ -1752,11 +1809,8 @@ class Union(OR):
         )
 
         for right_value in right_values:
-            sources.update(right_value)
-            if yield_when_false and self.left_evaluated:
-                self._is_false_ = self.left._is_false_ and self.right._is_false_
-            else:
-                self._is_false_ = False
+            right_is_false = not self.get_operand_truth_value(self.right, right_value)
+            self._is_false_ = left_is_false and right_is_false
             if not self._is_false_ and self._is_duplicate_output_(sources):
                 continue
             self.right_evaluated = True
@@ -1792,7 +1846,8 @@ class ElseIf(OR):
         any_left = False
         for left_value in left_values:
             any_left = True
-            if self.left._is_false_:
+            left_is_false = not self.get_operand_truth_value(self.left, left_value)
+            if left_is_false:
                 if is_caching_enabled() and self.right_cache.check(left_value):
                     yield from self.yield_final_output_from_cache(
                         left_value, self.right_cache
@@ -1806,12 +1861,14 @@ class ElseIf(OR):
         if not any_left:
             yield from self.evaluate_right(sources, yield_when_false)
 
-    def evaluate_right(self, sources: Dict[int, HashedValue], yield_when_false: bool):
+    def evaluate_right(
+        self, sources: Dict[int, HashedValue], yield_when_false: bool
+    ) -> Iterable[Dict[int, HashedValue]]:
         right_values = self.right._evaluate__(
             sources, yield_when_false=yield_when_false, parent=self
         )
         for right_value in right_values:
-            self._is_false_ = self.right._is_false_
+            self._is_false_ = not self.get_operand_truth_value(self.right, right_value)
             if self._is_false_ and not yield_when_false:
                 continue
             if self._is_duplicate_output_(right_value):

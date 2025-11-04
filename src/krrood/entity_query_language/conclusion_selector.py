@@ -114,7 +114,7 @@ class ExceptIf(ConclusionSelector):
 
             left_value.update(sources)
 
-            self._is_false_ = self.left._is_false_
+            self._is_false_ = not self.get_operand_truth_value(self.left, left_value)
             if self._is_false_:
                 if yield_when_false and not self._is_duplicate_output_(left_value):
                     yield left_value
@@ -163,13 +163,10 @@ class Alternative(ElseIf, ConclusionSelector):
             sources, yield_when_false=yield_when_false, parent=parent
         )
         for output in outputs:
-            left_is_true = not self.left._is_false_
-            right_is_true = not self.right._is_false_
-
             # Only yield if conclusions were successfully added (not duplicates)
-            if left_is_true:
+            if self.get_operand_truth_value(self.left, output):
                 self.update_conclusion(output, self.left._conclusion_)
-            elif right_is_true:
+            elif self.get_operand_truth_value(self.right, output):
                 self.update_conclusion(output, self.right._conclusion_)
 
             if self._conclusion_ or yield_when_false:

@@ -545,9 +545,9 @@ def test_not_and_or_with_domain_mapping(handles_and_containers_world):
                     )
                 ),
             )
-        ).evaluate()
+        )
 
-    all_not_handle1_and_not_container1 = list(not_handle1_and_not_container1)
+    all_not_handle1_and_not_container1 = list(not_handle1_and_not_container1.evaluate())
     assert len(all_not_handle1_and_not_container1) == 4, "Should generate 4 bodies"
     assert all(
         h.name not in ["Handle1", "Container1"]
