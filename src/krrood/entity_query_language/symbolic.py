@@ -107,7 +107,6 @@ class SymbolicExpression(Generic[T], ABC):
     _conclusion_: typing.Set[Conclusion] = field(init=False, default_factory=set)
     _symbolic_expression_stack_: ClassVar[List[SymbolicExpression]] = []
     _yield_when_false_: bool = field(init=False, repr=False, default=False)
-    _invert_: bool = field(init=False, default=False)
     _is_false_: bool = field(init=False, repr=False, default=False)
     _seen_parent_values_by_parent_: Dict[int, Dict[bool, SeenSet]] = field(
         default_factory=dict, init=False, repr=False
@@ -872,10 +871,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     The iterable domain of values for this variable.
     """
-    _invert_: bool = field(init=False, default=False, repr=False)
-    """
-    Redefined from super class to give it a default value.
-    """
     _predicate_type_: Optional[PredicateType] = field(default=None, repr=False)
     """
     If this symbol is an instance of the Predicate class.
@@ -968,11 +963,7 @@ class Variable(CanBehaveLikeAVariable[T]):
             instance = self._type_(**{k: hv.value for k, hv in bound_kwargs.items()})
             if self._predicate_type_ == PredicateType.SubClassOfPredicate:
                 instance = instance()
-            # Compute truth considering inversion
-            result_truthy = bool(instance)
-            self._is_false_ = result_truthy if self._invert_ else not result_truthy
-            if not self._is_false_ or yield_when_false:
-                yield self._process_output_and_update_values_(instance, kwargs)
+            yield self._process_output_and_update_values_(instance, kwargs)
 
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
@@ -1191,10 +1182,7 @@ class Attribute(DomainMapping):
 
     @property
     def _name_(self):
-        name = f"{self._child_._var_._name_}.{self._attr_name_}"
-        if self._invert_:
-            name = f"~{name}"
-        return name
+        return f"{self._child_._var_._name_}.{self._attr_name_}"
 
 
 @dataclass(eq=False)
@@ -1210,10 +1198,7 @@ class Index(DomainMapping):
 
     @property
     def _name_(self):
-        name = f"{self._child_._var_._name_}[{self._key_}]"
-        if self._invert_:
-            name = f"~{name}"
-        return name
+        return f"{self._child_._var_._name_}[{self._key_}]"
 
 
 @dataclass(eq=False)
@@ -1235,10 +1220,7 @@ class Call(DomainMapping):
 
     @property
     def _name_(self):
-        name = f"{self._child_._var_._name_}()"
-        if self._invert_:
-            name = f"~{name}"
-        return name
+        return f"{self._child_._var_._name_}()"
 
 
 @dataclass(eq=False)
@@ -1263,10 +1245,7 @@ class Flatten(DomainMapping):
 
     @cached_property
     def _name_(self):
-        name = f"Flatten({self._child_._name_})"
-        if self._invert_:
-            name = f"~{name}"
-        return name
+        return f"Flatten({self._child_._name_})"
 
 
 @dataclass(eq=False)
@@ -1453,7 +1432,9 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[Dict[int, HashedValue]]:
         # Evaluate the condition under this particular universal value
         for condition_val in self.condition._evaluate__(sources, parent=self):
-            self._is_false_ = self.condition._is_false_
+            self._is_false_ = not self.get_operand_truth_value(
+                self.condition, condition_val
+            )
             if not self._is_false_ or yield_when_false:
                 yield condition_val
             if not self._is_false_:
