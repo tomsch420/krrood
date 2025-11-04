@@ -9,6 +9,7 @@ from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
+from copy import copy
 
 from typing_extensions import (
     get_type_hints,
@@ -87,7 +88,7 @@ class WrappedField:
         try:
             result = get_type_hints(self.clazz.clazz)[self.field.name]
             return result
-        except NameError as e:
+        except NameError as e:.items()
             # First try to find the class in the class diagram
             potential_matching_classes = [
                 cls.clazz
@@ -244,7 +245,7 @@ def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
     Searches for a class with the given name in all loaded modules (via sys.modules).
     """
     found_classes = []
-    for module_name, module in sys.modules.items():
+    for module_name, module in copy(sys.modules).items():
         if module is None or not hasattr(module, "__dict__"):
             continue  # Skip built-in modules or modules without a __dict__
 
