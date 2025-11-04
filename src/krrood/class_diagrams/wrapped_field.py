@@ -88,7 +88,7 @@ class WrappedField:
         try:
             result = get_type_hints(self.clazz.clazz)[self.field.name]
             return result
-        except NameError as e:.items()
+        except NameError as e:
             # First try to find the class in the class diagram
             potential_matching_classes = [
                 cls.clazz
