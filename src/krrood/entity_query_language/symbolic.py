@@ -1058,7 +1058,6 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: CanBehaveLikeAVariable[T]
-    _invert_: bool = field(init=False, default=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -1505,6 +1504,7 @@ class Comparator(BinaryOperator):
         self._node_.name = self._node_.name.replace(
             prev_operation.__name__, self.operation.__name__
         )
+        return self
 
     @property
     def _name_(self):
