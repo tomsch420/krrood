@@ -107,6 +107,7 @@ class SymbolicExpression(Generic[T], ABC):
     _conclusion_: typing.Set[Conclusion] = field(init=False, default_factory=set)
     _symbolic_expression_stack_: ClassVar[List[SymbolicExpression]] = []
     _yield_when_false_: bool = field(init=False, repr=False, default=False)
+    _invert_: bool = field(init=False, default=False)
     _is_false_: bool = field(init=False, repr=False, default=False)
     _seen_parent_values_by_parent_: Dict[int, Dict[bool, SeenSet]] = field(
         default_factory=dict, init=False, repr=False
@@ -329,7 +330,7 @@ class SymbolicExpression(Generic[T], ABC):
         return _optimize_or(self, other)
 
     def __invert__(self):
-        self._invert_ = True
+        self._invert_ = not self._invert_
         return self
 
     def __enter__(self, in_rule_mode: bool = False):
@@ -1449,6 +1450,16 @@ class Exists(QuantifiedConditional):
         return ForAll(self.variable, self.condition.__invert__())
 
 
+def not_contains(container, item) -> bool:
+    """
+    The inverted contains operation.
+    :param container: The container.
+    :param item: The item to test if contained in the container.
+    :return:
+    """
+    return not operator.contains(container, item)
+
+
 @dataclass(eq=False)
 class Comparator(BinaryOperator):
     """
@@ -1458,7 +1469,6 @@ class Comparator(BinaryOperator):
     left: CanBehaveLikeAVariable
     right: CanBehaveLikeAVariable
     operation: Callable[[Any, Any], bool]
-    _invert__: bool = field(init=False, default=False)
     operation_name_map: ClassVar[Dict[Any, str]] = {
         operator.eq: "==",
         operator.ne: "!=",
@@ -1468,37 +1478,30 @@ class Comparator(BinaryOperator):
         operator.ge: ">=",
     }
 
-    @property
-    def _invert_(self):
-        return self._invert__
-
-    @_invert_.setter
-    def _invert_(self, value):
-        if value == self._invert__:
-            return
-        self._invert__ = value
+    def __invert__(self):
         prev_operation = self.operation
         match self.operation:
             case operator.lt:
-                self.operation = operator.ge if self._invert_ else self.operation
+                self.operation = operator.ge
             case operator.gt:
-                self.operation = operator.le if self._invert_ else self.operation
+                self.operation = operator.le
             case operator.le:
-                self.operation = operator.gt if self._invert_ else self.operation
+                self.operation = operator.gt
             case operator.ge:
-                self.operation = operator.lt if self._invert_ else self.operation
+                self.operation = operator.lt
             case operator.eq:
-                self.operation = operator.ne if self._invert_ else self.operation
+                self.operation = operator.ne
             case operator.ne:
-                self.operation = operator.eq if self._invert_ else self.operation
+                self.operation = operator.eq
             case operator.contains:
-
-                def not_contains(a, b):
-                    return not operator.contains(a, b)
-
-                self.operation = not_contains if self._invert_ else self.operation
+                self.operation = not_contains
             case _:
-                raise ValueError(f"Unsupported operation: {self.operation.__name__}")
+                if self.operation is not_contains:
+                    self.operation = operator.contains
+                else:
+                    raise ValueError(
+                        f"Unsupported operation: {self.operation.__name__}"
+                    )
         self._node_.name = self._node_.name.replace(
             prev_operation.__name__, self.operation.__name__
         )

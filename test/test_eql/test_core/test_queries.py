@@ -922,3 +922,16 @@ def test_equivalent_to_contains_type_using_exists():
 
     query_result = list(fruit_box_query.evaluate())
     assert len(query_result) == 1, "Should generate 1 fruit box."
+
+
+def test_double_not(handles_and_containers_world):
+    world = handles_and_containers_world
+    with symbolic_mode():
+        query = an(
+            entity(
+                body := let(type_=Body, domain=world.bodies),
+                not_(not_(contains(body.name, "Handle"))),
+            )
+        )
+    results = list(query.evaluate())
+    assert all("Handle" in r.name for r in results)
