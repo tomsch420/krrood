@@ -8,7 +8,11 @@ from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
 
 import rustworkx as rx
-from rustworkx_utils import RWXNode
+
+try:
+    from rustworkx_utils import RWXNode
+except ImportError:
+    RWXNode = None
 from typing_extensions import List, Optional, Dict, Union, Tuple
 from typing_extensions import Type
 
@@ -517,6 +521,11 @@ class ClassDiagram:
         :param add_association_relations: If True, include association relations as parent-child connections.
         :return: Root RWXNode representing the class diagram
         """
+        if not RWXNode:
+            raise ImportError(
+                "The rustworkx_utils package is required to visualize the class diagram."
+                "Please install it with `pip install rustworkx_utils`."
+            )
         # Create RWXNode for each class
         node_map = {}
         for wrapped_class in self.wrapped_classes:
