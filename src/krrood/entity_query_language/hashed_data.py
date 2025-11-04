@@ -227,4 +227,4 @@ class HashedIterable(Generic[T]):
         return values_are_equal
 
     def __bool__(self):
-        return bool(self.values) or bool(next(iter(self), None))
+        return bool(self.values) or bool(self.iterable)

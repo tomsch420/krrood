@@ -173,17 +173,23 @@ class SymbolicExpression(Generic[T], ABC):
         pass
 
     @staticmethod
-    def get_operand_truth_value(operand, operand_value) -> bool:
+    def get_operand_truth_value(
+        operand: SymbolicExpression[T], operand_value: Dict[int, HashedValue]
+    ) -> bool:
+        """
+        Determine the truth value of an operand based on its type and value.
+
+        :param operand: The evaluated operand.
+        :param operand_value: The value of the operand.
+        :return: The truth value of the operand.
+        """
         if isinstance(
             operand,
             (LogicalOperator, Comparator, ResultQuantifier, Not, QuantifiedConditional),
         ):
             return not operand._is_false_
         else:
-            try:
-                return bool(operand_value[operand._id_])
-            except KeyError:
-                pass
+            return bool(operand_value[operand._id_])
 
     def _add_conclusion_(self, conclusion: Conclusion):
         self._conclusion_.add(conclusion)
@@ -940,7 +946,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             if yield_when_false or not self._is_false_:
                 yield sources
-        elif self._domain_source_:
+        elif self._domain_:
             for v in self:
                 yield {**sources, **v}
         elif self._should_be_instantiated_:
@@ -1493,7 +1499,7 @@ class Comparator(BinaryOperator):
                 if self.operation is not_contains:
                     new_operation = operator.contains
                 else:
-                    raise ValueError(
+                    raise NotImplementedError(
                         f"Unsupported operation: {self.operation.__name__}"
                     )
         return Comparator(self.left, self.right, new_operation)
@@ -1592,7 +1598,7 @@ class Not(CanBehaveLikeAVariable[T]):
             yield sources
             return
         yield from (
-            {**v, self._id_: HashedValue(not self._is_false_)}
+            {**v, self._id_: HashedValue(self._is_false_)}
             for v in self._child_._evaluate__(sources, yield_when_false, parent=self)
             if self.should_yield(yield_when_false, v)
         )
