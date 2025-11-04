@@ -7,3 +7,4 @@ sqlalchemy
 black
 sortedcontainers
 SPARQLWrapper
+rustworkx_utils
