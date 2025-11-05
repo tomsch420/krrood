@@ -1758,7 +1758,6 @@ class OR(LogicalOperator, ABC):
         """
         Evaluate the left operand, taking into consideration if it should yield when it is False.
         :param sources:
-        :param yield_when_false:
         :param left_yield_when_false:
         :return:
         """
