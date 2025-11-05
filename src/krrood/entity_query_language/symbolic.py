@@ -1719,6 +1719,17 @@ class OR(LogicalOperator, ABC):
     A symbolic single choice operation that can be used to choose between multiple symbolic expressions.
     """
 
+    left_evaluated: bool = field(default=False, init=False)
+    right_evaluated: bool = field(default=False, init=False)
+
+    @abstractmethod
+    def should_evaluate_right_given_left(self, left_is_false: bool) -> bool:
+        """
+        Determine if the right operand should be evaluated given the left operand's truth value.
+
+        :param left_is_false: The left operand's truth value.
+        """
+
     @lru_cache(maxsize=None)
     def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
         """
@@ -1739,14 +1750,57 @@ class OR(LogicalOperator, ABC):
             projection.update(self._parent_._projection_(when_true))
         return projection
 
+    def evaluate_left(
+        self,
+        sources: Optional[Dict[int, HashedValue]],
+        left_yield_when_false: bool,
+    ) -> Iterable[Dict[int, HashedValue]]:
+        """
+        Evaluate the left operand, taking into consideration if it should yield when it is False.
+        :param sources:
+        :param yield_when_false:
+        :param left_yield_when_false:
+        :return:
+        """
+        left_values = self.left._evaluate__(
+            sources, yield_when_false=left_yield_when_false, parent=self
+        )
+
+        for left_value in left_values:
+            self.left_evaluated = True
+            left_is_false = not self.get_operand_truth_value(self.left, left_value)
+            if self.should_evaluate_right_given_left(left_is_false):
+                yield from self.evaluate_right(left_value)
+            else:
+                self._is_false_ = False
+                yield left_value
+
+    def evaluate_right(
+        self,
+        sources: Optional[Dict[int, HashedValue]],
+    ) -> Iterable[Dict[int, HashedValue]]:
+
+        self.left_evaluated = False
+
+        right_values = self.right._evaluate__(
+            sources, yield_when_false=self._yield_when_false_, parent=self
+        )
+
+        for right_value in right_values:
+            self._is_false_ = not self.get_operand_truth_value(self.right, right_value)
+            if self._is_false_ and not self._yield_when_false_:
+                continue
+            self.right_evaluated = True
+            yield right_value
+
+        self.right_evaluated = False
+
     def __invert__(self):
         return AND(self.left.__invert__(), self.right.__invert__())
 
 
 @dataclass(eq=False)
 class Union(OR):
-    left_evaluated: bool = field(default=False, init=False)
-    right_evaluated: bool = field(default=False, init=False)
 
     def _evaluate__(
         self,
@@ -1754,57 +1808,15 @@ class Union(OR):
         yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[Dict[int, HashedValue]]:
-        # init an empty source if none is provided
         sources = sources or {}
         self._eval_parent_ = parent
-        if is_caching_enabled() and self._cache_.check(sources):
-            yield from self.yield_final_output_from_cache(sources)
-            return
+        self._yield_when_false_ = yield_when_false
 
-        # constrain left values by available sources
-        left_values = self.left._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=self
-        )
+        yield from self.evaluate_left(sources, yield_when_false)
+        yield from self.evaluate_right(sources)
 
-        left_is_false = True
-        for left_value in left_values:
-            output = copy(sources)
-            output.update(left_value)
-            self.left_evaluated = True
-            left_is_false = not self.get_operand_truth_value(self.left, left_value)
-            if left_is_false and yield_when_false:
-                yield from self.evaluate_right(output, yield_when_false, left_is_false)
-                continue
-            if self._is_duplicate_output_(output):
-                continue
-            self.update_cache(output, self._cache_)
-            yield output
-        self.left_evaluated = False
-        yield from self.evaluate_right(sources, yield_when_false, left_is_false)
-
-    def evaluate_right(
-        self,
-        sources: Optional[Dict[int, HashedValue]],
-        yield_when_false: bool,
-        left_is_false: bool,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        # For the found left value, find all right values,
-        # and yield the (left, right) results found.
-
-        right_values = self.right._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=self
-        )
-
-        for right_value in right_values:
-            right_is_false = not self.get_operand_truth_value(self.right, right_value)
-            self._is_false_ = left_is_false and right_is_false
-            if not self._is_false_ and self._is_duplicate_output_(sources):
-                continue
-            self.right_evaluated = True
-            self.update_cache(sources, self._cache_)
-            yield sources
-
-        self.right_evaluated = False
+    def should_evaluate_right_given_left(self, left_is_false: bool) -> bool:
+        return left_is_false and self._yield_when_false_
 
 
 @dataclass(eq=False)
@@ -1823,45 +1835,14 @@ class ElseIf(OR):
         Constrain the symbolic expression based on the indices of the operands.
         This method overrides the base class method to handle ElseIf logic.
         """
-        # init an empty source if none is provided
         sources = sources or {}
         self._eval_parent_ = parent
+        self._yield_when_false_ = yield_when_false
+        # Force left_yield_when_false=True to preserve else-if semantics.
+        yield from self.evaluate_left(sources, True)
 
-        # constrain left values by available sources
-        # Force yield_when_false=True for the left branch to preserve else-if semantics
-        left_values = self.left._evaluate__(sources, yield_when_false=True, parent=self)
-        any_left = False
-        for left_value in left_values:
-            any_left = True
-            left_is_false = not self.get_operand_truth_value(self.left, left_value)
-            if left_is_false:
-                if is_caching_enabled() and self.right_cache.check(left_value):
-                    yield from self.yield_final_output_from_cache(
-                        left_value, self.right_cache
-                    )
-                    continue
-                yield from self.evaluate_right(left_value, yield_when_false)
-            else:
-                self._is_false_ = False
-                yield left_value
-        # If left produced no values at all, evaluate right against sources
-        if not any_left:
-            yield from self.evaluate_right(sources, yield_when_false)
-
-    def evaluate_right(
-        self, sources: Dict[int, HashedValue], yield_when_false: bool
-    ) -> Iterable[Dict[int, HashedValue]]:
-        right_values = self.right._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=self
-        )
-        for right_value in right_values:
-            self._is_false_ = not self.get_operand_truth_value(self.right, right_value)
-            if self._is_false_ and not yield_when_false:
-                continue
-            if self._is_duplicate_output_(right_value):
-                continue
-            self.update_cache(right_value, self.right_cache)
-            yield right_value
+    def should_evaluate_right_given_left(self, left_is_false: bool) -> bool:
+        return left_is_false
 
 
 OperatorOptimizer = Callable[[SymbolicExpression, SymbolicExpression], LogicalOperator]
