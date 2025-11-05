@@ -1757,9 +1757,10 @@ class OR(LogicalOperator, ABC):
     ) -> Iterable[Dict[int, HashedValue]]:
         """
         Evaluate the left operand, taking into consideration if it should yield when it is False.
-        :param sources:
+
+        :param sources: The current bindings to use for evaluation.
         :param left_yield_when_false:
-        :return:
+        :return: The new bindings after evaluating the left operand (and possibly right operand).
         """
         left_values = self.left._evaluate__(
             sources, yield_when_false=left_yield_when_false, parent=self
@@ -1778,6 +1779,12 @@ class OR(LogicalOperator, ABC):
         self,
         sources: Optional[Dict[int, HashedValue]],
     ) -> Iterable[Dict[int, HashedValue]]:
+        """
+        Evaluate the right operand.
+
+        :param sources: The sources (i.e. current bindings) to use during evaluation.
+        :return: The new bindings after evaluating the right operand.
+        """
 
         self.left_evaluated = False
 
