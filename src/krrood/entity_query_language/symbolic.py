@@ -1782,7 +1782,7 @@ class OR(LogicalOperator, ABC):
         """
         Evaluate the right operand.
 
-        :param sources: The sources (i.e. current bindings) to use during evaluation.
+        :param sources: The sources (i.e., current bindings) to use during evaluation.
         :return: The new bindings after evaluating the right operand.
         """
 
