@@ -18,42 +18,25 @@ from .utils import make_list, ALL
 T = TypeVar("T")
 
 
+@dataclass
 class HashedValue(Generic[T]):
     """
     Value wrapper carrying a stable hash identifier.
     """
 
-    _SINGLETONS: ClassVar[Dict[bool, "HashedValue"]] = {}
+    value: T
     """
-    Registry for hashed values of True/False/None
+    The wrapped value.
     """
-    # value: T
-    # """
-    # The wrapped value.
-    # """
-    # id_: Optional[int] = field(default=None)
-    # """
-    # Optional explicit identifier; if omitted, derived from value.
-    # """
+    id_: Optional[int] = field(default=None)
+    """
+    Optional explicit identifier; if omitted, derived from value.
+    """
 
-    def __new__(cls, value: T, id_: Optional[int] = None):
-        # If wrapping a HashedValue of a boolean/None, return the singleton instance
-        if isinstance(value, HashedValue):
-            return value
-        if id_ is None and isinstance(value, (bool, type(None))):
-            existing = cls._SINGLETONS.get(value)
-            if existing is not None:
-                return existing
-        return super().__new__(cls)
-
-    def __init__(self, value: T, id_: Optional[int] = None) -> None:
+    def __post_init__(self) -> None:
         """
         Initialize the identifier from the wrapped value when not provided.
         """
-        if isinstance(value, HashedValue):
-            return
-        self.value = value
-        self.id_ = id_
         if self.id_ is not None:
             return
         if isinstance(self.value, HashedValue):
@@ -80,12 +63,8 @@ class HashedValue(Generic[T]):
             return False
         return self.id_ == other.id_
 
-
-# Initialize boolean singletons after class definition
-# We create them by constructing HashedValue once for True, False, and None; subsequent
-# HashedValue(True/False/None) constructions will return these singletons via __new__.
-for value in (True, False, None):
-    HashedValue._SINGLETONS[value] = HashedValue(value)
+    def __bool__(self) -> bool:
+        return bool(self.value)
 
 
 @dataclass

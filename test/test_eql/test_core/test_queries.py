@@ -16,6 +16,8 @@ from krrood.entity_query_language.entity import (
     the,
     or_,
     a,
+    exists,
+    flatten,
 )
 from krrood.entity_query_language.failures import MultipleSolutionFound
 from krrood.entity_query_language.predicate import (
@@ -543,9 +545,9 @@ def test_not_and_or_with_domain_mapping(handles_and_containers_world):
                     )
                 ),
             )
-        ).evaluate()
+        )
 
-    all_not_handle1_and_not_container1 = list(not_handle1_and_not_container1)
+    all_not_handle1_and_not_container1 = list(not_handle1_and_not_container1.evaluate())
     assert len(all_not_handle1_and_not_container1) == 4, "Should generate 4 bodies"
     assert all(
         h.name not in ["Handle1", "Container1"]
@@ -905,3 +907,58 @@ def test_contains_type():
 
     query_result = list(fruit_box_query.evaluate())
     assert len(query_result) == 1, "Should generate 1 fruit box."
+
+
+def test_equivalent_to_contains_type_using_exists():
+    fb1_fruits = [Apple("apple"), Body("Body1")]
+    fb2_fruits = [Body("Body3"), Body("Body2")]
+    fb1 = FruitBox("FruitBox1", fb1_fruits)
+    fb2 = FruitBox("FruitBox2", fb2_fruits)
+    with symbolic_mode():
+        fruit_box_query = a(
+            fb := let(FruitBox, domain=None),
+            exists(fb, HasType(flatten(fb.fruits), Apple)),
+        )
+
+    query_result = list(fruit_box_query.evaluate())
+    assert len(query_result) == 1, "Should generate 1 fruit box."
+
+
+def test_double_not(handles_and_containers_world):
+    world = handles_and_containers_world
+    with symbolic_mode():
+        query = an(
+            entity(
+                body := let(type_=Body, domain=world.bodies),
+                not_(not_(contains(body.name, "Handle"))),
+            )
+        )
+    results = list(query.evaluate())
+    assert all("Handle" in r.name for r in results)
+
+
+def test_reuse_of_subquery_with_not(handles_and_containers_world):
+    world = handles_and_containers_world
+    with symbolic_mode():
+        body = let(type_=Body, domain=world.bodies)
+        sub_query = contains(body.name, "Handle")
+        query = an(
+            entity(
+                body,
+                sub_query,
+                body.name.endswith("1"),
+            )
+        )
+        query_with_not = an(
+            entity(
+                body,
+                not_(sub_query),
+                body.name.endswith("1"),
+            )
+        )
+    results = list(query.evaluate())
+    results_with_not = list(query_with_not.evaluate())
+    assert len(results) == 1
+    assert isinstance(results[0], Handle)
+    assert len(results_with_not) == 1
+    assert isinstance(results_with_not[0], Container)
