@@ -1807,6 +1807,9 @@ class OR(LogicalOperator, ABC):
 
 @dataclass(eq=False)
 class Union(OR):
+    """
+    This operator is a version of the OR operator that always evaluates both the left and the right operand.
+    """
 
     def _evaluate__(
         self,
@@ -1828,7 +1831,7 @@ class Union(OR):
 @dataclass(eq=False)
 class ElseIf(OR):
     """
-    A symbolic single choice operation that can be used to choose between multiple symbolic expressions.
+    A version of the OR operator that evaluates the right operand only when the left operand is False.
     """
 
     def _evaluate__(
