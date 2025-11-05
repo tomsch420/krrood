@@ -24,7 +24,7 @@ from .symbolic import (
     symbolic_mode,
     Variable,
     Infer,
-    _optimize_or,
+    optimize_or,
     Flatten,
     ForAll,
     Exists,
@@ -255,7 +255,7 @@ def or_(*conditions):
     :return: An OR operator joining the conditions.
     :rtype: SymbolicExpression
     """
-    return chained_logic(_optimize_or, *conditions)
+    return chained_logic(optimize_or, *conditions)
 
 
 def not_(operand: SymbolicExpression):
