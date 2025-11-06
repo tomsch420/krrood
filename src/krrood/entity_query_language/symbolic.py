@@ -797,7 +797,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         return vars
 
     def __invert__(self):
-        return self.__class__(self._child_.__invert__(), self.selected_variables)
+        raise NotImplementedError("Inverting Selections is not allowed")
 
     def __repr__(self):
         return self._name_
@@ -1376,32 +1376,6 @@ class Comparator(BinaryOperator):
         operator.gt: ">",
         operator.ge: ">=",
     }
-
-    def __invert__(self):
-        new_operation = None
-        match self.operation:
-            case operator.lt:
-                new_operation = operator.ge
-            case operator.gt:
-                new_operation = operator.le
-            case operator.le:
-                new_operation = operator.gt
-            case operator.ge:
-                new_operation = operator.lt
-            case operator.eq:
-                new_operation = operator.ne
-            case operator.ne:
-                new_operation = operator.eq
-            case operator.contains:
-                new_operation = not_contains
-            case _:
-                if self.operation is not_contains:
-                    new_operation = operator.contains
-                else:
-                    raise NotImplementedError(
-                        f"Unsupported operation: {self.operation.__name__}"
-                    )
-        return Comparator(self.left, self.right, new_operation)
 
     @property
     def _name_(self):
