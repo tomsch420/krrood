@@ -11,7 +11,7 @@ from ..dataset.semantic_world_like_classes import (
     Handle,
     Container,
 )
-from ..dataset.sqlalchemy_interface import (
+from ..dataset.ormatic_interface import (
     PositionDAO,
     PoseDAO,
     OrientationDAO,

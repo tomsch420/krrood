@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import datetime
 import inspect
-import sys
+import types
 from contextlib import suppress
 from enum import Enum
+from types import ModuleType
 
 import sqlalchemy
 from sqlalchemy import Engine, text, MetaData
-from typing_extensions import TypeVar, _SpecialForm, Type, List, Iterable, Union
+from typing_extensions import TypeVar, _SpecialForm, Type, List, Iterable, Union, Tuple
+
+from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
 
 
 class classproperty:
@@ -23,7 +26,7 @@ class classproperty:
         return self.fget(owner)
 
 
-def classes_of_module(module) -> List[Type]:
+def classes_of_module(module: types.ModuleType) -> List[Type]:
     """
     Get all classes of a given module.
 
@@ -32,7 +35,7 @@ def classes_of_module(module) -> List[Type]:
     """
 
     result = []
-    for name, obj in inspect.getmembers(sys.modules[module.__name__]):
+    for name, obj in inspect.getmembers(module):
         if inspect.isclass(obj) and obj.__module__ == module.__name__:
             result.append(obj)
     return result
@@ -122,3 +125,29 @@ class InheritanceStrategy(Enum):
 
 def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
     return f"{t.__module__}.{t.__name__}"
+
+
+def get_classes_of_ormatic_interface(
+    interface: ModuleType,
+) -> Tuple[List[Type], List[Type[AlternativeMapping]]]:
+    """
+    Get all classes and alternative mappings of an existing ormatic interface.
+
+    :param interface: The ormatic interface to extract the information from.
+    :return: A list of classes and a list of alternative mappings used in the interface.
+    """
+    classes = []
+    alternative_mappings = []
+
+    for cls in filter(
+        lambda x: issubclass(x, DataAccessObject), classes_of_module(interface)
+    ):
+        original_class = cls.original_class()
+
+        if issubclass(original_class, AlternativeMapping):
+            alternative_mappings.append(original_class)
+            classes.append(original_class.original_class())
+        else:
+            classes.append(original_class)
+
+    return classes, alternative_mappings

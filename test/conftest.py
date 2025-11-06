@@ -72,7 +72,7 @@ def generate_sqlalchemy_interface():
     instance.make_all_tables()
 
     file_path = os.path.join(
-        os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
+        os.path.dirname(__file__), "dataset", "ormatic_interface.py"
     )
 
     with open(file_path, "w") as f:
@@ -83,7 +83,7 @@ def generate_sqlalchemy_interface():
 
 def pytest_configure(config):
     """
-    Generate sqlalchemy_interface.py before test collection.
+    Generate ormatic_interface.py before test collection.
 
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
@@ -99,13 +99,13 @@ def pytest_sessionstart(session):
         import warnings
 
         warnings.warn(
-            f"Failed to generate sqlalchemy_interface.py: {e}. "
+            f"Failed to generate ormatic_interface.py: {e}. "
             "Tests may fail if the file doesn't exist.",
             RuntimeWarning,
         )
 
 
-from .dataset.sqlalchemy_interface import *
+from .dataset.ormatic_interface import *
 
 
 @pytest.fixture
