@@ -13,8 +13,10 @@ def test_extension(tmp_path):
     Test that existing ormatic interfaces can be extended
     """
     # import classes from the existing interface
-    classes, alternative_mappings = get_classes_of_ormatic_interface(ormatic_interface)
-
+    classes, alternative_mappings, type_mappings = get_classes_of_ormatic_interface(
+        ormatic_interface
+    )
+    assert type_mappings == ormatic_interface.Base.type_mappings
     # specify new classes
     classes += [CustomPosition, AggregatorOfExternalInstances]
 
@@ -22,7 +24,11 @@ def test_extension(tmp_path):
     class_diagram = ClassDiagram(
         list(sorted(classes, key=lambda c: c.__name__, reverse=True))
     )
-    instance = ORMatic(class_diagram, alternative_mappings=alternative_mappings)
+    instance = ORMatic(
+        class_diagram,
+        type_mappings=type_mappings,
+        alternative_mappings=alternative_mappings,
+    )
     instance.make_all_tables()
 
     # write to tempfile
@@ -38,7 +44,9 @@ def test_extension(tmp_path):
     sys.modules[spec.name] = module  # make it discoverable during exec
     spec.loader.exec_module(module)
 
-    new_classes, new_alternative_mappings = get_classes_of_ormatic_interface(module)
+    new_classes, new_alternative_mappings, new_type_mappings = (
+        get_classes_of_ormatic_interface(module)
+    )
 
     assert set(cls.__name__ for cls in classes) == set(
         cls.__name__ for cls in new_classes

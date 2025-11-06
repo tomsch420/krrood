@@ -9,7 +9,17 @@ from types import ModuleType
 
 import sqlalchemy
 from sqlalchemy import Engine, text, MetaData
-from typing_extensions import TypeVar, _SpecialForm, Type, List, Iterable, Union, Tuple
+from sqlalchemy.orm import DeclarativeBase
+from typing_extensions import (
+    TypeVar,
+    _SpecialForm,
+    Type,
+    List,
+    Iterable,
+    Union,
+    Tuple,
+    Dict,
+)
 
 from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
 
@@ -127,9 +137,19 @@ def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
     return f"{t.__module__}.{t.__name__}"
 
 
+def is_direct_subclass(cls: Type, *bases: Type) -> bool:
+    """
+    :param cls: The class to check.
+    :param base: The base class to check against.
+
+    :return: Whether 'cls' is directly derived from another class or is the same class.
+    """
+    return cls in bases or (set(cls.__bases__) & set(bases))
+
+
 def get_classes_of_ormatic_interface(
     interface: ModuleType,
-) -> Tuple[List[Type], List[Type[AlternativeMapping]]]:
+) -> Tuple[List[Type], List[Type[AlternativeMapping]], Dict]:
     """
     Get all classes and alternative mappings of an existing ormatic interface.
 
@@ -138,9 +158,11 @@ def get_classes_of_ormatic_interface(
     """
     classes = []
     alternative_mappings = []
+    classes_of_ormatic_interface = classes_of_module(interface)
+    type_mappings = {}
 
     for cls in filter(
-        lambda x: issubclass(x, DataAccessObject), classes_of_module(interface)
+        lambda x: issubclass(x, DataAccessObject), classes_of_ormatic_interface
     ):
         original_class = cls.original_class()
 
@@ -150,4 +172,10 @@ def get_classes_of_ormatic_interface(
         else:
             classes.append(original_class)
 
-    return classes, alternative_mappings
+    # get the type mappings from the direct subclass of declarative base
+    for cls in filter(
+        lambda x: is_direct_subclass(x, DeclarativeBase), classes_of_ormatic_interface
+    ):
+        type_mappings.update(cls.type_mappings)
+
+    return classes, alternative_mappings, type_mappings
