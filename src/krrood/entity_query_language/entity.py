@@ -18,7 +18,6 @@ from .symbolic import (
     AND,
     Comparator,
     chained_logic,
-    Not,
     CanBehaveLikeAVariable,
     ResultQuantifier,
     From,
@@ -27,9 +26,9 @@ from .symbolic import (
     Infer,
     _optimize_or,
     Flatten,
-    Concatenate,
     ForAll,
     Exists,
+    Literal,
 )
 
 from .predicate import (
@@ -263,7 +262,9 @@ def not_(operand: SymbolicExpression):
     """
     A symbolic NOT operation that can be used to negate symbolic expressions.
     """
-    return Not(operand)
+    if not isinstance(operand, SymbolicExpression):
+        operand = Literal(operand)
+    return operand.__invert__()
 
 
 def contains(container, item):
@@ -299,16 +300,6 @@ def flatten(
     (similar to SQL UNNEST), keeping existing variable bindings intact.
     """
     return Flatten(var)
-
-
-def concatenate(
-    var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
-) -> Union[CanBehaveLikeAVariable[T], Iterable[T]]:
-    """
-    Concatenate a nested iterable domain into a one-element domain that is still a nested iterable that contains all
-    the values of the sub iterables.
-    """
-    return Concatenate(var)
 
 
 def for_all(
