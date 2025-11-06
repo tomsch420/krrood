@@ -363,14 +363,18 @@ def test_generate_with_more_than_one_source_optimized(handles_and_containers_wor
     world = handles_and_containers_world
 
     with symbolic_mode():
-        q1 = a(
-            fixed_connection := let(FixedConnection, world.connections),
-            HasType(fixed_connection.parent, Container),
-            HasType(fixed_connection.child, Handle),
+        q1 = an(
+            entity(
+                fixed_connection := let(FixedConnection, world.connections),
+                HasType(fixed_connection.parent, Container),
+                HasType(fixed_connection.child, Handle),
+            )
         )
-        q2 = a(
-            prismatic_connection := let(PrismaticConnection, world.connections),
-            prismatic_connection.child == fixed_connection.parent,
+        q2 = an(
+            entity(
+                prismatic_connection := let(PrismaticConnection, world.connections),
+                prismatic_connection.child == fixed_connection.parent,
+            )
         )
         query = a(set_of([q1, q2]))
 

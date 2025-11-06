@@ -185,14 +185,14 @@ def _extract_variables_and_expression(
     final_expression_list = list(properties)
     expression_list = []
     selected_variables = list(selected_variables)
-    for i, var in enumerate(selected_variables):
-        if isinstance(var, ResultQuantifier):
-            result_quantifier = var
-            var = var._var_
-            expression_list.append(result_quantifier)
-            # if result_quantifier._child_._child_:
-            #     expression_list.append(result_quantifier._child_._child_)
-            selected_variables[i] = var
+    # for i, var in enumerate(selected_variables):
+    # if isinstance(var, ResultQuantifier):
+    # result_quantifier = var
+    # var = var._var_
+    # expression_list.append(result_quantifier)
+    # if result_quantifier._child_._child_:
+    #     expression_list.append(result_quantifier._child_._child_)
+    # selected_variables[i] = var
     expression_list += final_expression_list
     expression = None
     if len(expression_list) > 0:
