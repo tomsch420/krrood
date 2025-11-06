@@ -140,9 +140,9 @@ def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
 def is_direct_subclass(cls: Type, *bases: Type) -> bool:
     """
     :param cls: The class to check.
-    :param base: The base class to check against.
+    :param bases: The base classes to check against.
 
-    :return: Whether 'cls' is directly derived from another class or is the same class.
+    :return: Whether 'cls' is directly derived from any of the given base classes or is the same class.
     """
     return cls in bases or (set(cls.__bases__) & set(bases))
 
