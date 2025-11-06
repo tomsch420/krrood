@@ -314,7 +314,10 @@ class WrappedTable:
             else inner_type
         )
 
-        constructor = "mapped_column(use_existing_column=True)"
+        if wrapped_field.type_endpoint is str:
+            constructor = f"mapped_column(String(255), use_existing_column=True)"
+        else:
+            constructor = f"mapped_column(use_existing_column=True)"
         self.builtin_columns.append(
             ColumnConstructor(
                 name=wrapped_field.field.name,

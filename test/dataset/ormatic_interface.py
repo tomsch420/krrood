@@ -19,6 +19,7 @@ import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
 import krrood.entity_query_language.symbol_graph
+import krrood.ormatic.custom_types
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
 import typing
@@ -243,7 +244,9 @@ class CustomEntityDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    overwritten_name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    overwritten_name: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
 
     alternativemappingaggregatordao_entities1_id: Mapped[
         typing.Optional[builtins.int]
@@ -273,7 +276,9 @@ class DerivedEntityDAO(
         use_existing_column=True,
     )
 
-    description: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    description: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": "DerivedEntityDAO",
@@ -321,7 +326,7 @@ class FruitBoxDAO(
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     fruits: Mapped[typing.List[BodyDAO]] = relationship(
         "BodyDAO", foreign_keys="[BodyDAO.fruitboxdao_fruits_id]", post_update=True
@@ -381,7 +386,7 @@ class KinematicChainDAO(
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     torsodao_kinematic_chains_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
         ForeignKey("TorsoDAO.database_id", use_alter=True),
@@ -525,7 +530,7 @@ class ParentDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Parent]
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "ParentDAO",
@@ -561,7 +566,7 @@ class ParentBaseMappingDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
 
 class ChildBaseMappingDAO(
@@ -574,7 +579,7 @@ class ChildBaseMappingDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
 
 class PoseDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Pose]):
@@ -902,7 +907,7 @@ class ShapeDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Shape]):
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     origin_id: Mapped[int] = mapped_column(
         ForeignKey("TransformationMappedDAO.database_id", use_alter=True),
@@ -1131,7 +1136,7 @@ class BodyDAO(
         use_existing_column=True,
     )
 
-    name: Mapped[builtins.str] = mapped_column(use_existing_column=True)
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
     size: Mapped[builtins.int] = mapped_column(use_existing_column=True)
 
     fruitboxdao_fruits_id: Mapped[typing.Optional[builtins.int]] = mapped_column(

@@ -164,11 +164,13 @@ class ORMatic:
         return None
 
     def create_type_annotations_map(self):
-        self.type_annotation_map = {}  # {"Type": "TypeType"}
+        self.type_annotation_map = {}
         for clazz, custom_type in self.type_mappings.items():
             self.type_annotation_map[module_and_class_name(clazz)] = (
                 module_and_class_name(custom_type)
             )
+            self.imported_modules.add(clazz.__module__)
+            self.imported_modules.add(custom_type.__module__)
 
     @property
     def wrapped_classes_in_topological_order(self) -> List[WrappedClass]:
