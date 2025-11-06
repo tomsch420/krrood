@@ -419,6 +419,7 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
     """
     The path of the variable in the symbol graph as a sequence of relation instances.
     """
+
     _type_: Type = field(init=False, default=None)
     """
     The type of the variable.
@@ -540,8 +541,6 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         values = self._child_._evaluate__(sources, parent=self)
         for value in values:
             self._is_false_ = value.is_false
-            if self._is_false_:
-                continue
             if self._var_:
                 value[self._id_] = value[self._var_._id_]
             yield OperationResult(value.bindings, self._is_false_, self)
@@ -714,8 +713,6 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
-            if values.is_false:
-                continue
             values = self.update_data_from_child(values)
             self._warn_on_unbound_variables_(values.bindings, self.selected_variables)
             if any(var._id_ not in values for var in self.selected_variables):

@@ -376,7 +376,7 @@ def test_generate_with_more_than_one_source_optimized(handles_and_containers_wor
                 prismatic_connection.child == fixed_connection.parent,
             )
         )
-        query = a(set_of([q1, q2]))
+        query = a(set_of((fixed_connection, prismatic_connection), q1, q2))
 
     # query._render_tree_()
 
