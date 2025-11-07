@@ -121,7 +121,7 @@ class ExceptIf(ConclusionSelector):
 
             if is_caching_enabled() and self.right_cache.check(left_value.bindings):
                 yield from self.yield_final_output_from_cache(
-                    left_value, self.right_cache
+                    left_value.bindings, self.right_cache
                 )
                 continue
 
@@ -142,7 +142,7 @@ class ExceptIf(ConclusionSelector):
         self, result: OperationResult, conclusion: typing.Set[Conclusion]
     ) -> Iterable[OperationResult]:
         self.update_conclusion(result, conclusion)
-        yield result
+        yield OperationResult(result.bindings, self._is_false_, self)
         self._conclusion_.clear()
 
 
@@ -170,7 +170,7 @@ class Alternative(ElseIf, ConclusionSelector):
             elif self.get_operand_truth_value(self.right, output):
                 self.update_conclusion(output, self.right._conclusion_)
 
-            yield output
+            yield OperationResult(output.bindings, self._is_false_, self)
             self._conclusion_.clear()
 
 
@@ -191,5 +191,5 @@ class Next(EQLUnion, ConclusionSelector):
                 self.update_conclusion(output, self.left._conclusion_)
             if self.right_evaluated:
                 self.update_conclusion(output, self.right._conclusion_)
-            yield output
+            yield OperationResult(output.bindings, self._is_false_, self)
             self._conclusion_.clear()

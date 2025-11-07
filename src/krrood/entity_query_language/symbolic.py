@@ -1303,7 +1303,9 @@ class BinaryOperator(SymbolicExpression, ABC):
         self.right_cache.clear()
 
     def yield_final_output_from_cache(
-        self, variables_sources, cache: Optional[IndexedCache] = None
+        self,
+        variables_sources: Dict[int, HashedValue],
+        cache: Optional[IndexedCache] = None,
     ) -> Iterable[OperationResult]:
         cache = self.cache if cache is None else cache
         for output, is_false in cache.retrieve(variables_sources):
@@ -1513,7 +1515,7 @@ class AND(LogicalBinaryOperator):
                 yield OperationResult(left_value.bindings, self._is_false_, self)
             elif self.check_right_cache(left_value):
                 yield from self.yield_final_output_from_cache(
-                    left_value, self.right_cache
+                    left_value.bindings, self.right_cache
                 )
             else:
                 yield from self.evaluate_right(left_value)
