@@ -5,13 +5,13 @@ def test_generation_process():
     """
     Test that the SQLAlchemy interface was generated correctly.
 
-    This test verifies that the sqlalchemy_interface.py file was generated
+    This test verifies that the ormatic_interface.py file was generated
     by the pytest_configure hook and contains the expected content.
     The actual generation happens in conftest.py before tests run.
     """
     # Verify that the file was created
     file_path = os.path.join(
-        os.path.dirname(__file__), "..", "dataset", "sqlalchemy_interface.py"
+        os.path.dirname(__file__), "..", "dataset", "ormatic_interface.py"
     )
     assert os.path.exists(file_path)
 
@@ -23,11 +23,11 @@ def test_generation_process():
         assert "class Base(DeclarativeBase):" in content
 
     # Verify we can import from the generated file
-    from ..dataset import sqlalchemy_interface
+    from ..dataset import ormatic_interface
 
-    assert hasattr(sqlalchemy_interface, "Base")
+    assert hasattr(ormatic_interface, "Base")
 
     # Verify that expected DAO classes exist
-    assert hasattr(sqlalchemy_interface, "TransformationMappedDAO")
-    assert hasattr(sqlalchemy_interface, "PositionDAO")
-    assert hasattr(sqlalchemy_interface, "AtomDAO")
+    assert hasattr(ormatic_interface, "TransformationMappedDAO")
+    assert hasattr(ormatic_interface, "PositionDAO")
+    assert hasattr(ormatic_interface, "AtomDAO")

@@ -23,6 +23,8 @@ from ..class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
 
+TypeMappingsType = Dict[Type, Type[TypeDecorator]]
+
 
 class AlternativelyMaps(ClassRelation):
     """
@@ -47,7 +49,7 @@ class ORMatic:
     List of alternative mappings that should be used to map classes.
     """
 
-    type_mappings: Dict[Type, Type[TypeDecorator]] = field(default_factory=dict)
+    type_mappings: TypeMappingsType = field(default_factory=dict)
     """
     A dict that maps classes to custom types that should be used to save the classes.
     They keys of the type mappings must be disjoint with the classes given..
@@ -91,6 +93,7 @@ class ORMatic:
         self._create_inheritance_graph()
         self._add_alternative_mappings_to_class_diagram()
         self._create_wrapped_tables()
+        self.create_type_annotations_map()
 
         for wrapped_table in self.wrapped_tables.values():
             self.imported_modules.add(wrapped_table.wrapped_clazz.clazz.__module__)
@@ -161,11 +164,13 @@ class ORMatic:
         return None
 
     def create_type_annotations_map(self):
-        self.type_annotation_map = {"Type": "TypeType"}
+        self.type_annotation_map = {}
         for clazz, custom_type in self.type_mappings.items():
             self.type_annotation_map[module_and_class_name(clazz)] = (
                 module_and_class_name(custom_type)
             )
+            self.imported_modules.add(clazz.__module__)
+            self.imported_modules.add(custom_type.__module__)
 
     @property
     def wrapped_classes_in_topological_order(self) -> List[WrappedClass]:

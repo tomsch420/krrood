@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 from dataclasses import is_dataclass
 
 import pytest
@@ -43,20 +44,22 @@ def generate_sqlalchemy_interface():
     # build the symbol graph
     symbol_graph = SymbolGraph()
 
-    # collect all classes
+    # collect all classes that need persistence
     all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
     all_classes |= {
-        am.original_class() for am in recursive_subclasses(AlternativeMapping)
+        alternative_mapping.original_class()
+        for alternative_mapping in recursive_subclasses(AlternativeMapping)
     }
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
     all_classes |= {Symbol}
 
     # remove classes that don't need persistence
-    all_classes -= {HasType, HasTypes}
-    # remove classes that are not dataclasses
-    all_classes = {c for c in all_classes if is_dataclass(c)}
-    all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
+    all_classes -= {HasType, HasTypes, ContainsType}
     all_classes -= {NotMappedParent, ChildNotMapped}
+
+    # only keep dataclasses
+    all_classes = {c for c in all_classes if is_dataclass(c)}
+
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
@@ -72,7 +75,7 @@ def generate_sqlalchemy_interface():
     instance.make_all_tables()
 
     file_path = os.path.join(
-        os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
+        os.path.dirname(__file__), "dataset", "ormatic_interface.py"
     )
 
     with open(file_path, "w") as f:
@@ -83,7 +86,7 @@ def generate_sqlalchemy_interface():
 
 def pytest_configure(config):
     """
-    Generate sqlalchemy_interface.py before test collection.
+    Generate ormatic_interface.py before test collection.
 
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
@@ -94,18 +97,20 @@ def pytest_configure(config):
 
 def pytest_sessionstart(session):
     try:
-        ...  # generate_sqlalchemy_interface()
+        generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 
+        traceback.print_exc()
         warnings.warn(
-            f"Failed to generate sqlalchemy_interface.py: {e}. "
-            "Tests may fail if the file doesn't exist.",
+            f"Failed to generate ormatic_interface.py. "
+            "The Tests may fail or behave inconsistent if the file was not generated correctly."
+            f"Error: {e}",
             RuntimeWarning,
         )
 
 
-from .dataset.sqlalchemy_interface import *
+from .dataset.ormatic_interface import *
 
 
 @pytest.fixture

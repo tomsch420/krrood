@@ -1,7 +1,6 @@
-
 from krrood.ormatic.dao import HasGeneric, NoGenericError
 from ..dataset.example_classes import Position
-from ..dataset.sqlalchemy_interface import PositionDAO
+from ..dataset.ormatic_interface import PositionDAO
 
 
 class NoGeneric(HasGeneric): ...
