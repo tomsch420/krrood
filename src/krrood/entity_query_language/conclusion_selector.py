@@ -11,16 +11,17 @@ from .conclusion import Conclusion
 from .hashed_data import HashedIterable, HashedValue
 from .rxnode import ColorLegend
 from .symbolic import (
-    LogicalOperator,
     SymbolicExpression,
     ElseIf,
     Union as EQLUnion,
     Literal,
+    OperationResult,
+    LogicalBinaryOperator,
 )
 
 
 @dataclass(eq=False)
-class ConclusionSelector(LogicalOperator, ABC):
+class ConclusionSelector(LogicalBinaryOperator, ABC):
     """
     Base class for logical operators that may carry and select conclusions.
 
@@ -33,7 +34,7 @@ class ConclusionSelector(LogicalOperator, ABC):
     )
 
     def update_conclusion(
-        self, output: Dict[int, HashedValue], conclusions: typing.Set[Conclusion]
+        self, output: OperationResult, conclusions: typing.Set[Conclusion]
     ) -> None:
         """
         Update conclusions if this combination hasn't been seen before.
@@ -48,7 +49,9 @@ class ConclusionSelector(LogicalOperator, ABC):
                 lambda v: not isinstance(v.value, Literal)
             )
             required_vars.update(vars_)
-        required_output = {k: v for k, v in output.items() if k in required_vars}
+        required_output = {
+            k: v for k, v in output.bindings.items() if k in required_vars
+        }
 
         if not self.concluded_before[not self._is_false_].check(required_output):
             self._conclusion_.update(conclusions)
@@ -96,9 +99,8 @@ class ExceptIf(ConclusionSelector):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
+    ) -> Iterable[OperationResult]:
         """
         Evaluate the ExceptIf condition and yield the results.
         """
@@ -107,39 +109,41 @@ class ExceptIf(ConclusionSelector):
         sources = sources or HashedIterable()
 
         # constrain left values by available sources
-        left_values = self.left._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=self
-        )
+        left_values = self.left._evaluate__(sources, parent=self)
         for left_value in left_values:
 
             left_value.update(sources)
 
-            self._is_false_ = not self.get_operand_truth_value(self.left, left_value)
+            self._is_false_ = left_value.is_false
             if self._is_false_:
-                if yield_when_false and not self._is_duplicate_output_(left_value):
-                    yield left_value
+                yield left_value
                 continue
 
-            if is_caching_enabled() and self.right_cache.check(left_value):
+            if is_caching_enabled() and self.right_cache.check(left_value.bindings):
                 yield from self.yield_final_output_from_cache(
                     left_value, self.right_cache
                 )
                 continue
 
             right_yielded = False
-            for right_value in self.right._evaluate__(
-                left_value, yield_when_false=False, parent=self
-            ):
+            for right_value in self.right._evaluate__(left_value.bindings, parent=self):
+                if right_value.is_false:
+                    continue
                 right_yielded = True
-                self._conclusion_.update(self.right._conclusion_)
-                output = left_value.copy()
-                output.update(right_value)
-                yield output
-                self._conclusion_.clear()
+                yield from self.yield_and_update_conclusion(
+                    right_value, self.right._conclusion_
+                )
             if not right_yielded:
-                self._conclusion_.update(self.left._conclusion_)
-                yield left_value
-                self._conclusion_.clear()
+                yield from self.yield_and_update_conclusion(
+                    left_value, self.left._conclusion_
+                )
+
+    def yield_and_update_conclusion(
+        self, result: OperationResult, conclusion: typing.Set[Conclusion]
+    ) -> Iterable[OperationResult]:
+        self.update_conclusion(result, conclusion)
+        yield result
+        self._conclusion_.clear()
 
 
 @dataclass(eq=False)
@@ -156,12 +160,9 @@ class Alternative(ElseIf, ConclusionSelector):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        outputs = super()._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=parent
-        )
+    ) -> Iterable[OperationResult]:
+        outputs = super()._evaluate__(sources, parent=parent)
         for output in outputs:
             # Only yield if conclusions were successfully added (not duplicates)
             if self.get_operand_truth_value(self.left, output):
@@ -169,8 +170,7 @@ class Alternative(ElseIf, ConclusionSelector):
             elif self.get_operand_truth_value(self.right, output):
                 self.update_conclusion(output, self.right._conclusion_)
 
-            if self._conclusion_ or yield_when_false:
-                yield output
+            yield output
             self._conclusion_.clear()
 
 
@@ -183,17 +183,13 @@ class Next(EQLUnion, ConclusionSelector):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
-    ) -> Iterable[Dict[int, HashedValue]]:
-        outputs = super()._evaluate__(
-            sources, yield_when_false=yield_when_false, parent=parent
-        )
+    ) -> Iterable[OperationResult]:
+        outputs = super()._evaluate__(sources, parent=parent)
         for output in outputs:
             if self.left_evaluated:
                 self.update_conclusion(output, self.left._conclusion_)
             if self.right_evaluated:
                 self.update_conclusion(output, self.right._conclusion_)
-            if self._conclusion_ or yield_when_false:
-                yield output
+            yield output
             self._conclusion_.clear()

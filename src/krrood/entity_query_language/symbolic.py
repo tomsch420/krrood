@@ -729,7 +729,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             if self._is_false_:
                 return child_result
             for conclusion in self._child_._conclusion_:
-                child_result = conclusion._evaluate__(child_result, parent=self)
+                child_result.bindings = next(
+                    iter(conclusion._evaluate__(child_result.bindings, parent=self))
+                ).bindings
         else:
             self._is_false_ = False
         return child_result
