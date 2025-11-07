@@ -23,13 +23,13 @@ from .symbolic import (
     From,
     symbolic_mode,
     Variable,
-    Infer,
     optimize_or,
     Flatten,
     ForAll,
     Exists,
     Literal,
 )
+from .conclusion import Infer
 
 from .predicate import (
     Predicate,

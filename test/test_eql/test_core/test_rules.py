@@ -24,16 +24,20 @@ def test_generate_drawers(handles_and_containers_world):
     handle = let(type_=Handle, domain=world.bodies)
     fixed_connection = let(type_=FixedConnection, domain=world.connections)
     prismatic_connection = let(type_=PrismaticConnection, domain=world.connections)
-    with rule_mode():
-        solutions = infer(
-            Drawer(handle=handle, container=container),
+    with symbolic_mode():
+        query = infer(
+            drawers := let(type_=Drawer, domain=None),
             and_(
                 container == fixed_connection.parent,
                 handle == fixed_connection.child,
                 container == prismatic_connection.child,
             ),
-        ).evaluate()
+        )
 
+    with rule_mode(query):
+        Add(drawers, Drawer(handle=handle, container=container))
+
+    solutions = query.evaluate()
     all_solutions = list(solutions)
 
     assert (
@@ -166,7 +170,7 @@ def test_rule_tree_with_an_alternative(doors_and_drawers_world):
     revolute_connection = let(type_=RevoluteConnection, domain=world.connections)
 
     with symbolic_mode():
-        query = an(
+        query = infer(
             entity(
                 views := let(type_=View, domain=None),
                 body == fixed_connection.parent,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import UserDict, defaultdict
+from collections import UserDict
 from contextlib import contextmanager
 from copy import copy
 
@@ -714,14 +714,31 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
             values = self.update_data_from_child(values)
+            if self.any_selected_inferred_vars_are_unbound(values):
+                continue
             self._warn_on_unbound_variables_(values.bindings, self.selected_variables)
-            if any(var._id_ not in values for var in self.selected_variables):
+            if self.any_selected_not_inferred_vars_are_unbound(values):
                 for binding in self.generate_combinations_with_unbound_variables(
                     values.bindings
                 ):
                     yield OperationResult(binding, self._is_false_, self)
             else:
                 yield values
+
+    def any_selected_inferred_vars_are_unbound(self, values: OperationResult) -> bool:
+        return any(
+            var._id_ not in values and (isinstance(var, Variable) and var._is_inferred_)
+            for var in self.selected_variables
+        )
+
+    def any_selected_not_inferred_vars_are_unbound(
+        self, values: OperationResult
+    ) -> bool:
+        return any(
+            var._id_ not in values
+            and not (isinstance(var, Variable) and var._is_inferred_)
+            for var in self.selected_variables
+        )
 
     def update_data_from_child(self, child_result: OperationResult):
         if self._child_:
@@ -752,10 +769,8 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             for var in self.selected_variables
         }
         for sol in generate_combinations(var_val_gen):
-            v = copy(sources)
             var_val = {var._id_: sol[var][var._id_] for var in self.selected_variables}
-            v.update(var_val)
-            yield v
+            yield {**sources, **var_val}
 
     def _warn_on_unbound_variables_(
         self,
@@ -835,20 +850,6 @@ class Entity(QueryObjectDescriptor[T], CanBehaveLikeAVariable[T]):
     @property
     def selected_variable(self):
         return self.selected_variables[0] if self.selected_variables else None
-
-
-@dataclass(eq=False)
-class Infer(An[T]):
-
-    def __post_init__(self):
-        super().__post_init__()
-        for v in self._child_.selected_variables:
-            v._is_inferred_ = True
-        self._node_.wrap_subtree = False
-
-    @property
-    def _plot_color_(self) -> ColorLegend:
-        return ColorLegend("Infer", "#EAC9FF")
 
 
 @dataclass
@@ -1318,10 +1319,7 @@ class BinaryOperator(SymbolicExpression, ABC):
         if not is_caching_enabled():
             return
         cache = self.cache if cache is None else cache
-        try:
-            filtered = {k: v for k, v in values.bindings.items() if k in cache.keys}
-        except AttributeError:
-            pass
+        filtered = {k: v for k, v in values.bindings.items() if k in cache.keys}
         cache.insert(filtered, output=self._is_false_)
 
     @property

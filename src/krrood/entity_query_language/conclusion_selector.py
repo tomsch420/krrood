@@ -112,17 +112,9 @@ class ExceptIf(ConclusionSelector):
         left_values = self.left._evaluate__(sources, parent=self)
         for left_value in left_values:
 
-            left_value.update(sources)
-
             self._is_false_ = left_value.is_false
             if self._is_false_:
                 yield left_value
-                continue
-
-            if is_caching_enabled() and self.right_cache.check(left_value.bindings):
-                yield from self.yield_final_output_from_cache(
-                    left_value.bindings, self.right_cache
-                )
                 continue
 
             right_yielded = False
@@ -169,7 +161,6 @@ class Alternative(ElseIf, ConclusionSelector):
                 self.update_conclusion(output, self.left._conclusion_)
             elif self.get_operand_truth_value(self.right, output):
                 self.update_conclusion(output, self.right._conclusion_)
-
             yield OperationResult(output.bindings, self._is_false_, self)
             self._conclusion_.clear()
 
