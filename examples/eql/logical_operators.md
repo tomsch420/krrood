@@ -12,9 +12,7 @@ kernelspec:
 ---
 # Logical Operators
 
-EQL supports a bunch of logical operators, namely {py:func}`krrood.entity_query_language.entity.and_`, 
-{py:func}`krrood.entity_query_language.entity.or_`, {py:func}`krrood.entity_query_language.entity.exists`, 
-{py:func}`krrood.entity_query_language.entity.for_all` and {py:func}`krrood.entity_query_language.entity.not_`.
+EQL supports a bunch of logical operators, namely `and_`, `or_`, `exists`, `for_all` and `not_`.
 When you want to use these, you have to rely on the operators imported from EQL.entity, since the python operators
 cannot be overloaded to the extent that EQL requires.
 
@@ -75,6 +73,8 @@ for dealing with collections and quantifying over them.
 
 For example, lets add to our model two drawers and a cabinet like object.
 ```{code-cell} ipython3
+from dataclasses import field
+
 @dataclass
 class View(Symbol):
     world: object = field(default=None, repr=False, kw_only=True)
@@ -103,6 +103,8 @@ world.views = [cabinet]
 Now lets look for all drawers that are not part of any cabinet in the world.
 
 ```{code-cell} ipython3
+from krrood.entity_query_language.entity import in_, for_all
+
 with symbolic_mode():
     # A variable ranging over drawers in the world
     drawer = let(Drawer, [drawer1, drawer2, drawer3])
@@ -110,28 +112,31 @@ with symbolic_mode():
     all_cabinets_drawers = views.drawers # A nested iterable where there is a list of views each with a list of drawers.
     # Find drawers that are NOT in the list 
     # (expected to find only the drawer3 since it is not part of any cabinet)
-    non_cabinet_drawers_query = an(entity(d, for_all(all_cabinets_drawers, not_(in_(drawer, all_cabinets_drawers)))))
+    condition = for_all(all_cabinets_drawers, not_(in_(drawer, all_cabinets_drawers)))
+    non_cabinet_drawers_query = an(entity(drawer, condition))
 
 found_non_cabinet_drawers = list(non_cabinet_drawers_query.evaluate())
 assert len(found_non_cabinet_drawers) == 1
 print(*found_non_cabinet_drawers, sep="\n")
 ```
 
-Now if we look for drawers that exist in a cabinet, we should find drawer1 and drawer2.
+Now if we look for drawers that are part of any cabinet using `exists` we should find the other two drawers.
 
 ```{code-cell} ipython3
+from krrood.entity_query_language.entity import exists
+
 with symbolic_mode():
     # A variable ranging over drawers in the world
     drawer = let(Drawer, [drawer1, drawer2, drawer3])
-    views = let(CabinetLike, world.views)
-    all_cabinets_drawers = views.drawers # A nested iterable where there is a list of views each with a list of drawers.
+    cabinets = let(CabinetLike, world.views)
+    all_cabinets_drawers = cabinets.drawers # A nested iterable where there is a list of views each with a list of drawers.
     # Find drawers that are NOT in the list 
-    # (expected to find only the drawer3 since it is not part of any cabinet)
-    cabinet_drawers_query = an(entity(d, exists(all_cabinets_drawers, in_(drawer, all_cabinets_drawers))))
-
+    # (expected to find drawer1 and drawer2 since they are part of a cabinet)
+    condition = exists(drawer, in_(drawer, all_cabinets_drawers))
+    cabinet_drawers_query = an(entity(drawer, condition))
 found_cabinet_drawers = list(cabinet_drawers_query.evaluate())
-assert len(found_non_cabinet_drawers) == 2
-print(*found_non_cabinet_drawers, sep="\n")
+assert len(found_cabinet_drawers) == 2
+print(*found_cabinet_drawers, sep="\n")
 ```
 
 In EQL Negation is a filter that chooses only the False values of the expression that was negated.
