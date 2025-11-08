@@ -47,7 +47,7 @@ from .cache_data import (
     SeenSet,
     IndexedCache,
 )
-from .failures import MultipleSolutionFound, NoSolutionFound
+from .failures import MultipleSolutionFound, NoSolutionFound, UsageError
 from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
 
@@ -85,29 +85,32 @@ RWXNode.enclosed_name = "Selected Variable"
 
 @dataclass
 class OperationResult:
+    """
+    A data structure that carries information about the result of an operation in EQL.
+    """
+
     bindings: Dict[int, HashedValue]
+    """
+    The bindings resulting from the operation, mapping variable IDs to their values.
+    """
     is_false: bool
+    """
+    Whether the operation resulted in a false value (i.e., The operation condition was not satisfied)
+    """
     operand: SymbolicExpression
+    """
+    The operand that produced the result.
+    """
 
     @cached_property
     def is_true(self):
         return not self.is_false
 
-    @cached_property
-    def value(self):
-        return self.bindings[self.operand._id_]
-
-    def update(self, new_bindings: Dict[int, HashedValue]):
-        self.bindings.update(new_bindings)
-
     def __contains__(self, item):
         return item in self.bindings
 
     def __getitem__(self, item):
-        try:
-            return self.bindings[item]
-        except KeyError:
-            pass
+        return self.bindings[item]
 
     def __setitem__(self, key, value):
         self.bindings[key] = value
@@ -589,11 +592,11 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             raise NotImplementedError(f"Unknown child type {type(self._child_)}")
 
     def __invert__(self):
-        raise NotImplementedError(
-            f"Symbolic NOT operations on {ResultQuantifier} operands "
-            f"are not allowed, you can negate the conditions or {QueryObjectDescriptor}"
-            f" instead as negating quantifiers is most likely not what you want"
-            f" as it is ambiguous."
+        raise UsageError(
+            f"Symbolic NOT operations on {QueryObjectDescriptor} and {ResultQuantifier}"
+            f" operands are not allowed, you can negate the conditions instead,"
+            f" as negating quantifiers is most likely not what you want"
+            f" because it is ambiguous and can be very expensive to compute."
         )
 
     def visualize(
@@ -814,7 +817,12 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         return vars
 
     def __invert__(self):
-        raise NotImplementedError("Inverting Selections is not allowed")
+        raise UsageError(
+            f"Symbolic NOT operations on {QueryObjectDescriptor} and {ResultQuantifier}"
+            f" operands are not allowed, you can negate the conditions instead,"
+            f" as negating quantifiers is most likely not what you want"
+            f" because it is ambiguous and can be very expensive to compute."
+        )
 
     def __repr__(self):
         return self._name_
@@ -1532,9 +1540,6 @@ class AND(LogicalBinaryOperator):
             self.update_cache(right_value, self.right_cache)
             yield OperationResult(right_value.bindings, self._is_false_, self)
 
-    def __invert__(self):
-        return optimize_or(self.left.__invert__(), self.right.__invert__())
-
 
 @dataclass(eq=False)
 class OR(LogicalBinaryOperator, ABC):
@@ -1606,9 +1611,6 @@ class OR(LogicalBinaryOperator, ABC):
             yield OperationResult(right_value.bindings, self._is_false_, self)
 
         self.right_evaluated = False
-
-    def __invert__(self):
-        return AND(self.left.__invert__(), self.right.__invert__())
 
 
 @dataclass(eq=False)

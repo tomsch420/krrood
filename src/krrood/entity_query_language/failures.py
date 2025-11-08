@@ -17,6 +17,7 @@ class MultipleSolutionFound(Exception):
     :param first_val: The first solution encountered.
     :param second_val: The second solution encountered.
     """
+
     def __init__(self, first_val, second_val):
         super(MultipleSolutionFound, self).__init__(
             f"Multiple solutions found, the first two are {first_val}\n{second_val}"
@@ -27,5 +28,17 @@ class NoSolutionFound(Exception):
     """
     Raised when a query does not yield any solution.
     """
+
     def __init__(self, expression: SymbolicExpression):
-        super(NoSolutionFound, self).__init__(f"No solution found for expression {expression}")
+        super(NoSolutionFound, self).__init__(
+            f"No solution found for expression {expression}"
+        )
+
+
+class UsageError(Exception):
+    """
+    Raised when there is an incorrect usage of the entity query language API.
+    """
+
+    def __init__(self, message: str):
+        super(UsageError, self).__init__(message)
