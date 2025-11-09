@@ -1,8 +1,8 @@
 from dataclasses import dataclass
+from functools import cached_property
 from math import factorial
 
 import pytest
-from propcache import cached_property
 
 from krrood.entity_query_language.entity import (
     and_,
