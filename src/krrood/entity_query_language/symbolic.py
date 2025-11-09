@@ -1819,6 +1819,7 @@ def symbolic_mode(
     symbolic Variables instead of real instances.
 
     :param query: Optional symbolic expression to also enter/exit as a context.
+    :param mode: The symbolic mode to set. (Default: EQLMode.Query)
     """
     prev_mode = _symbolic_mode.get()
     try:
@@ -1834,7 +1835,7 @@ def symbolic_mode(
 
 def properties_to_expression_tree(
     var: CanBehaveLikeAVariable, properties: Dict[str, Any]
-) -> Tuple[SymbolicExpression, List[SymbolicExpression]]:
+) -> SymbolicExpression:
     """
     Convert properties of a variable to a symbolic expression.
     """
@@ -1845,7 +1846,7 @@ def properties_to_expression_tree(
             expression = conditions[0]
         elif len(conditions) > 1:
             expression = chained_logic(AND, *conditions)
-    return expression, [op.left for op in conditions]
+    return expression
 
 
 def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:

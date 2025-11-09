@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from math import factorial
 
 import pytest
+from propcache import cached_property
 
 from krrood.entity_query_language.entity import (
     and_,
@@ -581,7 +582,7 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     ), "All generated items should be of type Handle."
 
 
-def test_generate_with_using_inherited_binary_predicate(handles_and_containers_world):
+def test_generate_with_using_inherited_predicate(handles_and_containers_world):
     """
     Test the generation of handles in the HandlesAndContainersWorld.
     """
@@ -592,10 +593,6 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         body1: Body
         body2: Body
         body3: Body
-
-        @classmethod
-        def holds_direct(cls, body1, body2, body3):
-            return body1.name[0] == body2.name[0] == body3.name[0]
 
         def __call__(self):
             return self.body1.name[0] == self.body2.name[0] == self.body3.name[0]
@@ -610,6 +607,7 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
                 ),
                 body1 != body2,
                 body2 != body3,
+                body3 != body1,
                 HaveSameFirstCharacter(
                     body1,
                     body2,
@@ -624,7 +622,6 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         for body_pair in body_pairs
     ]
 
-    print(body_pairs)
     expected = factorial(
         len([h for h in world.bodies if isinstance(h, Handle)])
     ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
@@ -637,7 +634,7 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         for b1 in world.bodies
         for b2 in world.bodies
         for b3 in world.bodies
-        if (b1, b2, b3) not in body_pairs
+        if b1 != b2 and b2 != b3 and b1 != b3 and (b1, b2, b3) not in body_pairs
     ), ("All not generated items " "should not satisfy the " "predicate.")
 
 
@@ -649,20 +646,17 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
 
     @dataclass
     class HaveSameFirstCharacter(BinaryPredicate):
-        body1: Body
-        body2: Body
 
-        @classmethod
-        def holds_direct(cls, body1, body2):
-            return body1.name[0] == body2.name[0]
+        @cached_property
+        def body1(self) -> Body:
+            return self.source.instance
 
-        @property
-        def domain_value(self):
-            return self.body1
+        @cached_property
+        def body2(self) -> Body:
+            return self.target.instance
 
-        @property
-        def range_value(self):
-            return self.body2
+        def __call__(self):
+            return self.body1.name[0] == self.body2.name[0]
 
     with symbolic_mode():
         query = a(

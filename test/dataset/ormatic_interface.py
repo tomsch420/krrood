@@ -50,6 +50,10 @@ class PredicateClassRelationDAO(
 
     inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
 
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
     source_id: Mapped[int] = mapped_column(
         ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
         nullable=True,
@@ -57,11 +61,6 @@ class PredicateClassRelationDAO(
     )
     target_id: Mapped[int] = mapped_column(
         ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    predicate_id: Mapped[int] = mapped_column(
-        ForeignKey("BinaryPredicateDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
@@ -85,12 +84,11 @@ class PredicateClassRelationDAO(
         foreign_keys=[target_id],
         post_update=True,
     )
-    predicate: Mapped[BinaryPredicateDAO] = relationship(
-        "BinaryPredicateDAO",
-        uselist=False,
-        foreign_keys=[predicate_id],
-        post_update=True,
-    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "PredicateClassRelationDAO",
+    }
 
 
 class SymbolDAO(Base, DataAccessObject[krrood.entity_query_language.predicate.Symbol]):
@@ -786,6 +784,32 @@ class BinaryPredicateDAO(
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    inferred: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+    source_id: Mapped[int] = mapped_column(
+        ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("WrappedInstanceMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    source: Mapped[WrappedInstanceMappingDAO] = relationship(
+        "WrappedInstanceMappingDAO",
+        uselist=False,
+        foreign_keys=[source_id],
+        post_update=True,
+    )
+    target: Mapped[WrappedInstanceMappingDAO] = relationship(
+        "WrappedInstanceMappingDAO",
+        uselist=False,
+        foreign_keys=[target_id],
+        post_update=True,
     )
 
     __mapper_args__ = {
