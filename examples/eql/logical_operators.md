@@ -130,7 +130,7 @@ with symbolic_mode():
     drawer = let(Drawer, [drawer1, drawer2, drawer3])
     cabinets = let(CabinetLike, world.views)
     all_cabinets_drawers = cabinets.drawers # A nested iterable where there is a list of views each with a list of drawers.
-    # Find drawers that are NOT in the list 
+    # Find drawers that are in the list
     # (expected to find drawer1 and drawer2 since they are part of a cabinet)
     condition = exists(drawer, in_(drawer, all_cabinets_drawers))
     cabinet_drawers_query = an(entity(drawer, condition))
