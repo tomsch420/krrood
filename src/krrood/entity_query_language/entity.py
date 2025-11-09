@@ -43,23 +43,22 @@ T = TypeVar("T")  # Define type variable "T"
 
 def an(
     entity_: Optional[Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]] = None,
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
+    at_least: Optional[int] = None,
+    at_most: Optional[int] = None,
+    exactly: Optional[int] = None,
 ) -> Union[An[T], T, SymbolicExpression[T]]:
     """
     Select a single element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :type entity_: Union[SetOf[T], Entity[T]]
-    :param properties: Conditions that define the entity.
-    :type properties: Union[SymbolicExpression, bool]
-    :param has_type: Optional type to constrain the selected variable.
-    :type has_type: Optional[Type[T]]
+    :param at_least: Optional minimum number of results.
+    :param at_most: Optional maximum number of results.
+    :param exactly: Optional exact number of results.
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
     return select_one_or_select_many_or_infer(
-        An, entity_, *properties, has_type=has_type
+        An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
     )
 
 
@@ -71,58 +70,36 @@ This is an alias to accommodate for words not starting with vowels.
 
 def the(
     entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
 ) -> Union[The[T], T]:
     """
     Select the unique element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :type entity_: Union[SetOf[T], Entity[T]]
-    :param properties: Conditions that define the entity.
-    :type properties: Union[SymbolicExpression, bool]
-    :param has_type: Optional type to constrain the selected variable.
-    :type has_type: Optional[Type[T]]
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_infer(
-        The, entity_, *properties, has_type=has_type
-    )
+    return select_one_or_select_many_or_infer(The, entity_)
 
 
 def infer(
     entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
 ) -> Infer[T]:
-    return select_one_or_select_many_or_infer(
-        Infer, entity_, *properties, has_type=has_type
-    )
+    return select_one_or_select_many_or_infer(Infer, entity_)
 
 
 def select_one_or_select_many_or_infer(
     quantifier: Union[Type[An], Type[The], Type[Infer]],
     entity_: Union[SetOf[T], Entity[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
+    **kwargs,
 ) -> Union[An[T], The[T], Infer[T]]:
-    if isinstance(entity_, type):
-        entity_ = entity_()
-    elif entity_ is None and has_type:
-        entity_ = has_type()
     if isinstance(entity_, (Entity, SetOf)):
-        q = quantifier(entity_)
-    elif isinstance(entity_, ResultQuantifier) and not properties:
+        q = quantifier(entity_, **kwargs)
+    elif isinstance(entity_, ResultQuantifier):
         if isinstance(entity_, quantifier):
             q = entity_
         else:
             entity_._child_._parent_ = None
-            q = quantifier(entity_._child_)
-    elif isinstance(entity_, CanBehaveLikeAVariable):
-        q = quantifier(entity(entity_, *properties))
-    elif isinstance(entity_, (list, tuple)):
-        q = quantifier(set_of(entity_, *properties))
+            q = quantifier(entity_._child_, **kwargs)
     else:
         raise ValueError(f"Invalid entity: {entity_}")
     return q

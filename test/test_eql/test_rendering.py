@@ -80,7 +80,11 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
                 r.child == handle,
             )
         )
-        rule = infer(views := View(), fixed_connection, prismatic_connection)
+        rule = infer(
+            entity(
+                views := let(View, domain=None), fixed_connection, prismatic_connection
+            )
+        )
 
     with rule_mode(rule):
         Add(views, Drawer(handle=handle, container=body, world=world))

@@ -47,7 +47,13 @@ from .cache_data import (
     SeenSet,
     IndexedCache,
 )
-from .failures import MultipleSolutionFound, NoSolutionFound, UsageError
+from .failures import (
+    MultipleSolutionFound,
+    NoSolutionFound,
+    UsageError,
+    GreaterThanExpectedNumberOfSolutions,
+    LessThanExpectedNumberOfSolutions,
+)
 from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
 
@@ -644,30 +650,131 @@ class UnificationDict(UserDict):
         return super().__getitem__(key).value
 
 
-@dataclass(eq=False)
-class The(ResultQuantifier[T]):
-    """
-    Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
-    """
-
-    def evaluate(
-        self,
-    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
-        all_results = []
-        for result in super().evaluate():
-            all_results.append(result)
-            if len(all_results) > 1:
-                raise MultipleSolutionFound(all_results[0], all_results[1])
-        if len(all_results) == 0:
-            raise NoSolutionFound(self._child_)
-        return all_results[0]
-
-
 @dataclass(eq=False, repr=False)
 class An(ResultQuantifier[T]):
     """Quantifier that yields all matching results one by one."""
 
-    ...
+    _at_least_: Optional[int] = None
+    _at_most_: Optional[int] = None
+    _exactly_: Optional[int] = None
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self._exactly_ and (self._at_least_ or self._at_most_):
+            raise UsageError(
+                f"exactly is specified, but either at_least or at_most is also specified,"
+                f"cannot specify both."
+            )
+        if (
+            (self._at_least_ and self._at_least_ < 0)
+            or (self._at_most_ and self._at_most_ < 0)
+            or (self._exactly_ and self._exactly_ < 0)
+        ):
+            raise UsageError(
+                f"at_least, at_most, and exactly must be positive integers."
+            )
+        if self._at_most_ and self._at_least_:
+            if self._at_most_ == self._at_least_:
+                self._exactly_ = self._at_least_
+                self._at_most_ = None
+                self._at_least_ = None
+            elif self._at_most_ < self._at_least_:
+                raise UsageError(
+                    f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
+                )
+
+    @cached_property
+    def _upper_limit_(self) -> Optional[int]:
+        """
+        :return: The upper limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_most_:
+            return self._at_most_
+        else:
+            return None
+
+    @cached_property
+    def _lower_limit_(self) -> Optional[int]:
+        """
+        :return: The lower limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_least_:
+            return self._at_least_
+        else:
+            return None
+
+    def __repr__(self):
+        name = f"{self.__class__.__name__}"
+        if self._at_least_ or self._at_most_ or self._exactly_:
+            name += "("
+        if self._at_least_ and not self._at_most_:
+            name += f"n>={self._at_least_})"
+        elif self._at_most_ and not self._at_least_:
+            name += f"n<={self._at_most_})"
+        elif self._at_least_ and self._at_most_:
+            name += f"{self._at_least_}<=n<={self._at_most_})"
+        elif self._exactly_:
+            name += f"n={self._exactly_})"
+        return name
+
+    def evaluate(
+        self,
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        """
+        Evaluate the query graph while monitoring the result count and raising when the expected count is violated.
+        """
+        result_count = 0
+        for result in super().evaluate():
+            result_count += 1
+            self._assert_less_than_upper_limit_(result_count)
+            yield result
+        self._assert_more_than_lower_limit_(result_count)
+
+    def _assert_less_than_upper_limit_(self, count: int):
+        """
+        Assert that the count is less than the upper limit.
+
+        :param count:
+        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
+        """
+        if self._upper_limit_ and count > self._upper_limit_:
+            raise GreaterThanExpectedNumberOfSolutions(self, self._exactly_)
+
+    def _assert_more_than_lower_limit_(self, count: int):
+        """
+        Assert that the count is more than the lower limit.
+
+        :param count: The current count.
+        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
+        :raises NoSolutionFound: If no solution is found.
+        """
+        if self._lower_limit_ and count < self._lower_limit_:
+            raise LessThanExpectedNumberOfSolutions(self, self._exactly_, count)
+
+
+@dataclass(eq=False, repr=False)
+class The(An[T]):
+    """
+    Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
+    """
+
+    _exactly_: int = field(init=False, default=1)
+    _at_least_: int = field(init=False, default=None)
+    _at_most_: int = field(init=False, default=None)
+
+    def evaluate(
+        self,
+    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
+        try:
+            return list(super().evaluate())[0]
+        except LessThanExpectedNumberOfSolutions:
+            raise NoSolutionFound(self)
+        except GreaterThanExpectedNumberOfSolutions:
+            raise MultipleSolutionFound(self)
 
 
 @dataclass(eq=False)
