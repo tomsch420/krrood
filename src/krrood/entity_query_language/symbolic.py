@@ -47,7 +47,12 @@ from .cache_data import (
     SeenSet,
     IndexedCache,
 )
-from .failures import MultipleSolutionFound, NoSolutionFound, UsageError
+from .failures import (
+    MultipleSolutionFound,
+    NoSolutionFound,
+    UsageError,
+    UnsupportedNegation,
+)
 from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
 
@@ -592,12 +597,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             raise NotImplementedError(f"Unknown child type {type(self._child_)}")
 
     def __invert__(self):
-        raise UsageError(
-            f"Symbolic NOT operations on {QueryObjectDescriptor} and {ResultQuantifier}"
-            f" operands are not allowed, you can negate the conditions instead,"
-            f" as negating quantifiers is most likely not what you want"
-            f" because it is ambiguous and can be very expensive to compute."
-        )
+        raise UnsupportedNegation(self.__class__)
 
     def visualize(
         self,
@@ -817,12 +817,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         return vars
 
     def __invert__(self):
-        raise UsageError(
-            f"Symbolic NOT operations on {QueryObjectDescriptor} and {ResultQuantifier}"
-            f" operands are not allowed, you can negate the conditions instead,"
-            f" as negating quantifiers is most likely not what you want"
-            f" because it is ambiguous and can be very expensive to compute."
-        )
+        raise UnsupportedNegation(self.__class__)
 
     def __repr__(self):
         return self._name_

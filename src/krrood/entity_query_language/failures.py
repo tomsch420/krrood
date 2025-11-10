@@ -3,7 +3,7 @@ from __future__ import annotations
 """
 Custom exception types used by entity_query_language.
 """
-from typing_extensions import TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from .symbolic import SymbolicExpression
@@ -42,3 +42,25 @@ class UsageError(Exception):
 
     def __init__(self, message: str):
         super(UsageError, self).__init__(message)
+
+
+class UnsupportedOperation(UsageError):
+    """
+    Raised when an operation is not supported by the entity query language API.
+    """
+
+    ...
+
+
+class UnsupportedNegation(UnsupportedOperation):
+    """
+    Raised when negating quantifiers.
+    """
+
+    def __init__(self, operation_type: Type[SymbolicExpression]):
+        super().__init__(
+            f"Symbolic NOT operations on {operation_type} types"
+            f" operands are not allowed, you can negate the conditions instead,"
+            f" as negating quantifiers is most likely not what you want"
+            f" because it is ambiguous and can be very expensive to compute."
+        )
