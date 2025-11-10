@@ -4,12 +4,12 @@ from typing_extensions import Union, TYPE_CHECKING
 
 from .conclusion_selector import ExceptIf, Alternative, Next
 from .enums import RDREdge
-from .hashed_data import T
 from .symbolic import (
     SymbolicExpression,
     chained_logic,
     AND,
     BinaryOperator,
+    T,
 )
 
 if TYPE_CHECKING:

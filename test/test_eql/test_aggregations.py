@@ -60,12 +60,16 @@ def test_exists_and_for_all(handles_and_containers_world):
         my_drawers = an(
             entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
         )
-        drawers = cabinets.drawers
-        query = an(entity(my_drawers, for_all(drawers, not_(in_(my_drawers, drawers)))))
+        cabinet_drawers = cabinets.drawers
+        query = an(
+            entity(
+                my_drawers,
+                for_all(cabinet_drawers, not_(in_(my_drawers, cabinet_drawers))),
+            )
+        )
 
     results = list(query.evaluate())
 
-    # We should get one row for each drawer and the parent view preserved
     assert len(results) == 0
 
     with symbolic_mode():

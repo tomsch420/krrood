@@ -3,14 +3,14 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Iterable
 
-from typing_extensions import Any, Optional, List
-from typing_extensions import Dict
+from typing_extensions import Any, Optional, List, Dict
 
 from .enums import RDREdge
 from .hashed_data import HashedValue
 from .rxnode import ColorLegend
-from .symbolic import SymbolicExpression, T, Variable
+from .symbolic import SymbolicExpression, T, Variable, OperationResult, An
 
 
 @dataclass(eq=False)
@@ -69,9 +69,8 @@ class Set(Conclusion[T]):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
-    ) -> Dict[int, HashedValue]:
+    ) -> Iterable[OperationResult]:
         self._eval_parent_ = parent
         self._yield_when_false_ = False
         if self.var._var_._id_ not in sources:
@@ -82,7 +81,7 @@ class Set(Conclusion[T]):
         sources[self.var._var_._id_] = next(
             iter(self.value._evaluate__(sources, parent=self))
         )[self.value._id_]
-        return sources
+        yield OperationResult(sources, False, self)
 
 
 @dataclass(eq=False)
@@ -92,11 +91,24 @@ class Add(Conclusion[T]):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
-    ) -> Dict[int, HashedValue]:
+    ) -> Iterable[OperationResult]:
         self._eval_parent_ = parent
         self._yield_when_false_ = False
         v = next(iter(self.value._evaluate__(sources, parent=self)))[self.value._id_]
         sources[self.var._var_._id_] = v
-        return sources
+        yield OperationResult(sources, False, self)
+
+
+@dataclass(eq=False)
+class Infer(An[T]):
+
+    def __post_init__(self):
+        super().__post_init__()
+        for v in self._child_.selected_variables:
+            v._is_inferred_ = True
+        self._node_.wrap_subtree = False
+
+    @property
+    def _plot_color_(self) -> ColorLegend:
+        return ColorLegend("Infer", "#EAC9FF")

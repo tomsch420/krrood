@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 from math import factorial
 
 import pytest
@@ -19,7 +20,10 @@ from krrood.entity_query_language.entity import (
     exists,
     flatten,
 )
-from krrood.entity_query_language.failures import MultipleSolutionFound
+from krrood.entity_query_language.failures import (
+    MultipleSolutionFound,
+    UnsupportedNegation,
+)
 from krrood.entity_query_language.predicate import (
     HasType,
     symbolic_function,
@@ -363,16 +367,20 @@ def test_generate_with_more_than_one_source_optimized(handles_and_containers_wor
     world = handles_and_containers_world
 
     with symbolic_mode():
-        q1 = a(
-            fixed_connection := let(FixedConnection, world.connections),
-            HasType(fixed_connection.parent, Container),
-            HasType(fixed_connection.child, Handle),
+        q1 = an(
+            entity(
+                fixed_connection := let(FixedConnection, world.connections),
+                HasType(fixed_connection.parent, Container),
+                HasType(fixed_connection.child, Handle),
+            )
         )
-        q2 = a(
-            prismatic_connection := let(PrismaticConnection, world.connections),
-            prismatic_connection.child == fixed_connection.parent,
+        q2 = an(
+            entity(
+                prismatic_connection := let(PrismaticConnection, world.connections),
+                prismatic_connection.child == fixed_connection.parent,
+            )
         )
-        query = a(set_of([q1, q2]))
+        query = a(set_of((fixed_connection, prismatic_connection), q1, q2))
 
     # query._render_tree_()
 
@@ -577,7 +585,7 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     ), "All generated items should be of type Handle."
 
 
-def test_generate_with_using_inherited_binary_predicate(handles_and_containers_world):
+def test_generate_with_using_inherited_predicate(handles_and_containers_world):
     """
     Test the generation of handles in the HandlesAndContainersWorld.
     """
@@ -588,10 +596,6 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         body1: Body
         body2: Body
         body3: Body
-
-        @classmethod
-        def holds_direct(cls, body1, body2, body3):
-            return body1.name[0] == body2.name[0] == body3.name[0]
 
         def __call__(self):
             return self.body1.name[0] == self.body2.name[0] == self.body3.name[0]
@@ -606,6 +610,7 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
                 ),
                 body1 != body2,
                 body2 != body3,
+                body3 != body1,
                 HaveSameFirstCharacter(
                     body1,
                     body2,
@@ -620,7 +625,6 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         for body_pair in body_pairs
     ]
 
-    print(body_pairs)
     expected = factorial(
         len([h for h in world.bodies if isinstance(h, Handle)])
     ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
@@ -633,7 +637,7 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
         for b1 in world.bodies
         for b2 in world.bodies
         for b3 in world.bodies
-        if (b1, b2, b3) not in body_pairs
+        if b1 != b2 and b2 != b3 and b1 != b3 and (b1, b2, b3) not in body_pairs
     ), ("All not generated items " "should not satisfy the " "predicate.")
 
 
@@ -645,20 +649,17 @@ def test_generate_with_using_inherited_binary_predicate(handles_and_containers_w
 
     @dataclass
     class HaveSameFirstCharacter(BinaryPredicate):
-        body1: Body
-        body2: Body
 
-        @classmethod
-        def holds_direct(cls, body1, body2):
-            return body1.name[0] == body2.name[0]
+        @cached_property
+        def body1(self) -> Body:
+            return self.source.instance
 
-        @property
-        def domain_value(self):
-            return self.body1
+        @cached_property
+        def body2(self) -> Body:
+            return self.target.instance
 
-        @property
-        def range_value(self):
-            return self.body2
+        def __call__(self):
+            return self.body1.name[0] == self.body2.name[0]
 
     with symbolic_mode():
         query = a(
@@ -962,3 +963,21 @@ def test_reuse_of_subquery_with_not(handles_and_containers_world):
     assert isinstance(results[0], Handle)
     assert len(results_with_not) == 1
     assert isinstance(results_with_not[0], Container)
+
+
+def test_unsupported_negation(handles_and_containers_world):
+    world = handles_and_containers_world
+    with symbolic_mode():
+        body = let(type_=Body, domain=world.bodies)
+        with pytest.raises(UnsupportedNegation):
+            query = not_(
+                an(
+                    entity(
+                        body,
+                        body.name.endswith("1"),
+                    )
+                )
+            )
+
+        with pytest.raises(UnsupportedNegation):
+            query = an(not_(entity(body, body.name.endswith("1"))))

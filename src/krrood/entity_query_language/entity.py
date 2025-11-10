@@ -23,13 +23,13 @@ from .symbolic import (
     From,
     symbolic_mode,
     Variable,
-    Infer,
-    _optimize_or,
+    optimize_or,
     Flatten,
     ForAll,
     Exists,
     Literal,
 )
+from .conclusion import Infer
 
 from .predicate import (
     Predicate,
@@ -172,28 +172,14 @@ def _extract_variables_and_expression(
     selected_variables: Iterable[T], *properties: Union[SymbolicExpression, bool]
 ) -> Tuple[List[T], SymbolicExpression]:
     """
-    Extracts the variables and expressions from the selected variables, this is usefule when
-    the selected variables are not all variables but some are expressions like A/An/The.
+    Extracts the variables and expressions from the selected variables.
 
     :param selected_variables: Iterable of variables to select in the result set.
-    :type selected_variables: Iterable[T]
     :param properties: Conditions on the selected variables.
-    :type properties: Union[SymbolicExpression, bool]
     :return: Tuple of selected variables and expressions.
-    :rtype: Tuple[List[T], List[SymbolicExpression]]
     """
-    final_expression_list = list(properties)
-    expression_list = []
+    expression_list = list(properties)
     selected_variables = list(selected_variables)
-    for i, var in enumerate(selected_variables):
-        if isinstance(var, ResultQuantifier):
-            result_quantifier = var
-            var = var._var_
-            expression_list.append(result_quantifier)
-            # if result_quantifier._child_._child_:
-            #     expression_list.append(result_quantifier._child_._child_)
-            selected_variables[i] = var
-    expression_list += final_expression_list
     expression = None
     if len(expression_list) > 0:
         expression = (
@@ -255,7 +241,7 @@ def or_(*conditions):
     :return: An OR operator joining the conditions.
     :rtype: SymbolicExpression
     """
-    return chained_logic(_optimize_or, *conditions)
+    return chained_logic(optimize_or, *conditions)
 
 
 def not_(operand: SymbolicExpression):
