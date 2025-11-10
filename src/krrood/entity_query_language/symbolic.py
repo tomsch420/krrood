@@ -209,25 +209,6 @@ class SymbolicExpression(Generic[T], ABC):
         """
         pass
 
-    @staticmethod
-    def get_operand_truth_value(
-        operand: SymbolicExpression[T], operand_value: OperationResult
-    ) -> bool:
-        """
-        Determine the truth value of an operand based on its type and value.
-
-        :param operand: The evaluated operand.
-        :param operand_value: The value of the operand.
-        :return: The truth value of the operand.
-        """
-        if isinstance(
-            operand,
-            (LogicalOperator, Comparator, ResultQuantifier, Not, QuantifiedConditional),
-        ):
-            return not operand._is_false_
-        else:
-            return bool(operand_value[operand._id_])
-
     def _add_conclusion_(self, conclusion: Conclusion):
         self._conclusion_.add(conclusion)
 
@@ -1021,11 +1002,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     Whether this variable should be inferred.
     """
-    _is_indexed_: bool = field(default=True, repr=False)
-    """
-    Whether this variable cache is indexed or flat.
-    """
-
     _child_vars_: Optional[Dict[str, SymbolicExpression]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -1069,7 +1045,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         """
@@ -1082,8 +1057,10 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             yield OperationResult(sources, not bool(sources[self._id_]), self)
         elif self._domain_:
-            for v in self:
-                yield OperationResult({**sources, **v}, False, self)
+            for v in self._domain_:
+                yield OperationResult(
+                    {**sources, self._id_: HashedValue(v)}, False, self
+                )
         elif self._should_be_instantiated_:
             yield from self._instantiate_using_child_vars_and_yield_results_(sources)
         else:
@@ -1107,7 +1084,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
     ):
-        # Use backtracking generator for early pruning instead of full Cartesian product
         yield from generate_combinations(
             {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
         )
@@ -1153,10 +1129,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _plot_color_(self, value: ColorLegend):
         self._plot_color__ = value
         self._node_.color = value
-
-    def __iter__(self):
-        for v in self._domain_:
-            yield {self._id_: HashedValue(v)}
 
     def __repr__(self):
         return self._name_
@@ -1596,7 +1568,7 @@ class Not(LogicalOperator[T]):
         sources = sources or {}
         self._eval_parent_ = parent
         for v in self._child_._evaluate__(sources, parent=self):
-            self._is_false_ = self.get_operand_truth_value(self._child_, v)
+            self._is_false_ = v.is_true
             yield OperationResult(v.bindings, self._is_false_, self)
 
     @property
@@ -1873,9 +1845,7 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         # Evaluate the condition under this particular universal value
         for condition_val in self.condition._evaluate__(sources, parent=self):
-            self._is_false_ = not self.get_operand_truth_value(
-                self.condition, condition_val
-            )
+            self._is_false_ = condition_val.is_false
             if not self._is_false_:
                 yield OperationResult(condition_val.bindings, False, self)
                 break
