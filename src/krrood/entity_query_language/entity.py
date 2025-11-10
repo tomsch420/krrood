@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .symbol_graph import SymbolGraph
+
 """
 User interface (grammar & vocabulary) for entity query language.
 """
@@ -16,44 +18,47 @@ from .symbolic import (
     AND,
     Comparator,
     chained_logic,
-    Not,
     CanBehaveLikeAVariable,
     ResultQuantifier,
     From,
     symbolic_mode,
     Variable,
-    Infer,
-    _optimize_or,
+    optimize_or,
     Flatten,
-    Concatenate,
     ForAll,
     Exists,
+    Literal,
 )
-from .symbol_graph import symbols_registry
-from .predicate import Predicate, predicate
+from .conclusion import Infer
+
+from .predicate import (
+    Predicate,
+    symbolic_function,  # type: ignore
+    BinaryPredicate,
+    Symbol,  # type: ignore
+)
 
 T = TypeVar("T")  # Define type variable "T"
 
 
 def an(
     entity_: Optional[Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]] = None,
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
+    at_least: Optional[int] = None,
+    at_most: Optional[int] = None,
+    exactly: Optional[int] = None,
 ) -> Union[An[T], T, SymbolicExpression[T]]:
     """
     Select a single element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :type entity_: Union[SetOf[T], Entity[T]]
-    :param properties: Conditions that define the entity.
-    :type properties: Union[SymbolicExpression, bool]
-    :param has_type: Optional type to constrain the selected variable.
-    :type has_type: Optional[Type[T]]
+    :param at_least: Optional minimum number of results.
+    :param at_most: Optional maximum number of results.
+    :param exactly: Optional exact number of results.
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
     return select_one_or_select_many_or_infer(
-        An, entity_, *properties, has_type=has_type
+        An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
     )
 
 
@@ -65,65 +70,44 @@ This is an alias to accommodate for words not starting with vowels.
 
 def the(
     entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
 ) -> Union[The[T], T]:
     """
     Select the unique element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :type entity_: Union[SetOf[T], Entity[T]]
-    :param properties: Conditions that define the entity.
-    :type properties: Union[SymbolicExpression, bool]
-    :param has_type: Optional type to constrain the selected variable.
-    :type has_type: Optional[Type[T]]
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_infer(
-        The, entity_, *properties, has_type=has_type
-    )
+    return select_one_or_select_many_or_infer(The, entity_)
 
 
 def infer(
     entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
 ) -> Infer[T]:
-    return select_one_or_select_many_or_infer(
-        Infer, entity_, *properties, has_type=has_type
-    )
+    return select_one_or_select_many_or_infer(Infer, entity_)
 
 
 def select_one_or_select_many_or_infer(
     quantifier: Union[Type[An], Type[The], Type[Infer]],
     entity_: Union[SetOf[T], Entity[T], Type[T], None],
-    *properties: Union[SymbolicExpression, bool, Predicate],
-    has_type: Optional[Type[T]] = None,
+    **kwargs,
 ) -> Union[An[T], The[T], Infer[T]]:
-    if isinstance(entity_, type):
-        entity_ = entity_()
-    elif entity_ is None and has_type:
-        entity_ = has_type()
     if isinstance(entity_, (Entity, SetOf)):
-        q = quantifier(entity_)
-    elif isinstance(entity_, ResultQuantifier) and not properties:
+        q = quantifier(entity_, **kwargs)
+    elif isinstance(entity_, ResultQuantifier):
         if isinstance(entity_, quantifier):
             q = entity_
         else:
             entity_._child_._parent_ = None
-            q = quantifier(entity_._child_)
-    elif isinstance(entity_, CanBehaveLikeAVariable):
-        q = quantifier(entity(entity_, *properties))
-    elif isinstance(entity_, (list, tuple)):
-        q = quantifier(set_of(entity_, *properties))
+            q = quantifier(entity_._child_, **kwargs)
     else:
         raise ValueError(f"Invalid entity: {entity_}")
     return q
 
 
 def entity(
-    selected_variable: T, *properties: Union[SymbolicExpression, bool, Predicate, Any]
+    selected_variable: T,
+    *properties: Union[SymbolicExpression, bool, Predicate, Any],
 ) -> Entity[T]:
     """
     Create an entity descriptor from a selected variable and its properties.
@@ -165,28 +149,14 @@ def _extract_variables_and_expression(
     selected_variables: Iterable[T], *properties: Union[SymbolicExpression, bool]
 ) -> Tuple[List[T], SymbolicExpression]:
     """
-    Extracts the variables and expressions from the selected variables, this is usefule when
-    the selected variables are not all variables but some are expressions like A/An/The.
+    Extracts the variables and expressions from the selected variables.
 
     :param selected_variables: Iterable of variables to select in the result set.
-    :type selected_variables: Iterable[T]
     :param properties: Conditions on the selected variables.
-    :type properties: Union[SymbolicExpression, bool]
     :return: Tuple of selected variables and expressions.
-    :rtype: Tuple[List[T], List[SymbolicExpression]]
     """
-    final_expression_list = list(properties)
-    expression_list = []
+    expression_list = list(properties)
     selected_variables = list(selected_variables)
-    for i, var in enumerate(selected_variables):
-        if isinstance(var, ResultQuantifier):
-            result_quantifier = var
-            var = var._var_
-            expression_list.append(result_quantifier)
-            # if result_quantifier._child_._child_:
-            #     expression_list.append(result_quantifier._child_._child_)
-            selected_variables[i] = var
-    expression_list += final_expression_list
     expression = None
     if len(expression_list) > 0:
         expression = (
@@ -196,7 +166,7 @@ def _extract_variables_and_expression(
 
 
 def let(
-    type_: Type[T], domain: Optional[Any] = None, name: Optional[str] = None
+    type_: Type[T], domain: Optional[Iterable[T]], name: Optional[str] = None
 ) -> Union[T, CanBehaveLikeAVariable[T], Variable[T]]:
     """
     Declare a symbolic variable or source.
@@ -214,15 +184,14 @@ def let(
     :rtype: T
     :raises ValueError: If the type is not registered as a symbol.
     """
-    if not any(issubclass(type_, t) for t in symbols_registry):
+    if not issubclass(type_, Symbol):
         raise ValueError(
             f"Type {type_} is not registered as symbol, did you forget to decorate it with @symbol?"
         )
     with symbolic_mode():
         if domain is None:
-            var = type_()
-        else:
-            var = type_(From(domain))
+            domain = SymbolGraph().get_instances_of_type(type_)
+        var = type_(From(domain))
     if name is not None:
         var._name__ = name
     return var
@@ -249,14 +218,16 @@ def or_(*conditions):
     :return: An OR operator joining the conditions.
     :rtype: SymbolicExpression
     """
-    return chained_logic(_optimize_or, *conditions)
+    return chained_logic(optimize_or, *conditions)
 
 
 def not_(operand: SymbolicExpression):
     """
     A symbolic NOT operation that can be used to negate symbolic expressions.
     """
-    return Not(operand)
+    if not isinstance(operand, SymbolicExpression):
+        operand = Literal(operand)
+    return operand.__invert__()
 
 
 def contains(container, item):
@@ -292,16 +263,6 @@ def flatten(
     (similar to SQL UNNEST), keeping existing variable bindings intact.
     """
     return Flatten(var)
-
-
-def concatenate(
-    var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
-) -> Union[CanBehaveLikeAVariable[T], Iterable[T]]:
-    """
-    Concatenate a nested iterable domain into a one-element domain that is still a nested iterable that contains all
-    the values of the sub iterables.
-    """
-    return Concatenate(var)
 
 
 def for_all(

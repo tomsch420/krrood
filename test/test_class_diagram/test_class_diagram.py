@@ -1,12 +1,8 @@
 from dataclasses import is_dataclass
-from pathlib import Path
 
-
-from ..dataset.example_classes import Pose, Positions
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from ..dataset import example_classes
-import rustworkx.visualization
 
 
 def test_class_diagram_visualization():

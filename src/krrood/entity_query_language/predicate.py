@@ -2,26 +2,23 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from collections import deque
 from dataclasses import dataclass
 from functools import wraps
-from typing import (
-    Iterable,
+
+from typing_extensions import (
+    Callable,
+    Optional,
+    Any,
+    Type,
+    Tuple,
+    ClassVar,
 )
 
-from line_profiler import profile
-from typing_extensions import Callable, Optional, Any, Type, Tuple, TYPE_CHECKING
-
-from typing_extensions import ClassVar
-
-from .cache_data import get_cache_keys_for_class_, yield_class_values_from_cache
 from .enums import PredicateType, EQLMode
-from .hashed_data import HashedValue
 from .symbol_graph import (
-    PredicateRelation,
+    PredicateClassRelation,
     WrappedInstance,
     SymbolGraph,
-    symbols_registry,
 )
 from .symbolic import (
     T,
@@ -30,22 +27,21 @@ from .symbolic import (
     Variable,
     An,
     Entity,
-    ResultQuantifier,
-    AND,
     properties_to_expression_tree,
     From,
-    Flatten,
 )
-from .utils import is_iterable, make_list
-from ..class_diagrams.wrapped_field import WrappedField
-
-if TYPE_CHECKING:
-    from .property_descriptor import MonitoredSet
+from .utils import is_iterable
+from ..utils import recursive_subclasses
 
 cls_args = {}
+"""
+Cache of class arguments.
+"""
 
 
-def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]]:
+def symbolic_function(
+    function: Callable[..., T],
+) -> Callable[..., SymbolicExpression[T]]:
     """
     Function decorator that constructs a symbolic expression representing the function call
      when inside a symbolic_rule context.
@@ -67,8 +63,8 @@ def predicate(function: Callable[..., T]) -> Callable[..., SymbolicExpression[T]
             ]
             kwargs.update(dict(zip(function_arg_names, args)))
             return Variable(
-                function.__name__,
-                function,
+                _name__=function.__name__,
+                _type_=function,
                 _kwargs_=kwargs,
                 _predicate_type_=PredicateType.DecoratedMethod,
             )
@@ -89,17 +85,10 @@ class Symbol:
             update_cache(instance)
             return instance
 
-    def __init_subclass__(cls, **kwargs):
-        symbols_registry.add(cls)
-
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
         predicate_type = (
             PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
-        )
-        node = SymbolicExpression._current_parent_()
-        args = bind_first_argument_of_predicate_if_in_query_context(
-            node, predicate_type, *args
         )
         domain, kwargs = update_domain_and_kwargs_from_args(cls, *args, **kwargs)
         # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
@@ -107,13 +96,11 @@ class Symbol:
         # we need to infer new values.
         if not domain and (in_symbolic_mode(EQLMode.Rule) or predicate_type):
             var = Variable(
-                cls.__name__,
-                cls,
+                _name__=cls.__name__,
+                _type_=cls,
                 _kwargs_=kwargs,
                 _predicate_type_=predicate_type,
-                _is_indexed_=index_class_cache(cls),
             )
-            update_query_child_expression_if_in_query_context(node, predicate_type, var)
             return var
         else:
             # In this mode, we either have a domain through the `domain` provided here, or through the cache if
@@ -128,243 +115,66 @@ class Symbol:
 @dataclass(eq=False)
 class Predicate(Symbol, ABC):
     """
-    The super predicate class that represents a filtration operation.
+    The super predicate class that represents a filtration operation or asserts a relation.
     """
 
     is_expensive: ClassVar[bool] = False
-    transitive: ClassVar[bool] = False
-    inverse_of: ClassVar[Optional[Type[Predicate]]] = None
 
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        inverse = getattr(cls, "inverse_of", None)
-        if inverse is not None:
-            if not isinstance(inverse, type) or not issubclass(inverse, Predicate):
-                raise TypeError("inverse_of must be set to a Predicate subclass")
-            if getattr(inverse, "inverse_of", None) is None:
-                inverse.inverse_of = cls
-
-    @property
     @abstractmethod
-    def domain_value(self): ...
-
-    @property
-    @abstractmethod
-    def range_value(self): ...
-
-    # New: subclasses implement these two hooks.
-    @abstractmethod
-    def _holds_direct(self, domain_value: Any, range_value: Any) -> bool:
+    def __call__(self) -> bool:
         """
-        Return True if the relation holds directly (non-transitively) between
-        the given domain and range values.
+        Evaluate the predicate for the supplied values.
         """
-        ...
 
-    @property
-    def symbol_graph(self) -> SymbolGraph:
-        return SymbolGraph()
 
-    def _neighbors(self, value: Symbol, outgoing: bool = True) -> Iterable[Symbol]:
-        """
-        Return direct neighbors of the given value to traverse when transitivity is enabled.
-        Default is no neighbors (non-transitive or leaf).
+@dataclass(eq=False)
+class BinaryPredicate(PredicateClassRelation, Predicate, ABC):
+    """
+    A predicate that has a domain and a range.
+    """
 
-        :param value: The value to get neighbors for.
-        :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
-        :return: Iterable of neighbors.
-        """
-        wrapped_instance = self.symbol_graph.get_wrapped_instance(value)
-        if not wrapped_instance:
-            return
-        if outgoing:
-            yield from (
-                n.instance
-                for n in self.symbol_graph.get_outgoing_neighbors_with_predicate_type(
-                    wrapped_instance, self.__class__
-                )
-            )
-        else:
-            yield from (
-                n.instance
-                for n in self.symbol_graph.get_incoming_neighbors_with_predicate_type(
-                    wrapped_instance, self.__class__
-                )
-            )
-
-    def _get_super_property_descriptors(self, value: Symbol) -> Iterable[MonitoredSet]:
-        """
-        Find neighboring symbols connected by super edges.
-
-        This method identifies neighboring symbols that are connected
-        through edge with predicate types that are superclasses of the current predicate.
-
-        :param value: (Symbol): The symbol for which neighboring symbols are
-                evaluated through super predicate type edges.
-
-        :return: A list containing neighboring symbols connected by super type edges.
-        """
-        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(value))
-        if not wrapped_cls:
-            return
-        yield from (
-            getattr(value, property_field.public_name)
-            for property_field in self.symbol_graph.type_graph.get_fields_of_superclass_property_descriptors(
-                wrapped_cls, self.__class__
-            )
-        )
-        role_taker_property_fields = (
-            self.symbol_graph.type_graph.get_role_taker_superclass_properties(
-                wrapped_cls, self.__class__
-            )
-        )
-        if not role_taker_property_fields:
-            return
-        for role_taker_field in role_taker_property_fields.fields:
-            yield getattr(
-                getattr(value, role_taker_property_fields.role_taker.public_name),
-                role_taker_field.public_name,
-            )
-
-    @profile
-    def __call__(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        """
-        Evaluate the predicate for the supplied values. If `transitive` is set,
-        perform a graph traversal using `_neighbors` to determine reachability,
-        otherwise rely on `_holds_direct` only.
-        """
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        if self._holds_direct(domain_value, range_value):
-            # self.add_relation(domain_value, range_value)
-            return True
-        return False
-
-    def get_inverse(self, obj) -> MonitoredSet:
-        wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(type(obj))
-        inverse_field = (
-            self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
-                wrapped_cls, self.inverse_of
-            )
-        )
-        if not inverse_field:
-            # try to get it from role taker if there is one.
-            role_taker = self.symbol_graph.get_role_takers_of_instance(obj)
-            role_taker_wrapped_cls = self.symbol_graph.type_graph.get_wrapped_class(
-                type(role_taker)
-            )
-            if role_taker:
-                inverse_field = self.symbol_graph.type_graph.get_the_field_of_property_descriptor_type(
-                    role_taker_wrapped_cls, self.inverse_of
-                )
-                return getattr(role_taker, inverse_field.public_name)
-        if not inverse_field:
-            raise ValueError(
-                f"cannot find a field for the inverse {self.inverse_of} defined for {wrapped_cls}"
-            )
-        return getattr(obj, inverse_field.public_name)
-
-    def add_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
-        inferred: bool = False,
-    ):
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        if range_value is None:
-            raise ValueError(
-                f"range_value cannot be None for {self.__class__}, domain={domain_value}"
-            )
-        range_value = make_list(range_value)
-        for rv in range_value:
-            self.symbol_graph.add_edge(self.get_relation(domain_value, rv, inferred))
-            for property_value in self._get_super_property_descriptors(domain_value):
-                property_value.add(rv, inferred=True)
-            if self.inverse_of:
-                inverse = self.get_inverse(rv)
-                if domain_value not in inverse:
-                    self.get_inverse(rv).add(domain_value, inferred=True)
-            if self.transitive:
-                for nxt in self._neighbors(rv):
-                    self.add_relation(domain_value, nxt, inferred=True)
-                for nxt in self._neighbors(domain_value, outgoing=False):
-                    self.add_relation(nxt, rv, inferred=True)
-
-    def get_relation(
-        self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
-        inferred: bool = False,
-    ) -> PredicateRelation:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        wrapped_domain_instance = self.symbol_graph.get_wrapped_instance(domain_value)
-        if not wrapped_domain_instance:
-            wrapped_domain_instance = WrappedInstance(domain_value)
-            self.symbol_graph.add_node(wrapped_domain_instance)
-        wrapped_range_instance = self.symbol_graph.get_wrapped_instance(range_value)
-        if not wrapped_range_instance:
-            wrapped_range_instance = WrappedInstance(range_value)
-            self.symbol_graph.add_node(wrapped_range_instance)
-        return PredicateRelation(
-            wrapped_domain_instance,
-            wrapped_range_instance,
-            self,
-            inferred=inferred,
-        )
+    ...
 
 
 @dataclass(eq=False)
 class HasType(Predicate):
+    """
+    Represents a predicate to check if a given variable is an instance of a specified type.
+
+    This class is used to evaluate whether the domain value belongs to a given type by leveraging
+    Python's built-in `isinstance` functionality. It provides methods to retrieve the domain and
+    range values and perform direct checks.
+    """
+
     variable: Any
+    """
+    The variable whose type is being checked.
+    """
     types_: Type
-    is_expensive: ClassVar[bool] = False
+    """
+    The type or tuple of types against which the `variable` is validated.
+    """
 
-    def _holds_direct(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
+    def __call__(self) -> bool:
         return isinstance(self.variable, self.types_)
-
-    @property
-    def domain_value(self):
-        return self.variable
-
-    @property
-    def range_value(self):
-        return self.types_
 
 
 @dataclass(eq=False)
 class HasTypes(HasType):
+    """
+    Represents a specialized data structure holding multiple types.
+
+    This class is a data container designed to store and manage a tuple of
+    types. It inherits from the `HasType` class and extends its functionality
+    to handle multiple types efficiently. The primary goal of this class is to
+    allow structured representation and access to a collection of type
+    information with equality comparison explicitly disabled.
+    """
+
     types_: Tuple[Type, ...]
-
-
-def bind_first_argument_of_predicate_if_in_query_context(
-    node: SymbolicExpression, predicate_type: Optional[PredicateType], *args
-):
-    if predicate_type and node and in_symbolic_mode(EQLMode.Query):
-        if not isinstance(node, ResultQuantifier):
-            result_quantifier = node._parent_._parent_
-        else:
-            result_quantifier = node
-        args = list(args)
-        args.insert(1, result_quantifier._child_.selected_variables[0])
-    return args
-
-
-def update_query_child_expression_if_in_query_context(
-    node: SymbolicExpression,
-    predicate_type: Optional[PredicateType],
-    var: SymbolicExpression,
-):
-    if predicate_type and node and in_symbolic_mode(EQLMode.Query):
-        if node._child_._child_:
-            node._child_._child_ = AND(node._child_._child_, var)
-        else:
-            node._child_._child_ = var
+    """
+    A tuple containing Type objects that are associated with this instance.
+    """
 
 
 def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
@@ -400,75 +210,67 @@ def extract_selected_variable_and_expression(
     **kwargs,
 ):
     """
-    :param symbolic_cls: The constructed class.
-    :param domain: The domain source for the values of the variable by.
-    :param predicate_type: The predicate type.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The selected variable and expression.
+    Extracts a variable and constructs its expression tree for the given symbolic class.
+
+    This function generates a variable of the specified `symbolic_cls` and uses the
+    provided domain, predicate type, and additional arguments to create its expression
+    tree. The domain can optionally be filtered when iterating through its elements
+    if specified or retrieved from the cache keys associated with the symbolic class.
+
+    :param symbolic_cls: The symbolic class type to be used for variable creation.
+    :param domain: Optional domain to provide constraints for the variable.
+    :param predicate_type: Optional predicate type associated with the variable.
+    :param kwargs: Additional properties to define and construct the variable.
+    :return: A tuple containing the generated variable and its corresponding expression tree.
     """
-    cache_keys = get_cache_keys_for_class_(Variable._cache_, symbolic_cls)
+    cache_keys = [symbolic_cls] + recursive_subclasses(symbolic_cls)
     if not domain and cache_keys:
         domain = From(
             (
-                v
-                for a, v in yield_class_values_from_cache(
-                    Variable._cache_,
-                    symbolic_cls,
-                    from_index=False,
-                    cache_keys=cache_keys,
-                )
+                instance
+                for instance in SymbolGraph()._class_to_wrapped_instances[symbolic_cls]
             )
         )
     elif domain and is_iterable(domain.domain):
         domain.domain = filter(lambda v: isinstance(v, symbolic_cls), domain.domain)
 
     var = Variable(
-        symbolic_cls.__name__,
-        symbolic_cls,
+        _name__=symbolic_cls.__name__,
+        _type_=symbolic_cls,
         _domain_source_=domain,
         _predicate_type_=predicate_type,
-        _is_indexed_=index_class_cache(symbolic_cls),
     )
 
-    expression, _ = properties_to_expression_tree(var, kwargs)
+    expression = properties_to_expression_tree(var, kwargs)
 
     return var, expression
 
 
 def update_cache(instance: Symbol):
     """
-    :param instance: The instance to update the cache with.
+    Updates the cache with the given instance of a symbolic type.
+
+    :param instance: The symbolic instance to be cached.
     """
-    symbolic_cls = type(instance)
-    index = index_class_cache(symbolic_cls)
-    if index:
-        update_cls_args(symbolic_cls)
-        kwargs = {
-            f: HashedValue(getattr(instance, f)) for f in cls_args[symbolic_cls][1:]
-        }
-        if (
-            symbolic_cls not in Variable._cache_
-            or not Variable._cache_[symbolic_cls].keys
-        ):
-            Variable._cache_[symbolic_cls].keys = kwargs.keys()
-    else:
-        kwargs = {}
-    Variable._cache_[symbolic_cls].insert(kwargs, HashedValue(instance), index=index)
-    if not isinstance(instance, Predicate) and isinstance(instance, Symbol):
+    if not isinstance(instance, Predicate):
         SymbolGraph().add_node(WrappedInstance(instance))
-    return instance
 
 
 def update_cls_args(symbolic_cls: Type):
+    """
+    Updates the global `cls_args` dictionary with the constructor arguments
+    of the given symbolic class, if it is not already present. The keys in
+    `cls_args` are symbolic class types, and the values are lists of
+    constructor parameter names for those classes.
+
+    This function inspects the signature of the `__init__` method of the
+    given symbolic class and stores the parameter names if the class
+    is not already in the global `cls_args`.
+
+    :param symbolic_cls: A symbolic class type to be inspected.
+    """
     global cls_args
     if symbolic_cls not in cls_args:
         cls_args[symbolic_cls] = list(
             inspect.signature(symbolic_cls.__init__).parameters.keys()
         )
-
-
-def index_class_cache(symbolic_cls: Type) -> bool:
-    """
-    Determine whether the class cache should be indexed.
-    """
-    return issubclass(symbolic_cls, Predicate) and symbolic_cls.is_expensive

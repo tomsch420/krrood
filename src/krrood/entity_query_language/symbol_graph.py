@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
-from copy import copy
-from dataclasses import dataclass, field, fields
-from functools import cached_property
+import weakref
+from collections import defaultdict
+from dataclasses import dataclass, field, InitVar
+from typing import Union
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -14,29 +15,87 @@ from typing_extensions import (
     List,
     Type,
     Dict,
+    DefaultDict,
     ClassVar,
-    Set,
 )
 
-from .attribute_introspector import DescriptorAwareIntrospector
-from .utils import recursive_subclasses
 from .. import logger
-from ..class_diagrams import ClassDiagram, Relation
-from ..class_diagrams.wrapped_field import WrappedField
+from ..class_diagrams import ClassDiagram
+from ..singleton import SingletonMeta
+from ..utils import recursive_subclasses
 
 if TYPE_CHECKING:
-    from .predicate import Predicate, Symbol
+    from .predicate import Symbol
 
 
-@dataclass
-class PredicateRelation(Relation):
+@dataclass(unsafe_hash=True)
+class PredicateClassRelation:
+    """
+    Edge data representing a predicate-based relation between two wrapped instances.
+
+    The relation carries the predicate instance that asserted the edge and a flag indicating
+    whether it was inferred transitively or added directly.
+    """
+
     source: WrappedInstance
+    """
+    The source of the predicate
+    """
+
     target: WrappedInstance
-    predicate: Predicate
+    """
+    The target of the predicate
+    """
+
     inferred: bool = False
+    """
+    Rather it was inferred or not.
+    """
+
+    transitive: ClassVar[bool] = False
+    """
+    If the relation is transitive or not.
+    """
+
+    inverse_of: ClassVar[Optional[Type[PredicateClassRelation]]] = None
+    """
+    The inverse of the relation if it exists.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        Hook to set up inverse_of class variable automatically.
+        """
+        super().__init_subclass__(**kwargs)
+        if cls.inverse_of is not None:
+            cls.inverse_of.inverse_of = cls
+
+    def __post_init__(self):
+        self.source = SymbolGraph().ensure_wrapped_instance(self.source)
+        self.target = SymbolGraph().ensure_wrapped_instance(self.target)
+
+    def add_to_graph(self):
+        """
+        Add the relation to the graph.
+        """
+        if SymbolGraph().add_relation(self):
+            self.add_transitive_relations_to_graph()
+
+    def add_transitive_relations_to_graph(self):
+        """
+        Add all transitive relations of this relation type that results from adding this relation to the graph.
+        """
+        if self.transitive:
+            for nxt in self.target.neighbors_with_relation_type(self.__class__):
+                self.__class__(self.source, nxt, inferred=True).add_to_graph()
+            for nxt in self.source.neighbors_with_relation_type(
+                self.__class__, outgoing=False
+            ):
+                self.__class__(nxt, self.target, inferred=True).add_to_graph()
 
     def __str__(self):
-        return self.predicate.__class__.__name__
+        """Return the predicate type name for labeling the edge."""
+        return self.__class__.__name__
 
     @property
     def color(self) -> str:
@@ -45,19 +104,74 @@ class PredicateRelation(Relation):
 
 @dataclass
 class WrappedInstance:
-    instance: Symbol
+    """
+    A node wrapper around a concrete Symbol instance used in the instance graph.
+    """
+
+    instance: InitVar[Symbol]
+    """
+    The instance to wrap. Only passed as initialization variable.
+    """
+
+    instance_reference: weakref.ReferenceType[Symbol] = field(init=False, default=None)
+    """
+    A weak reference to the symbol instance this wraps.
+    """
+
     index: Optional[int] = field(init=False, default=None)
+    """
+    Index in the instance graph of the symbol graph that manages this object.
+    """
+
     _symbol_graph_: Optional[SymbolGraph] = field(
         init=False, hash=False, default=None, repr=False
     )
-    inferred: bool = False
+    """
+    The symbol graph that manages this object.
+    """
 
-    @cached_property
-    def fields(self) -> List[WrappedField]:
-        return [WrappedField(self.instance, f) for f in fields(self.instance)]
+    inferred: bool = False
+    """
+    Rather is instance was inferred or constructed.
+    """
+
+    instance_type: Type[Symbol] = field(init=False, default=None)
+    """
+    The type of the instance.
+    This is needed to clean it up from the cache after the instance reference died.
+    """
+
+    def __post_init__(self, instance: Symbol):
+        self.instance_reference = weakref.ref(instance)
+        self.instance_type = type(instance)
+
+    def neighbors_with_relation_type(
+        self, relation_type: Type[PredicateClassRelation], outgoing: bool = True
+    ) -> Iterable[WrappedInstance]:
+        """
+        Return direct neighbors of the given value to traverse when transitivity is enabled.
+        Default is no neighbors (non-transitive or leaf).
+
+        :param relation_type: The relation type to filter neighbors by.
+        :param outgoing: Whether to get outgoing neighbors or incoming neighbors.
+        :return: Iterable of neighbors.
+        """
+        if outgoing:
+            neighbors_getter = SymbolGraph().get_outgoing_neighbors_with_predicate_type
+        else:
+            neighbors_getter = SymbolGraph().get_incoming_neighbors_with_predicate_type
+        yield from neighbors_getter(self, relation_type)
+
+    @property
+    def instance(self) -> Optional[Symbol]:
+        """
+        :return: The symbol that is referenced to. Can return None if this symbol is garbage collected already.
+        """
+        return self.instance_reference()
 
     @property
     def name(self):
+        """Return a unique display name composed of class name and node index."""
         return self.instance.__class__.__name__ + str(self.index)
 
     @property
@@ -68,43 +182,64 @@ class WrappedInstance:
         return self.instance == other.instance
 
     def __hash__(self):
-        try:
+        if self.instance:
             return hash(self.instance)
-        except TypeError:
+        else:
             return id(self.instance)
 
 
 @dataclass
-class SymbolGraph:
+class SymbolGraph(metaclass=SingletonMeta):
     """
-    A more encompassing class diagram that includes relations between classes other than inheritance and associations.
+    A singleton combination of a class and instance diagram.
+    This class tracks the life cycles `Symbol` instance created in the python process.
+    Furthermore, relations between instances are also tracked.
+
     Relations are represented as edges where each edge has a relation object attached to it. The relation object
     contains also the Predicate object that represents the relation.
+
+    The construction of this object will do nothing if a singleton instance of this already exists.
+    Make sure to call `clear()` before constructing this object if you want a new one.
     """
 
-    _type_graph: Optional[ClassDiagram] = field(default=None)
-    _instance_graph: PyDiGraph[WrappedInstance, PredicateRelation] = field(
-        default_factory=PyDiGraph
+    _class_diagram: ClassDiagram = field(default=None)
+    """
+    The class diagram of all registered classes.
+    """
+
+    _instance_graph: PyDiGraph[WrappedInstance, PredicateClassRelation] = field(
+        default_factory=PyDiGraph, init=False
     )
-    _instance_index: Dict = field(default_factory=dict, init=False, repr=False)
+    """
+    A directed graph that stores all instances of `Symbol` and how they relate to each other.
+    """
+
+    _instance_index: Dict[int, WrappedInstance] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    Dictionary that maps the ids of objects to wrapped instances.
+    Used for faster access when only the WrappedInstance.instance is available.
+    """
+
+    _class_to_wrapped_instances: DefaultDict[Type, List[WrappedInstance]] = field(
+        init=False, default_factory=lambda: defaultdict(list)
+    )
+    """
+    A dictionary that sorts the wrapped instances by the type inside them.
+    This enables quick behavior similar to selecting everything from an entire table in SQL.
+    """
+
     _relation_index: Dict[type, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
-    _current_graph: ClassVar[Optional[SymbolGraph]] = None
-    _initialized: ClassVar[bool] = False
 
-    def __new__(cls, *args, **kwargs):
-        if cls._current_graph is None:
-            cls._current_graph = super().__new__(cls)
-        return cls._current_graph
+    def __post_init__(self):
+        if self._class_diagram is None:
+            # fetch all symbols and construct the graph
+            from .predicate import Symbol
 
-    def __init__(self, type_graph: Optional[ClassDiagram] = None):
-        if not self._initialized:
-            self._type_graph = type_graph or ClassDiagram([])
-            self._instance_graph = PyDiGraph()
-            self._instance_index = {}
-            self._relation_index = {}
-            self.__class__._initialized = True
+            self._class_diagram = ClassDiagram(list(recursive_subclasses(Symbol)))
 
     def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
@@ -115,7 +250,7 @@ class SymbolGraph:
         wrapped_instance = self.get_wrapped_instance(instance)
         if not wrapped_instance:
             raise ValueError(f"Instance {instance} not found in graph.")
-        role_taker_assoc = self.type_graph.get_role_taker_associations_of_cls(
+        role_taker_assoc = self.class_diagram.get_role_taker_associations_of_cls(
             type(wrapped_instance.instance)
         )
         if not role_taker_assoc:
@@ -123,35 +258,74 @@ class SymbolGraph:
         return getattr(wrapped_instance.instance, role_taker_assoc.field.public_name)
 
     @property
-    def type_graph(self) -> ClassDiagram:
-        return self._current_graph._type_graph
+    def class_diagram(self) -> ClassDiagram:
+        return self._class_diagram
 
-    def add_node(self, wrapped_instance: WrappedInstance) -> None:
-        if not isinstance(wrapped_instance, WrappedInstance):
-            wrapped_instance = WrappedInstance(wrapped_instance)
+    def add_node(self, wrapped_instance: WrappedInstance):
+        """
+        Add a wrapped instance to the cache.
+
+        :param wrapped_instance: The instance to add.
+        """
         wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
         wrapped_instance._symbol_graph_ = self
         self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
+        self._class_to_wrapped_instances[type(wrapped_instance.instance)].append(
+            wrapped_instance
+        )
+
+    def remove_node(self, wrapped_instance: WrappedInstance):
+        """
+        Remove a wrapped instance from the cache.
+
+        :param wrapped_instance: The instance to remove.
+        """
+        self._instance_index.pop(id(wrapped_instance.instance), None)
+        self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
+            wrapped_instance,
+        )
+        self._instance_graph.remove_node(wrapped_instance.index)
+
+    def remove_dead_instances(self):
+        for node in self._instance_graph.nodes():
+            if node.instance is None:
+                self.remove_node(node)
+
+    def get_instances_of_type(self, type_: Type[Symbol]) -> Iterable[Symbol]:
+        """
+        Get all wrapped instances of the given type and all its subclasses.
+
+        :param type_: The symbol type to look for
+        :return: All wrapped instances that refer to an instance of the given type.
+        """
+        yield from (
+            instance.instance
+            for cls in [type_] + recursive_subclasses(type_)
+            for instance in self._class_to_wrapped_instances[cls]
+        )
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
         if isinstance(instance, WrappedInstance):
             return instance
         return self._instance_index.get(id(instance), None)
 
-    def get_cls_associations(self, cls: Type) -> List[WrappedField]:
-        if self._type_graph is None:
-            return []
-        wrapped_cls = self._type_graph.get_wrapped_class(cls)
-        if wrapped_cls is None:
-            return []
-        return self._type_graph.g
+    def ensure_wrapped_instance(self, instance: Any) -> WrappedInstance:
+        """
+        Ensures that the given instance is wrapped into a `WrappedInstance`. If the
+        instance is not already wrapped, creates a new `WrappedInstance` object and
+        adds it as a node. Returns the wrapped instance.
 
-    def clear(self):
-        self._type_graph.clear()
-        self._instance_graph.clear()
-        self._instance_index.clear()
-        self.__class__._current_graph = None
-        self.__class__._initialized = False
+        :param instance: The object to be checked and wrapped if necessary.:
+        :return: WrappedInstance: The wrapped object.
+        """
+        wrapped_instance = self.get_wrapped_instance(instance)
+        if wrapped_instance is None:
+            wrapped_instance = WrappedInstance(instance)
+            self.add_node(wrapped_instance)
+        return wrapped_instance
+
+    def clear(self) -> None:
+        SingletonMeta.clear_instance(type(self))
 
     # Adapters to align with ORM alternative mapping expectations
     def add_instance(self, wrapped_instance: WrappedInstance) -> None:
@@ -162,39 +336,27 @@ class SymbolGraph:
         """
         self.add_node(wrapped_instance)
 
-    def add_relation(self, relation: PredicateRelation) -> None:
-        """Add a relation edge to the instance graph.
-
-        This is an adapter that delegates to add_edge to keep API compatibility with
-        SymbolGraphMapping.create_from_dao.
-        """
-        self.add_edge(relation)
-
-    def has_edge(
-        self, source: WrappedInstance, target: WrappedInstance, predicate_type: Type
-    ) -> bool:
-        return (source.index, target.index) in self._relation_index.get(
-            predicate_type, set()
-        )
-
-    def add_edge(self, relation: PredicateRelation) -> None:
-        source_out_edges = self._instance_graph.out_edges(relation.source.index)
-        for _, child_idx, e in source_out_edges:
-            if (
-                type(e.predicate) == type(relation.predicate)
-                and child_idx == relation.target.index
-            ):
-                return
+    def add_relation(self, relation: PredicateClassRelation) -> bool:
+        """Add a relation edge to the instance graph."""
+        if self.relation_exists(relation):
+            return False
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
-        if type(relation.predicate) not in self._relation_index:
-            self._relation_index[type(relation.predicate)] = set()
-        self._relation_index[type(relation.predicate)].add(
+        if type(relation) not in self._relation_index:
+            self._relation_index[type(relation)] = set()
+        self._relation_index[type(relation)].add(
             (relation.source.index, relation.target.index)
         )
+        return True
 
-    def relations(self) -> Iterable[PredicateRelation]:
+    def relation_exists(self, relation: PredicateClassRelation) -> bool:
+        return (
+            relation.source.index,
+            relation.target.index,
+        ) in self._relation_index.get(type(relation), set())
+
+    def relations(self) -> Iterable[PredicateClassRelation]:
         yield from self._instance_graph.edges()
 
     @property
@@ -202,27 +364,35 @@ class SymbolGraph:
         return self._instance_graph.nodes()
 
     def get_outgoing_neighbors_with_predicate_subclass(
-        self, wrapped_instance: WrappedInstance, predicate_subclass: Type[Predicate]
+        self,
+        wrapped_instance: Union[WrappedInstance, Symbol],
+        predicate_subclass: Type[PredicateClassRelation],
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
         yield from (
             self._instance_graph.get_node_data(child_idx)
             for _, child_idx, edge in self._instance_graph.in_edges(
                 wrapped_instance.index
             )
-            if issubclass(predicate_subclass, type(edge.predicate))
+            if issubclass(predicate_subclass, type(edge))
         )
 
     def get_incoming_neighbors_with_predicate_type(
-        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
+        self,
+        wrapped_instance: Union[WrappedInstance, Symbol],
+        predicate_type: Type[PredicateClassRelation],
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
         yield from (
             self._instance_graph.get_node_data(parent_idx)
             for parent_idx, _, edge in self._instance_graph.in_edges(
                 wrapped_instance.index
             )
-            if isinstance(edge.predicate, predicate_type)
+            if isinstance(edge, predicate_type)
         )
 
     def get_incoming_neighbors(
@@ -237,14 +407,20 @@ class SymbolGraph:
         )
 
     def get_outgoing_neighbors_with_predicate_type(
-        self, wrapped_instance: WrappedInstance, predicate_type: Type[Predicate]
+        self,
+        wrapped_instance: WrappedInstance,
+        predicate_type: Type[PredicateClassRelation],
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
-        for _, child_idx, edge in self._instance_graph.out_edges(
-            wrapped_instance.index
-        ):
-            if isinstance(edge.predicate, predicate_type):
-                yield self._instance_graph.get_node_data(child_idx)
+        if not wrapped_instance:
+            return
+        yield from (
+            self._instance_graph.get_node_data(child_idx)
+            for _, child_idx, edge in self._instance_graph.out_edges(
+                wrapped_instance.index
+            )
+            if isinstance(edge, predicate_type)
+        )
 
     def get_outgoing_neighbors(
         self, wrapped_instance: WrappedInstance
@@ -266,14 +442,6 @@ class SymbolGraph:
             for idx in self._instance_graph.neighbors(wrapped_instance.index)
         )
 
-    @classmethod
-    def build(cls, classes: List[Type] = None) -> SymbolGraph:
-        if not classes:
-            for cls_ in copy(symbols_registry):
-                symbols_registry.update(recursive_subclasses(cls_))
-            classes = symbols_registry
-        return SymbolGraph(ClassDiagram(list(classes), DescriptorAwareIntrospector()))
-
     def to_dot(
         self,
         filepath: str,
@@ -285,11 +453,13 @@ class SymbolGraph:
 
         if graph_type == "type":
             if without_inherited_associations:
-                graph = self._type_graph.to_subdiagram_without_inherited_associations(
-                    True
-                )._dependency_graph
+                graph = (
+                    self._class_diagram.to_subdiagram_without_inherited_associations(
+                        True
+                    )._dependency_graph
+                )
             else:
-                graph = self._type_graph._dependency_graph
+                graph = self._class_diagram._dependency_graph
         else:
             graph = self._instance_graph
         if not filepath.endswith(f".{format}"):
@@ -315,6 +485,3 @@ class SymbolGraph:
                 os.remove(tmp_filepath)
             except Exception as e:
                 logger.error(e)
-
-
-symbols_registry: Set[Type] = set()

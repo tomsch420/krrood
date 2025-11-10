@@ -3,8 +3,18 @@ from dataclasses import dataclass, field
 
 from typing_extensions import List, Callable
 
-from .base_config import WorldConf, BodyConf, ConnectionConf, FixedConnectionConf, PrismaticConnectionConf, \
-    ContainerConf, HandleConf, DrawerConf, CabinetConf, ViewConf
+from .base_config import (
+    WorldConf,
+    BodyConf,
+    ConnectionConf,
+    FixedConnectionConf,
+    PrismaticConnectionConf,
+    ContainerConf,
+    HandleConf,
+    DrawerConf,
+    CabinetConf,
+    ViewConf,
+)
 
 from ...factories.world import create_world
 
@@ -69,29 +79,25 @@ class Cabinet1(CabinetConf):
     drawers: List[DrawerConf] = field(default_factory=lambda: [Drawer3()])
 
 
-
 def bodies():
-    return [
-        Handle1(),
-        Handle2(),
-        Handle3(),
-        Container3(),
-        Container1(),
-        Container2()
-    ]
+    return [Handle1(), Handle2(), Handle3(), Container3(), Container1(), Container2()]
 
 
 @dataclass
-class World(WorldConf):
+class HandlesAndContainersWorld(WorldConf):
     bodies: List[BodyConf] = field(default_factory=bodies, init=False)
-    connections: List[ConnectionConf] = field(default_factory=lambda: [
-        FixedConnectionConf(parent=Container1(), child=Container2()),
-        FixedConnectionConf(parent=Container3(), child=Handle3()),
-        PrismaticConnectionConf(parent=Container2(), child=Container1()),
-        PrismaticConnectionConf(parent=Container2(), child=Container3()),
-        FixedConnectionConf(parent=Container1(), child=Handle1()),
-    ], init=False)
-    views: List[ViewConf] = field(default_factory=lambda: [Drawer1(), Drawer2(), Cabinet1(), Cabinet2()], init=False)
+    connections: List[ConnectionConf] = field(
+        default_factory=lambda: [
+            FixedConnectionConf(parent=Container1(), child=Container2()),
+            FixedConnectionConf(parent=Container3(), child=Handle3()),
+            PrismaticConnectionConf(parent=Container2(), child=Container1()),
+            PrismaticConnectionConf(parent=Container2(), child=Container3()),
+            FixedConnectionConf(parent=Container1(), child=Handle1()),
+        ],
+        init=False,
+    )
+    views: List[ViewConf] = field(
+        default_factory=lambda: [Drawer1(), Drawer2(), Cabinet1(), Cabinet2()],
+        init=False,
+    )
     factory_method: Callable = field(default=create_world, init=False)
-
-

@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, Field
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, Field
 from dataclasses import fields as dc_fields
 
-from typing_extensions import Dict, Iterable, List, Type, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
+from typing_extensions import List, Type, Optional
 
 
 @dataclass
@@ -19,8 +15,6 @@ class DiscoveredAttribute:
     """The dataclass field object that is wrapped."""
     public_name: Optional[str] = None
     """The public name of the field."""
-    property_descriptor: Optional[PropertyDescriptor] = None
-    """The property descriptor instance that manages the field."""
 
     def __post_init__(self):
         if self.public_name is None:

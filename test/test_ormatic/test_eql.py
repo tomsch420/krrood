@@ -2,6 +2,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import MultipleResultsFound
 
+from krrood.entity_query_language.failures import MultipleSolutionFound
 from ..dataset.example_classes import Position, Pose
 from ..dataset.semantic_world_like_classes import (
     World,
@@ -11,7 +12,7 @@ from ..dataset.semantic_world_like_classes import (
     Handle,
     Container,
 )
-from ..dataset.sqlalchemy_interface import (
+from ..dataset.ormatic_interface import (
     PositionDAO,
     PoseDAO,
     OrientationDAO,
@@ -125,7 +126,7 @@ def test_translate_in_operator(session, database):
     with symbolic_mode():
         query = an(
             entity(
-                position := Position(),
+                position := let(Position, domain=[]),
                 in_(position.x, [1, 7]),
             )
         )
@@ -144,23 +145,33 @@ def test_translate_in_operator(session, database):
 
 
 def test_the_quantifier(session, database):
-    session.add(PositionDAO(x=1, y=2, z=3))
-    session.add(PositionDAO(x=5, y=2, z=6))
+    position_daos = [PositionDAO(x=1, y=2, z=3), PositionDAO(x=5, y=2, z=6)]
+    positions = [Position(x=dao.x, y=dao.y, z=dao.z) for dao in position_daos]
+    session.add_all(position_daos)
     session.commit()
 
-    with symbolic_mode():
-        query = the(
-            entity(
-                position := let(
-                    type_=Position,
-                    domain=[],
-                ),
-                position.y == 2,
+    def get_query(domain=None):
+        with symbolic_mode():
+            query = the(
+                entity(
+                    position := let(
+                        type_=Position,
+                        domain=domain,
+                    ),
+                    position.y == 2,
+                )
             )
-        )
-    translator = eql_to_sql(query, session)
+        return query
+
+    with pytest.raises(MultipleSolutionFound):
+        result = get_query(positions).evaluate()
+
+    translator = eql_to_sql(get_query(), session)
     query_by_hand = select(PositionDAO).where(PositionDAO.y == 2)
     assert str(translator.sql_query) == str(query_by_hand)
+
+    with pytest.raises(MultipleResultsFound):
+        result = session.execute(query_by_hand).scalars().one()
 
     with pytest.raises(MultipleResultsFound):
         result = translator.evaluate()

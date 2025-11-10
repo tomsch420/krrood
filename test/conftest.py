@@ -1,4 +1,6 @@
+import logging
 import os
+import traceback
 from dataclasses import is_dataclass
 
 import pytest
@@ -8,15 +10,16 @@ from sqlalchemy.orm import Session, configure_mappers
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
 from krrood.class_diagrams.class_diagram import ClassDiagram
-from krrood.entity_query_language.predicate import Predicate, HasTypes, HasType
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor
-from krrood.entity_query_language.symbolic import Variable
+from krrood.entity_query_language.predicate import (
+    HasTypes,
+    HasType,
+)
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
-from krrood.ormatic.utils import classes_of_module, recursive_subclasses
+from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
-from .dataset import example_classes, semantic_world_like_classes
+from krrood.utils import recursive_subclasses
 from .dataset.example_classes import (
     PhysicalObject,
     NotMappedParent,
@@ -24,9 +27,9 @@ from .dataset.example_classes import (
     ConceptType,
 )
 from .dataset.semantic_world_like_classes import *
-from .test_eql.conf.world.doors_and_drawers import World as DoorsAndDrawersWorld
+from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
-    World as HandlesAndContainersWorld,
+    HandlesAndContainersWorld,
 )
 
 
@@ -39,22 +42,24 @@ def generate_sqlalchemy_interface():
     """
 
     # build the symbol graph
-    symbol_graph = SymbolGraph.build()
+    symbol_graph = SymbolGraph()
 
-    # collect all classes
-    all_classes = {c.clazz for c in symbol_graph._type_graph.wrapped_classes}
+    # collect all classes that need persistence
+    all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
     all_classes |= {
-        am.original_class() for am in recursive_subclasses(AlternativeMapping)
+        alternative_mapping.original_class()
+        for alternative_mapping in recursive_subclasses(AlternativeMapping)
     }
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
     all_classes |= {Symbol}
 
     # remove classes that don't need persistence
-    all_classes -= {HasType, HasTypes}
-    # remove classes that are not dataclasses
-    all_classes = {c for c in all_classes if is_dataclass(c)}
-    all_classes -= set(recursive_subclasses(PhysicalObject)) | {PhysicalObject}
+    all_classes -= {HasType, HasTypes, ContainsType}
     all_classes -= {NotMappedParent, ChildNotMapped}
+
+    # only keep dataclasses
+    all_classes = {c for c in all_classes if is_dataclass(c)}
+
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
@@ -70,7 +75,7 @@ def generate_sqlalchemy_interface():
     instance.make_all_tables()
 
     file_path = os.path.join(
-        os.path.dirname(__file__), "dataset", "sqlalchemy_interface.py"
+        os.path.dirname(__file__), "dataset", "ormatic_interface.py"
     )
 
     with open(file_path, "w") as f:
@@ -81,52 +86,52 @@ def generate_sqlalchemy_interface():
 
 def pytest_configure(config):
     """
-    Generate sqlalchemy_interface.py before test collection.
+    Generate ormatic_interface.py before test collection.
 
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
     """
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("numpy").setLevel(logging.WARNING)
 
+
+def pytest_sessionstart(session):
     try:
         generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 
+        traceback.print_exc()
         warnings.warn(
-            f"Failed to generate sqlalchemy_interface.py: {e}. "
-            "Tests may fail if the file doesn't exist.",
+            f"Failed to generate ormatic_interface.py. "
+            "The Tests may fail or behave inconsistent if the file was not generated correctly."
+            f"Error: {e}",
             RuntimeWarning,
         )
 
 
-from .dataset.sqlalchemy_interface import *
+from .dataset.ormatic_interface import *
 
 
 @pytest.fixture
 def handles_and_containers_world() -> World:
     world = HandlesAndContainersWorld().create()
-    SymbolGraph.build()
     return world
 
 
 @pytest.fixture
 def doors_and_drawers_world() -> World:
     world = DoorsAndDrawersWorld().create()
-    SymbolGraph.build()
+    SymbolGraph()
     return world
 
 
 @pytest.fixture(autouse=True)
 def cleanup_after_test():
     # Setup: runs before each test
-    SymbolGraph.build()
+    SymbolGraph()
     yield
-    # Teardown: runs after each test
-    for c in Variable._cache_.values():
-        c.clear()
-    Variable._cache_.clear()
     SymbolGraph().clear()
-    PropertyDescriptor.clear_subproperties_cache()
 
 
 @pytest.fixture(scope="session")

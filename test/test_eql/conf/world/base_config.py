@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from omegaconf import MISSING
-from typing_extensions import List, TYPE_CHECKING, Callable, Any
+from typing_extensions import List, Callable, Any
 
 
 @dataclass
@@ -13,13 +13,11 @@ class BodyConf:
 
 
 @dataclass
-class HandleConf(BodyConf):
-    ...
+class HandleConf(BodyConf): ...
 
 
 @dataclass
-class ContainerConf(BodyConf):
-    ...
+class ContainerConf(BodyConf): ...
 
 
 @dataclass
@@ -44,8 +42,7 @@ class RevoluteConnectionConf(ConnectionConf):
 
 
 @dataclass
-class ViewConf:
-    ...
+class ViewConf: ...
 
 
 @dataclass

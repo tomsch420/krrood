@@ -4,13 +4,13 @@ import importlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Sequence
 
 from sqlalchemy import types, TypeDecorator
+from typing_extensions import Dict, Any, Sequence
 from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.predicate import Symbol
-from krrood.ormatic.dao import DataAccessObject, AlternativeMapping, T
+from krrood.ormatic.dao import AlternativeMapping, T
 
 
 # check that custom enums works
@@ -139,7 +139,7 @@ class Bowl(PhysicalObject):
 
 @dataclass
 class OriginalSimulatedObject(Symbol):
-    concept: PhysicalObject
+    concept: Optional[PhysicalObject]
     placeholder: float = field(default=0)
 
 
@@ -424,3 +424,16 @@ class ChildBaseMapping(ParentBaseMapping, AlternativeMapping[ChildBase]):
 class PrivateDefaultFactory(Symbol):
     public_value: int = 0
     _private_list: List[int] = field(default_factory=list)
+
+
+@dataclass
+class RelationshipParent(Symbol):
+    positions: Position
+
+
+@dataclass
+class RelationshipChild(RelationshipParent):
+    """
+    This class should produce a problem when reconstructed from the database as relationships must not be declared
+    twice.
+    """

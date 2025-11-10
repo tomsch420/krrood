@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import enum
-import importlib
 import inspect
 import logging
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from types import NoneType
-from collections.abc import Sequence
+from copy import copy
 
 from typing_extensions import (
     get_type_hints,
@@ -23,13 +23,11 @@ from typing_extensions import (
     Union,
 )
 
-from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -65,11 +63,6 @@ class WrappedField:
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
     """
 
-    property_descriptor: Optional[PropertyDescriptor] = None
-    """
-    The property descriptor instance that manages the field.
-    """
-
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
@@ -94,12 +87,31 @@ class WrappedField:
     def resolved_type(self):
         try:
             result = get_type_hints(self.clazz.clazz)[self.field.name]
+            return result
         except NameError as e:
-            found_clazz = manually_search_for_class_name(e.name)
-            module = importlib.import_module(found_clazz.__module__)
-            locals()[e.name] = getattr(module, e.name)
-            result = get_type_hints(self.clazz.clazz, localns=locals())[self.field.name]
-        return result
+            # First try to find the class in the class diagram
+            potential_matching_classes = [
+                cls.clazz
+                for cls in self.clazz._class_diagram.wrapped_classes
+                if cls.clazz.__name__ == e.name
+            ]
+            if len(potential_matching_classes) > 0:
+                found_clazz = potential_matching_classes[0]
+            else:
+                # second try to find it in the modules
+                found_clazz = manually_search_for_class_name(e.name)
+
+            # Build a complete namespace with ALL classes from the class diagram
+            local_namespace = {
+                cls.clazz.__name__: cls.clazz
+                for cls in self.clazz._class_diagram.wrapped_classes
+            }
+            # Also add the manually found class (in case it's not in the diagram)
+            local_namespace[e.name] = found_clazz
+            result = get_type_hints(self.clazz.clazz, localns=local_namespace)[
+                self.field.name
+            ]
+            return result
 
     @cached_property
     def is_builtin_type(self) -> bool:
@@ -222,9 +234,9 @@ def search_class_in_globals(target_class_name: str) -> List[Type]:
     :return: The resolved classes with the matching name.
     """
     return [
-        obj
-        for obj in globals().items()
-        if inspect.isclass(obj) and obj.__name__ == target_class_name
+        value
+        for name, value in globals().items()
+        if inspect.isclass(value) and value.__name__ == target_class_name
     ]
 
 
@@ -233,13 +245,13 @@ def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
     Searches for a class with the given name in all loaded modules (via sys.modules).
     """
     found_classes = []
-    for module_name, module in sys.modules.items():
+    for module_name, module in copy(sys.modules).items():
         if module is None or not hasattr(module, "__dict__"):
             continue  # Skip built-in modules or modules without a __dict__
 
         for name, obj in module.__dict__.items():
             if inspect.isclass(obj) and obj.__name__ == target_class_name:
                 # Avoid duplicates if a class is imported into multiple namespaces
-                if (obj, f"from module '{module_name}'") not in found_classes:
+                if obj not in found_classes:
                     found_classes.append(obj)
     return found_classes

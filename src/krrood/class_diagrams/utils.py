@@ -1,8 +1,8 @@
 import inspect
 import sys
 from dataclasses import dataclass
-from typing import List, Type, Generic
 
+from typing_extensions import List, Type, Generic, TYPE_CHECKING
 from typing_extensions import TypeVar, get_origin, get_args
 
 
