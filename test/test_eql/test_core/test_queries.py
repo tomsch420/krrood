@@ -22,6 +22,7 @@ from krrood.entity_query_language.entity import (
 )
 from krrood.entity_query_language.failures import (
     MultipleSolutionFound,
+    UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
 )
@@ -968,6 +969,24 @@ def test_reuse_of_subquery_with_not(handles_and_containers_world):
     assert isinstance(results[0], Handle)
     assert len(results_with_not) == 1
     assert isinstance(results_with_not[0], Container)
+
+
+def test_unsupported_negation(handles_and_containers_world):
+    world = handles_and_containers_world
+    with symbolic_mode():
+        body = let(type_=Body, domain=world.bodies)
+        with pytest.raises(UnsupportedNegation):
+            query = not_(
+                an(
+                    entity(
+                        body,
+                        body.name.endswith("1"),
+                    )
+                )
+            )
+
+        with pytest.raises(UnsupportedNegation):
+            query = an(not_(entity(body, body.name.endswith("1"))))
 
 
 def test_quantified_query(handles_and_containers_world):
