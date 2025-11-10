@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
 
 from typing_extensions import (
@@ -12,7 +12,6 @@ from typing_extensions import (
     Type,
     Tuple,
     ClassVar,
-    Iterable,
 )
 
 from .enums import PredicateType, EQLMode
@@ -28,12 +27,10 @@ from .symbolic import (
     Variable,
     An,
     Entity,
-    ResultQuantifier,
-    AND,
     properties_to_expression_tree,
     From,
 )
-from .utils import is_iterable, make_list
+from .utils import is_iterable
 from ..utils import recursive_subclasses
 
 cls_args = {}

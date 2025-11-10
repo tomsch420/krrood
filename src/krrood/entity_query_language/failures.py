@@ -101,3 +101,25 @@ class UnsupportedNegation(UnsupportedOperation):
             f"To Negate Conditions do:"
             f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
+
+
+class CardinalitySpecificationError(UsageError):
+    """
+    Raised when the cardinality constraints specified on the query results are invalid or inconsistent.
+    """
+
+
+class CardinalityConsistencyError(CardinalitySpecificationError):
+    """
+    Raised when the cardinality constraints specified on the query results are inconsistent.
+    """
+
+    ...
+
+
+class CardinalityValueError(CardinalityConsistencyError):
+    """
+    Raised when the cardinality constraints specified on the query results are invalid.
+    """
+
+    ...

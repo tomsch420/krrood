@@ -54,6 +54,8 @@ from .failures import (
     UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
+    CardinalityConsistencyError,
+    CardinalityValueError,
 )
 from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
@@ -371,15 +373,11 @@ class SymbolicExpression(Generic[T], ABC):
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
-        to_return = self
         if in_rule_mode or in_symbolic_mode(EQLMode.Rule):
             if (node is self._root_) or (node._parent_ is self._root_):
                 node = node._conditions_root_
-        if isinstance(node, Variable) and node._parent_ is None:
-            node = An(Entity(selected_variables=[node]))
-            to_return = node
         SymbolicExpression._symbolic_expression_stack_.append(node)
-        return to_return
+        return self
 
     def __exit__(self, *args):
         SymbolicExpression._symbolic_expression_stack_.pop()
@@ -488,6 +486,9 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: QueryObjectDescriptor[T]
+    _at_least_: Optional[int] = None
+    _at_most_: Optional[int] = None
+    _exactly_: Optional[int] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -497,6 +498,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             else None
         )
         self._node_.wrap_subtree = True
+        self._validate_cardinality_constraints_()
 
     @cached_property
     def _type_(self):
@@ -516,8 +518,96 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         with symbolic_mode(mode=None):
             results = self._evaluate__()
             assert not in_symbolic_mode()
-            yield from map(self._process_result_, filter(lambda r: r.is_true, results))
+            result_count = 0
+            for result in map(
+                self._process_result_, filter(lambda r: r.is_true, results)
+            ):
+                result_count += 1
+                self._assert_less_than_upper_limit_(result_count)
+                yield result
+            self._assert_more_than_lower_limit_(result_count)
         self._reset_cache_()
+
+    def _validate_cardinality_constraints_(self):
+        """
+        Validate cardinality constraints are consistent and non-negative.
+        """
+        if self._exactly_ and (self._at_least_ or self._at_most_):
+            raise CardinalityConsistencyError(
+                f"exactly is specified, but either at_least or at_most is also specified,"
+                f"cannot specify both."
+            )
+        if (
+            (self._at_least_ and self._at_least_ < 0)
+            or (self._at_most_ and self._at_most_ < 0)
+            or (self._exactly_ and self._exactly_ < 0)
+        ):
+            raise CardinalityValueError(
+                f"at_least, at_most, and exactly must be non-negative integers."
+            )
+        if self._at_most_ and self._at_least_ and self._at_most_ < self._at_least_:
+            raise CardinalityValueError(
+                f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
+            )
+
+    @cached_property
+    def _upper_limit_(self) -> Optional[int]:
+        """
+        :return: The upper limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_most_:
+            return self._at_most_
+        else:
+            return None
+
+    @cached_property
+    def _lower_limit_(self) -> Optional[int]:
+        """
+        :return: The lower limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_least_:
+            return self._at_least_
+        else:
+            return None
+
+    def __repr__(self):
+        name = f"{self.__class__.__name__}"
+        if self._at_least_ or self._at_most_ or self._exactly_:
+            name += "("
+        if self._at_least_ and not self._at_most_:
+            name += f"n>={self._at_least_})"
+        elif self._at_most_ and not self._at_least_:
+            name += f"n<={self._at_most_})"
+        elif self._at_least_ and self._at_most_:
+            name += f"{self._at_least_}<=n<={self._at_most_})"
+        elif self._exactly_:
+            name += f"n={self._exactly_})"
+        return name
+
+    def _assert_less_than_upper_limit_(self, count: int):
+        """
+        Assert that the count is less than the upper limit.
+
+        :param count:
+        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
+        """
+        if self._upper_limit_ and count > self._upper_limit_:
+            raise GreaterThanExpectedNumberOfSolutions(self, self._upper_limit_)
+
+    def _assert_more_than_lower_limit_(self, count: int):
+        """
+        Assert that the count is more than the lower limit.
+
+        :param count: The current count.
+        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
+        :raises NoSolutionFound: If no solution is found.
+        """
+        if self._lower_limit_ and count < self._lower_limit_:
+            raise LessThanExpectedNumberOfSolutions(self, self._lower_limit_, count)
 
     def _evaluate__(
         self,
@@ -631,110 +721,11 @@ class UnificationDict(UserDict):
 class An(ResultQuantifier[T]):
     """Quantifier that yields all matching results one by one."""
 
-    _at_least_: Optional[int] = None
-    _at_most_: Optional[int] = None
-    _exactly_: Optional[int] = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self._exactly_ and (self._at_least_ or self._at_most_):
-            raise UsageError(
-                f"exactly is specified, but either at_least or at_most is also specified,"
-                f"cannot specify both."
-            )
-        if (
-            (self._at_least_ and self._at_least_ < 0)
-            or (self._at_most_ and self._at_most_ < 0)
-            or (self._exactly_ and self._exactly_ < 0)
-        ):
-            raise UsageError(
-                f"at_least, at_most, and exactly must be positive integers."
-            )
-        if self._at_most_ and self._at_least_:
-            if self._at_most_ == self._at_least_:
-                self._exactly_ = self._at_least_
-                self._at_most_ = None
-                self._at_least_ = None
-            elif self._at_most_ < self._at_least_:
-                raise UsageError(
-                    f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
-                )
-
-    @cached_property
-    def _upper_limit_(self) -> Optional[int]:
-        """
-        :return: The upper limit of the number of results if exists.
-        """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_most_:
-            return self._at_most_
-        else:
-            return None
-
-    @cached_property
-    def _lower_limit_(self) -> Optional[int]:
-        """
-        :return: The lower limit of the number of results if exists.
-        """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_least_:
-            return self._at_least_
-        else:
-            return None
-
-    def __repr__(self):
-        name = f"{self.__class__.__name__}"
-        if self._at_least_ or self._at_most_ or self._exactly_:
-            name += "("
-        if self._at_least_ and not self._at_most_:
-            name += f"n>={self._at_least_})"
-        elif self._at_most_ and not self._at_least_:
-            name += f"n<={self._at_most_})"
-        elif self._at_least_ and self._at_most_:
-            name += f"{self._at_least_}<=n<={self._at_most_})"
-        elif self._exactly_:
-            name += f"n={self._exactly_})"
-        return name
-
-    def evaluate(
-        self,
-    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
-        """
-        Evaluate the query graph while monitoring the result count and raising when the expected count is violated.
-        """
-        result_count = 0
-        for result in super().evaluate():
-            result_count += 1
-            self._assert_less_than_upper_limit_(result_count)
-            yield result
-        self._assert_more_than_lower_limit_(result_count)
-
-    def _assert_less_than_upper_limit_(self, count: int):
-        """
-        Assert that the count is less than the upper limit.
-
-        :param count:
-        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
-        """
-        if self._upper_limit_ and count > self._upper_limit_:
-            raise GreaterThanExpectedNumberOfSolutions(self, self._exactly_)
-
-    def _assert_more_than_lower_limit_(self, count: int):
-        """
-        Assert that the count is more than the lower limit.
-
-        :param count: The current count.
-        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
-        :raises NoSolutionFound: If no solution is found.
-        """
-        if self._lower_limit_ and count < self._lower_limit_:
-            raise LessThanExpectedNumberOfSolutions(self, self._exactly_, count)
+    ...
 
 
 @dataclass(eq=False, repr=False)
-class The(An[T]):
+class The(ResultQuantifier[T]):
     """
     Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
     """
