@@ -61,6 +61,8 @@ class UnsupportedNegation(UnsupportedOperation):
         super().__init__(
             f"Symbolic NOT operations on {operation_type} types"
             f" operands are not allowed, you can negate the conditions instead,"
-            f" as negating quantifiers is most likely not what you want"
+            f" as negating them is most likely not what you want"
             f" because it is ambiguous and can be very expensive to compute."
+            f"To Negate Conditions do:"
+            f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
