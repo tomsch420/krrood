@@ -414,11 +414,11 @@ class EQLTranslator:
         """
         bound_query = self.session.scalars(self.sql_query)
 
-        if isinstance(self.quantifier, An):
-            return bound_query.all()
-
         if isinstance(self.quantifier, The):
             return bound_query.one()
+
+        elif isinstance(self.quantifier, An):
+            return bound_query.all()
 
         raise UnsupportedQuantifierError(f"Unknown quantifier: {type(self.quantifier)}")
 
