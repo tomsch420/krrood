@@ -23,11 +23,13 @@ from typing_extensions import (
     Union,
 )
 
+from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
+    from ..entity_query_language.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -61,6 +63,11 @@ class WrappedField:
     public_name: Optional[str] = None
     """
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
+    """
+
+    property_descriptor: Optional[PropertyDescriptor] = None
+    """
+    The property descriptor instance that manages the field.
     """
 
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]

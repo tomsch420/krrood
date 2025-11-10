@@ -19,6 +19,7 @@ from typing_extensions import (
     ClassVar,
 )
 
+from .attribute_introspector import DescriptorAwareIntrospector
 from .. import logger
 from ..class_diagrams import ClassDiagram
 from ..singleton import SingletonMeta
@@ -239,7 +240,10 @@ class SymbolGraph(metaclass=SingletonMeta):
             # fetch all symbols and construct the graph
             from .predicate import Symbol
 
-            self._class_diagram = ClassDiagram(list(recursive_subclasses(Symbol)))
+            self._class_diagram = ClassDiagram(
+                list(recursive_subclasses(Symbol)),
+                introspector=DescriptorAwareIntrospector(),
+            )
 
     def get_role_takers_of_instance(self, instance: Any) -> Optional[Symbol]:
         """
