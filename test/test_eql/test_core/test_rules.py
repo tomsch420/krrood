@@ -26,12 +26,14 @@ def test_generate_drawers(handles_and_containers_world):
     prismatic_connection = let(type_=PrismaticConnection, domain=world.connections)
     with symbolic_mode():
         query = infer(
-            drawers := let(type_=Drawer, domain=None),
-            and_(
-                container == fixed_connection.parent,
-                handle == fixed_connection.child,
-                container == prismatic_connection.child,
-            ),
+            entity(
+                drawers := let(type_=Drawer, domain=None),
+                and_(
+                    container == fixed_connection.parent,
+                    handle == fixed_connection.child,
+                    container == prismatic_connection.child,
+                ),
+            )
         )
 
     with rule_mode(query):
@@ -214,10 +216,12 @@ def test_rule_tree_with_multiple_alternatives(doors_and_drawers_world):
 
     with symbolic_mode():
         query = infer(
-            views := let(type_=View, domain=None),
-            body == fixed_connection.parent,
-            handle == fixed_connection.child,
-            body == prismatic_connection.child,
+            entity(
+                views := let(type_=View, domain=None),
+                body == fixed_connection.parent,
+                handle == fixed_connection.child,
+                body == prismatic_connection.child,
+            )
         )
 
     with rule_mode(query):
@@ -262,9 +266,11 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
 
     with symbolic_mode():
         query = infer(
-            views := let(type_=View, domain=None),
-            HasType(fixed_connection.child, Handle),
-            fixed_connection.parent == prismatic_connection.child,
+            entity(
+                views := let(type_=View, domain=None),
+                HasType(fixed_connection.child, Handle),
+                fixed_connection.parent == prismatic_connection.child,
+            )
         )
 
     with rule_mode(query):
@@ -322,9 +328,11 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree(doors_and_drawers
 
     with symbolic_mode():
         query = infer(
-            views := let(type_=View, domain=None),
-            body == fixed_connection.parent,
-            handle == fixed_connection.child,
+            entity(
+                views := let(type_=View, domain=None),
+                body == fixed_connection.parent,
+                handle == fixed_connection.child,
+            )
         )
 
     with rule_mode(query):
@@ -370,8 +378,10 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
 
     with symbolic_mode():
         query = infer(
-            views := let(type_=View, domain=None),
-            HasType(fixed_connection.child, Handle),
+            entity(
+                views := let(type_=View, domain=None),
+                HasType(fixed_connection.child, Handle),
+            )
         )
 
     with rule_mode(query):

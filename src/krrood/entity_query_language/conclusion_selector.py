@@ -157,9 +157,9 @@ class Alternative(ElseIf, ConclusionSelector):
         outputs = super()._evaluate__(sources, parent=parent)
         for output in outputs:
             # Only yield if conclusions were successfully added (not duplicates)
-            if self.get_operand_truth_value(self.left, output):
+            if not self.left._is_false_:
                 self.update_conclusion(output, self.left._conclusion_)
-            elif self.get_operand_truth_value(self.right, output):
+            elif not self.right._is_false_:
                 self.update_conclusion(output, self.right._conclusion_)
             yield OperationResult(output.bindings, self._is_false_, self)
             self._conclusion_.clear()

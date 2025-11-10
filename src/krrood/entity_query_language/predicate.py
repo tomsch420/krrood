@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
 
 from typing_extensions import (
@@ -12,7 +12,6 @@ from typing_extensions import (
     Type,
     Tuple,
     ClassVar,
-    Iterable,
 )
 
 from .enums import PredicateType, EQLMode
@@ -28,12 +27,10 @@ from .symbolic import (
     Variable,
     An,
     Entity,
-    ResultQuantifier,
-    AND,
     properties_to_expression_tree,
     From,
 )
-from .utils import is_iterable, make_list
+from .utils import is_iterable
 from ..utils import recursive_subclasses
 
 cls_args = {}
@@ -103,7 +100,6 @@ class Symbol:
                 _type_=cls,
                 _kwargs_=kwargs,
                 _predicate_type_=predicate_type,
-                _is_indexed_=index_class_cache(cls),
             )
             return var
         else:
@@ -243,7 +239,6 @@ def extract_selected_variable_and_expression(
         _type_=symbolic_cls,
         _domain_source_=domain,
         _predicate_type_=predicate_type,
-        _is_indexed_=index_class_cache(symbolic_cls),
     )
 
     expression = properties_to_expression_tree(var, kwargs)
@@ -253,17 +248,12 @@ def extract_selected_variable_and_expression(
 
 def update_cache(instance: Symbol):
     """
-    Updates the cache with the given instance of a symbolic type. The function ensures
-    proper handling of symbolic class cache, updates associated arguments, and adds
-    relevant instances to the variable cache and symbol graph. This function operates
-    based on the type and characteristics of the given instance.
+    Updates the cache with the given instance of a symbolic type.
 
-    :param instance: The symbolic instance to be cached, which can include types such as
-        Symbol or BinaryPredicate, among others.
-    :return: Returns the updated instance that has been added to the cache.
+    :param instance: The symbolic instance to be cached.
     """
-    SymbolGraph().add_node(WrappedInstance(instance))
-    return instance
+    if not isinstance(instance, Predicate):
+        SymbolGraph().add_node(WrappedInstance(instance))
 
 
 def update_cls_args(symbolic_cls: Type):
@@ -284,12 +274,3 @@ def update_cls_args(symbolic_cls: Type):
         cls_args[symbolic_cls] = list(
             inspect.signature(symbolic_cls.__init__).parameters.keys()
         )
-
-
-def index_class_cache(symbolic_cls: Type) -> bool:
-    """
-    Determine whether the class cache should be indexed.
-
-    :param symbolic_cls: The symbolic class type.
-    """
-    return issubclass(symbolic_cls, BinaryPredicate) and symbolic_cls.is_expensive

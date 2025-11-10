@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from abc import ABC
+
 """
 Custom exception types used by entity_query_language.
 """
@@ -9,29 +11,62 @@ if TYPE_CHECKING:
     from .symbolic import SymbolicExpression
 
 
-class MultipleSolutionFound(Exception):
+class QuantificationError(Exception, ABC):
     """
-    Raised when a query unexpectedly yields more than one solution where a single
-    result was expected.
+    Represents a custom exception specific to quantification errors.
 
-    :param first_val: The first solution encountered.
-    :param second_val: The second solution encountered.
+    This exception is used to indicate errors related to the quantification
+    of the query results.
     """
 
-    def __init__(self, first_val, second_val):
-        super(MultipleSolutionFound, self).__init__(
-            f"Multiple solutions found, the first two are {first_val}\n{second_val}"
+
+class GreaterThanExpectedNumberOfSolutions(QuantificationError):
+    """
+    Represents an error when the number of solutions exceeds the
+    expected threshold.
+    """
+
+    def __init__(self, expression: SymbolicExpression, expected_number: int):
+        super(GreaterThanExpectedNumberOfSolutions, self).__init__(
+            f"More than {expected_number} solutions found for the expression {expression}."
         )
 
 
-class NoSolutionFound(Exception):
+class LessThanExpectedNumberOfSolutions(QuantificationError):
+    """
+    Represents an error that occurs when the number of solutions found
+    is lower than the expected number.
+    """
+
+    def __init__(
+        self, expression: SymbolicExpression, expected_number: int, found_number: int
+    ):
+        super(LessThanExpectedNumberOfSolutions, self).__init__(
+            f"Found {found_number} solutions which is less than the expected {expected_number} solutions for"
+            f" the expression {expression}."
+        )
+
+
+class MultipleSolutionFound(GreaterThanExpectedNumberOfSolutions):
+    """
+    Raised when a query unexpectedly yields more than one solution where a single
+    result was expected.
+    """
+
+    def __init__(self, expression: SymbolicExpression):
+        super(MultipleSolutionFound, self).__init__(expression, 1)
+
+
+class NoSolutionFound(LessThanExpectedNumberOfSolutions):
     """
     Raised when a query does not yield any solution.
     """
 
-    def __init__(self, expression: SymbolicExpression):
+    def __init__(self, expression: SymbolicExpression, expected_number: int = 1):
         super(NoSolutionFound, self).__init__(
-            f"No solution found for expression {expression}"
+            expression,
+            expected_number,
+            0,
         )
 
 
@@ -66,3 +101,25 @@ class UnsupportedNegation(UnsupportedOperation):
             f"To Negate Conditions do:"
             f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
+
+
+class CardinalitySpecificationError(UsageError):
+    """
+    Raised when the cardinality constraints specified on the query results are invalid or inconsistent.
+    """
+
+
+class CardinalityConsistencyError(CardinalitySpecificationError):
+    """
+    Raised when the cardinality constraints specified on the query results are inconsistent.
+    """
+
+    ...
+
+
+class CardinalityValueError(CardinalityConsistencyError):
+    """
+    Raised when the cardinality constraints specified on the query results are invalid.
+    """
+
+    ...

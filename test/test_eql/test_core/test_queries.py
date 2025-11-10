@@ -23,6 +23,8 @@ from krrood.entity_query_language.entity import (
 from krrood.entity_query_language.failures import (
     MultipleSolutionFound,
     UnsupportedNegation,
+    GreaterThanExpectedNumberOfSolutions,
+    LessThanExpectedNumberOfSolutions,
 )
 from krrood.entity_query_language.predicate import (
     HasType,
@@ -64,7 +66,7 @@ def test_empty_conditions_and_no_domain(
 
 def test_empty_conditions_without_using_entity(handles_and_containers_world):
     world = handles_and_containers_world
-    query = an(let(type_=Body, domain=world.bodies))
+    query = an(entity(let(type_=Body, domain=world.bodies)))
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
 
 
@@ -82,11 +84,13 @@ def test_filtering_connections_without_joining_with_parent_or_child_queries(
 ):
     world = handles_and_containers_world
     with symbolic_mode():
-        query = a(
-            connection := let(Connection, world.connections),
-            HasType(connection.parent, Container),
-            connection.parent.name == "Container1",
-            HasType(connection.child, Handle),
+        query = an(
+            entity(
+                connection := let(Connection, world.connections),
+                HasType(connection.parent, Container),
+                connection.parent.name == "Container1",
+                HasType(connection.child, Handle),
+            )
         )
     # query._render_tree_()
     results = list(query.evaluate())
@@ -103,8 +107,8 @@ def test_generate_with_using_attribute_and_callables(handles_and_containers_worl
 
     def generate_handles():
         with symbolic_mode():
-            yield from a(
-                body := let(Body, world.bodies), body.name.startswith("Handle")
+            yield from an(
+                entity(body := let(Body, world.bodies), body.name.startswith("Handle"))
             ).evaluate()
 
     handles = list(generate_handles())
@@ -902,8 +906,8 @@ def test_contains_type():
     fb1 = FruitBox("FruitBox1", fb1_fruits)
     fb2 = FruitBox("FruitBox2", fb2_fruits)
     with symbolic_mode():
-        fruit_box_query = a(
-            fb := let(FruitBox, domain=None), ContainsType(fb.fruits, Apple)
+        fruit_box_query = an(
+            entity(fb := let(FruitBox, domain=None), ContainsType(fb.fruits, Apple))
         )
 
     query_result = list(fruit_box_query.evaluate())
@@ -916,9 +920,11 @@ def test_equivalent_to_contains_type_using_exists():
     fb1 = FruitBox("FruitBox1", fb1_fruits)
     fb2 = FruitBox("FruitBox2", fb2_fruits)
     with symbolic_mode():
-        fruit_box_query = a(
-            fb := let(FruitBox, domain=None),
-            exists(fb, HasType(flatten(fb.fruits), Apple)),
+        fruit_box_query = an(
+            entity(
+                fb := let(FruitBox, domain=None),
+                exists(fb, HasType(flatten(fb.fruits), Apple)),
+            )
         )
 
     query_result = list(fruit_box_query.evaluate())
@@ -981,3 +987,33 @@ def test_unsupported_negation(handles_and_containers_world):
 
         with pytest.raises(UnsupportedNegation):
             query = an(not_(entity(body, body.name.endswith("1"))))
+
+
+def test_quantified_query(handles_and_containers_world):
+    world = handles_and_containers_world
+
+    def get_quantified_query(
+        at_least: int = None, at_most: int = None, exactly: int = None
+    ):
+        with symbolic_mode():
+            query = an(
+                entity(
+                    body := let(type_=Body, domain=world.bodies),
+                    contains(body.name, "Handle"),
+                ),
+                at_least=at_least,
+                at_most=at_most,
+                exactly=exactly,
+            )
+        return query
+
+    results = list(get_quantified_query(at_least=3).evaluate())
+    assert len(results) == 3
+    with pytest.raises(LessThanExpectedNumberOfSolutions):
+        list(get_quantified_query(at_least=4).evaluate())
+    with pytest.raises(GreaterThanExpectedNumberOfSolutions):
+        list(get_quantified_query(at_most=2).evaluate())
+    with pytest.raises(GreaterThanExpectedNumberOfSolutions):
+        list(get_quantified_query(exactly=2).evaluate())
+    with pytest.raises(LessThanExpectedNumberOfSolutions):
+        list(get_quantified_query(exactly=4).evaluate())

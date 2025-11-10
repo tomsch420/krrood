@@ -52,6 +52,10 @@ from .failures import (
     NoSolutionFound,
     UsageError,
     UnsupportedNegation,
+    GreaterThanExpectedNumberOfSolutions,
+    LessThanExpectedNumberOfSolutions,
+    CardinalityConsistencyError,
+    CardinalityValueError,
 )
 from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
@@ -207,25 +211,6 @@ class SymbolicExpression(Generic[T], ABC):
         This method should be implemented by subclasses.
         """
         pass
-
-    @staticmethod
-    def get_operand_truth_value(
-        operand: SymbolicExpression[T], operand_value: OperationResult
-    ) -> bool:
-        """
-        Determine the truth value of an operand based on its type and value.
-
-        :param operand: The evaluated operand.
-        :param operand_value: The value of the operand.
-        :return: The truth value of the operand.
-        """
-        if isinstance(
-            operand,
-            (LogicalOperator, Comparator, ResultQuantifier, Not, QuantifiedConditional),
-        ):
-            return not operand._is_false_
-        else:
-            return bool(operand_value[operand._id_])
 
     def _add_conclusion_(self, conclusion: Conclusion):
         self._conclusion_.add(conclusion)
@@ -388,15 +373,11 @@ class SymbolicExpression(Generic[T], ABC):
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
-        to_return = self
         if in_rule_mode or in_symbolic_mode(EQLMode.Rule):
             if (node is self._root_) or (node._parent_ is self._root_):
                 node = node._conditions_root_
-        if isinstance(node, Variable) and node._parent_ is None:
-            node = An(Entity(selected_variables=[node]))
-            to_return = node
         SymbolicExpression._symbolic_expression_stack_.append(node)
-        return to_return
+        return self
 
     def __exit__(self, *args):
         SymbolicExpression._symbolic_expression_stack_.pop()
@@ -505,6 +486,9 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: QueryObjectDescriptor[T]
+    _at_least_: Optional[int] = None
+    _at_most_: Optional[int] = None
+    _exactly_: Optional[int] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -514,6 +498,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             else None
         )
         self._node_.wrap_subtree = True
+        self._validate_cardinality_constraints_()
 
     @cached_property
     def _type_(self):
@@ -533,8 +518,96 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         with symbolic_mode(mode=None):
             results = self._evaluate__()
             assert not in_symbolic_mode()
-            yield from map(self._process_result_, filter(lambda r: r.is_true, results))
+            result_count = 0
+            for result in map(
+                self._process_result_, filter(lambda r: r.is_true, results)
+            ):
+                result_count += 1
+                self._assert_less_than_upper_limit_(result_count)
+                yield result
+            self._assert_more_than_lower_limit_(result_count)
         self._reset_cache_()
+
+    def _validate_cardinality_constraints_(self):
+        """
+        Validate cardinality constraints are consistent and non-negative.
+        """
+        if self._exactly_ and (self._at_least_ or self._at_most_):
+            raise CardinalityConsistencyError(
+                f"exactly is specified, but either at_least or at_most is also specified,"
+                f"cannot specify both."
+            )
+        if (
+            (self._at_least_ and self._at_least_ < 0)
+            or (self._at_most_ and self._at_most_ < 0)
+            or (self._exactly_ and self._exactly_ < 0)
+        ):
+            raise CardinalityValueError(
+                f"at_least, at_most, and exactly must be non-negative integers."
+            )
+        if self._at_most_ and self._at_least_ and self._at_most_ < self._at_least_:
+            raise CardinalityValueError(
+                f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
+            )
+
+    @cached_property
+    def _upper_limit_(self) -> Optional[int]:
+        """
+        :return: The upper limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_most_:
+            return self._at_most_
+        else:
+            return None
+
+    @cached_property
+    def _lower_limit_(self) -> Optional[int]:
+        """
+        :return: The lower limit of the number of results if exists.
+        """
+        if self._exactly_:
+            return self._exactly_
+        elif self._at_least_:
+            return self._at_least_
+        else:
+            return None
+
+    def __repr__(self):
+        name = f"{self.__class__.__name__}"
+        if self._at_least_ or self._at_most_ or self._exactly_:
+            name += "("
+        if self._at_least_ and not self._at_most_:
+            name += f"n>={self._at_least_})"
+        elif self._at_most_ and not self._at_least_:
+            name += f"n<={self._at_most_})"
+        elif self._at_least_ and self._at_most_:
+            name += f"{self._at_least_}<=n<={self._at_most_})"
+        elif self._exactly_:
+            name += f"n={self._exactly_})"
+        return name
+
+    def _assert_less_than_upper_limit_(self, count: int):
+        """
+        Assert that the count is less than the upper limit.
+
+        :param count:
+        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
+        """
+        if self._upper_limit_ and count > self._upper_limit_:
+            raise GreaterThanExpectedNumberOfSolutions(self, self._upper_limit_)
+
+    def _assert_more_than_lower_limit_(self, count: int):
+        """
+        Assert that the count is more than the lower limit.
+
+        :param count: The current count.
+        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
+        :raises NoSolutionFound: If no solution is found.
+        """
+        if self._lower_limit_ and count < self._lower_limit_:
+            raise LessThanExpectedNumberOfSolutions(self, self._lower_limit_, count)
 
     def _evaluate__(
         self,
@@ -644,30 +717,32 @@ class UnificationDict(UserDict):
         return super().__getitem__(key).value
 
 
-@dataclass(eq=False)
-class The(ResultQuantifier[T]):
-    """
-    Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
-    """
-
-    def evaluate(
-        self,
-    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
-        all_results = []
-        for result in super().evaluate():
-            all_results.append(result)
-            if len(all_results) > 1:
-                raise MultipleSolutionFound(all_results[0], all_results[1])
-        if len(all_results) == 0:
-            raise NoSolutionFound(self._child_)
-        return all_results[0]
-
-
 @dataclass(eq=False, repr=False)
 class An(ResultQuantifier[T]):
     """Quantifier that yields all matching results one by one."""
 
     ...
+
+
+@dataclass(eq=False, repr=False)
+class The(ResultQuantifier[T]):
+    """
+    Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
+    """
+
+    _exactly_: int = field(init=False, default=1)
+    _at_least_: int = field(init=False, default=None)
+    _at_most_: int = field(init=False, default=None)
+
+    def evaluate(
+        self,
+    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
+        try:
+            return list(super().evaluate())[0]
+        except LessThanExpectedNumberOfSolutions:
+            raise NoSolutionFound(self)
+        except GreaterThanExpectedNumberOfSolutions:
+            raise MultipleSolutionFound(self)
 
 
 @dataclass(eq=False)
@@ -909,11 +984,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     """
     Whether this variable should be inferred.
     """
-    _is_indexed_: bool = field(default=True, repr=False)
-    """
-    Whether this variable cache is indexed or flat.
-    """
-
     _child_vars_: Optional[Dict[str, SymbolicExpression]] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -957,7 +1027,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
-        yield_when_false: bool = False,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         """
@@ -970,8 +1039,10 @@ class Variable(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             yield OperationResult(sources, not bool(sources[self._id_]), self)
         elif self._domain_:
-            for v in self:
-                yield OperationResult({**sources, **v}, False, self)
+            for v in self._domain_:
+                yield OperationResult(
+                    {**sources, self._id_: HashedValue(v)}, False, self
+                )
         elif self._should_be_instantiated_:
             yield from self._instantiate_using_child_vars_and_yield_results_(sources)
         else:
@@ -995,7 +1066,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _generate_combinations_for_child_vars_values_(
         self, sources: Optional[Dict[int, HashedValue]] = None
     ):
-        # Use backtracking generator for early pruning instead of full Cartesian product
         yield from generate_combinations(
             {k: var._evaluate__(sources) for k, var in self._child_vars_.items()}
         )
@@ -1041,10 +1111,6 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _plot_color_(self, value: ColorLegend):
         self._plot_color__ = value
         self._node_.color = value
-
-    def __iter__(self):
-        for v in self._domain_:
-            yield {self._id_: HashedValue(v)}
 
     def __repr__(self):
         return self._name_
@@ -1484,7 +1550,7 @@ class Not(LogicalOperator[T]):
         sources = sources or {}
         self._eval_parent_ = parent
         for v in self._child_._evaluate__(sources, parent=self):
-            self._is_false_ = self.get_operand_truth_value(self._child_, v)
+            self._is_false_ = v.is_true
             yield OperationResult(v.bindings, self._is_false_, self)
 
     @property
@@ -1761,9 +1827,7 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         # Evaluate the condition under this particular universal value
         for condition_val in self.condition._evaluate__(sources, parent=self):
-            self._is_false_ = not self.get_operand_truth_value(
-                self.condition, condition_val
-            )
+            self._is_false_ = condition_val.is_false
             if not self._is_false_:
                 yield OperationResult(condition_val.bindings, False, self)
                 break
