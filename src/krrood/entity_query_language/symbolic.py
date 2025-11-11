@@ -745,7 +745,7 @@ class The(ResultQuantifier[T]):
             raise MultipleSolutionFound(self)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     """
     Describes the queried object(s), could be a query over a single variable or a set of variables,
@@ -894,9 +894,6 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     def __invert__(self):
         raise UnsupportedNegation(self.__class__)
 
-    def __repr__(self):
-        return self._name_
-
     @property
     def _plot_color_(self) -> ColorLegend:
         return ColorLegend("ObjectDescriptor", "#d62728")
@@ -906,7 +903,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         return f"({', '.join(var._name_ for var in self.selected_variables)})"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class SetOf(QueryObjectDescriptor[T]):
     """
     A query over a set of variables.
@@ -915,7 +912,7 @@ class SetOf(QueryObjectDescriptor[T]):
     ...
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Entity(QueryObjectDescriptor[T], CanBehaveLikeAVariable[T]):
     """
     A query over a single variable.
@@ -943,7 +940,7 @@ class From:
     """
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Variable(CanBehaveLikeAVariable[T]):
     """
     A Variable that queries will assign. The Variable produces results of type `T`.
@@ -1112,11 +1109,8 @@ class Variable(CanBehaveLikeAVariable[T]):
         self._plot_color__ = value
         self._node_.color = value
 
-    def __repr__(self):
-        return self._name_
 
-
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Literal(Variable[T]):
     """
     Literals are variables that are not constructed by their type but by their given data.
@@ -1147,7 +1141,7 @@ class Literal(Variable[T]):
             return ColorLegend("Literal", "#949292")
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class DomainMapping(CanBehaveLikeAVariable[T], ABC):
     """
     A symbolic expression the maps the domain of symbolic variables.
@@ -1205,7 +1199,7 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         self._node_.color = value
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Attribute(DomainMapping):
     """
     A symbolic attribute that can be used to access attributes of symbolic variables.
@@ -1277,7 +1271,7 @@ class Attribute(DomainMapping):
         return f"{self._child_._var_._name_}.{self._attr_name_}"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Index(DomainMapping):
     """
     A symbolic indexing operation that can be used to access items of symbolic variables via [] operator.
@@ -1293,7 +1287,7 @@ class Index(DomainMapping):
         return f"{self._child_._var_._name_}[{self._key_}]"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Call(DomainMapping):
     """
     A symbolic call that can be used to call methods on symbolic variables.
@@ -1315,7 +1309,7 @@ class Call(DomainMapping):
         return f"{self._child_._var_._name_}()"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Flatten(DomainMapping):
     """
     Domain mapping that flattens an iterable-of-iterables into a single iterable of items.
@@ -1340,7 +1334,7 @@ class Flatten(DomainMapping):
         return f"Flatten({self._child_._name_})"
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class BinaryOperator(SymbolicExpression, ABC):
     """
     A base class for binary operators that can be used to combine symbolic expressions.
@@ -1430,7 +1424,7 @@ def not_contains(container, item) -> bool:
     return not operator.contains(container, item)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Comparator(BinaryOperator):
     """
     A symbolic equality check that can be used to compare symbolic variables using a provided comparison operation.
@@ -1516,7 +1510,7 @@ class Comparator(BinaryOperator):
         return ColorLegend("Comparator", "#ff7f0e")
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class LogicalOperator(SymbolicExpression[T], ABC):
     """
     A symbolic operation that can be used to combine multiple symbolic expressions using logical constraints on their
@@ -1533,7 +1527,7 @@ class LogicalOperator(SymbolicExpression[T], ABC):
         return ColorLegend("LogicalOperator", "#2ca02c")
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Not(LogicalOperator[T]):
     """
     The logical negation of a symbolic expression. Its truth value is the opposite of its child's truth value. This is
@@ -1558,7 +1552,7 @@ class Not(LogicalOperator[T]):
         return self._child_._all_variable_instances_
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class LogicalBinaryOperator(LogicalOperator[T], BinaryOperator, ABC): ...
 
 
@@ -1602,7 +1596,7 @@ class AND(LogicalBinaryOperator):
             yield OperationResult(right_value.bindings, self._is_false_, self)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class OR(LogicalBinaryOperator, ABC):
     """
     A symbolic single choice operation that can be used to choose between multiple symbolic expressions.
@@ -1674,7 +1668,7 @@ class OR(LogicalBinaryOperator, ABC):
         self.right_evaluated = False
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Union(OR):
     """
     This operator is a version of the OR operator that always evaluates both the left and the right operand.
@@ -1692,7 +1686,7 @@ class Union(OR):
         yield from self.evaluate_right(sources)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class ElseIf(OR):
     """
     A version of the OR operator that evaluates the right operand only when the left operand is False.
@@ -1712,7 +1706,7 @@ class ElseIf(OR):
         yield from self.evaluate_left(sources)
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class QuantifiedConditional(LogicalBinaryOperator, ABC):
     """
     This is the super class of the universal, and existential conditional operators. It is a binary logical operator
@@ -1736,7 +1730,7 @@ class QuantifiedConditional(LogicalBinaryOperator, ABC):
         self.right = value
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class ForAll(QuantifiedConditional):
     """
     This operator is the universal conditional operator. It returns bindings that satisfy the condition for all the
@@ -1804,7 +1798,7 @@ class ForAll(QuantifiedConditional):
         return Exists(self.variable, self.condition.__invert__())
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Exists(QuantifiedConditional):
     """
     An existential checker that checks if a condition holds for any value of the variable given, the benefit
