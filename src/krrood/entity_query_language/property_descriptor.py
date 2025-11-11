@@ -12,14 +12,23 @@ from typing import (
     Iterable,
     Tuple,
     Dict,
+    Union,
 )
 from weakref import WeakKeyDictionary
 
 from line_profiler import profile
 from typing_extensions import DefaultDict
 
+from .failures import UnMonitoredContainerTypeForDescriptor
+from .monitored_container import (
+    MonitoredContainer,
+    monitored_type_map,
+    MonitoredList,
+    MonitoredSet,
+)
 from .predicate import Symbol
-from .utils import make_set
+from .symbol_graph import SymbolGraph
+from .utils import make_set, is_iterable
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 
@@ -186,34 +195,184 @@ class PropertyDescriptor:
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        container = getattr(obj, self.private_attr_name)
-        # Bind the owner so subsequent `add` calls know the instance
-        if getattr(container, "owner", None) is not obj:
-            container._bind_owner(obj)
-        return container
+        value = getattr(obj, self.private_attr_name)
+        value = self._ensure_monitored_type(value, obj)
+        self._bind_owner_if_container_type(value, owner=obj)
+        return value
+
+    @staticmethod
+    def _bind_owner_if_container_type(
+        value: Union[Iterable[Symbol], Symbol], owner: Optional[Any] = None
+    ):
+        """
+        Bind the owner instance to the monitored container if the value is a MonitoredContainer type.
+
+        :param value: The value to check and bind the owner to if it is a MonitoredContainer type.
+        :param owner: The owner instance.
+        """
+        if (
+            isinstance(value, MonitoredContainer)
+            and getattr(value, "owner", None) is not owner
+        ):
+            value._bind_owner(owner)
+
+    def _ensure_monitored_type(
+        self, value: Union[Iterable[Symbol], Symbol], obj: Optional[Any] = None
+    ) -> Union[MonitoredContainer[Symbol], Symbol]:
+        """
+        Ensure that the value is a monitored container type or is not iterable.
+
+        :param value: The value to ensure its type.
+        :param obj: The owner instance.
+        :return: The value with a monitored container-type if it is iterable, otherwise the value itself.
+        """
+        if is_iterable(value) and not isinstance(value, MonitoredContainer):
+            try:
+                monitored_type = monitored_type_map[type(value)]
+            except KeyError:
+                raise UnMonitoredContainerTypeForDescriptor(
+                    f"Cannot use the descriptor on field {self.wrapped_field} from {obj} because it has a container type"
+                    f"that is not monitored (i.e., is not a subclass of {MonitoredContainer}). Either use one of "
+                    f"{MonitoredList} or {MonitoredSet} or implement a custom monitored container type."
+                )
+            value = monitored_type(descriptor=self)
+        return value
 
     def __set__(self, obj, value):
         if isinstance(value, PropertyDescriptor):
             return
         attr = getattr(obj, self.private_attr_name)
-        attr.clear()
-        for v in make_set(value):
-            attr.add(v, call_on_add=False)
-            self.add_relation(obj, v, set_attr=False)
+        if isinstance(attr, MonitoredContainer):
+            attr._clear()
+            for v in make_set(value):
+                attr._add_item(v, call_on_add=False)
+                self.add_relation(obj, v, set_attr=False)
+        else:
+            setattr(obj, self.private_attr_name, value)
+            self.on_add(obj, value)
 
-    def add_relation(
+    def update_value(
         self,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
+        domain_value: Symbol,
+        range_value: Symbol,
         inferred: bool = False,
-        set_attr: bool = True,
     ) -> None:
-        """Add a relation to the property descriptor."""
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        super().add_relation(domain_value, range_value, inferred=inferred)
-        if set_attr:
-            getattr(domain_value, self.attr_name).add(range_value, call_on_add=False)
+        """Update the value of the managed attribute
+
+        :param domain_value: The domain value to update (i.e., the instance that this descriptor is attached to).
+        :param range_value: The range value to update (i.e., the value to set on the managed attribute).
+        :param inferred: Whether the update is due to an inferred relation.
+        """
+        v = getattr(domain_value, self.private_attr_name)
+        updated = False
+        if isinstance(v, MonitoredContainer):
+            updated = v._update(range_value, call_on_add=False)
+        elif v != range_value:
+            setattr(domain_value, self.private_attr_name, range_value)
+            updated = True
+        if not updated:
+            return
+        for super_domain, super_field in self.get_super_properties(domain_value):
+            super_descriptor = super_field.property_descriptor
+            super_descriptor.update_value(super_domain, range_value, inferred=True)
+        if self.inverse_of:
+            inverse_domain, inverse_field = self.get_inverse_field(range_value)
+            inverse_field.property_descriptor.update_value(
+                inverse_domain, domain_value, inferred=True
+            )
+        self.add_transitive_relations_to_graph()
+
+    def get_super_properties(
+        self, value: Symbol
+    ) -> Iterable[Tuple[Symbol, WrappedField]]:
+        """
+        Find neighboring symbols connected by super edges.
+
+        This method identifies neighboring symbols that are connected
+        through edge with predicate types that are superclasses of the current predicate.
+
+        :param value: The symbol for which neighboring symbols are
+                evaluated through super predicate type edges.
+
+        :return: A list containing neighboring symbols connected by super type edges.
+        """
+        class_diagram = SymbolGraph().class_diagram
+        wrapped_cls = class_diagram.get_wrapped_class(type(value))
+        if not wrapped_cls:
+            return
+        yield from (
+            (value, f)
+            for f in class_diagram.get_fields_of_superclass_property_descriptors(
+                wrapped_cls, self.__class__
+            )
+        )
+        role_taker_property_fields = class_diagram.get_role_taker_superclass_properties(
+            wrapped_cls, self.__class__
+        )
+        if not role_taker_property_fields:
+            return
+        yield from (
+            (getattr(value, role_taker_property_fields.role_taker.public_name), f)
+            for f in role_taker_property_fields.fields
+        )
+
+    def get_inverse_field(self, obj: Symbol) -> Tuple[Symbol, WrappedField]:
+        """
+        Get the inverse of the property descriptor.
+
+        :param obj: The object that has the property descriptor.
+        :return: The inverse property descriptor field.
+        """
+        symbol_graph = SymbolGraph()
+        class_diagram = symbol_graph.class_diagram
+        obj_type = type(obj)
+        inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
+            obj_type, self.inverse_of
+        )
+        if not inverse_field:
+            role_taker, inverse_field = (
+                self.get_inverse_field_from_role_taker_of_object(obj)
+            )
+            if inverse_field:
+                return role_taker, inverse_field
+            else:
+                raise ValueError(
+                    f"cannot find a field for the inverse {self.inverse_of} defined for {obj_type}"
+                )
+        return obj, inverse_field
+
+    def get_inverse_field_from_role_taker_of_object(
+        self, obj: Symbol
+    ) -> Tuple[Optional[Symbol], Optional[WrappedField]]:
+        """
+        Get the inverse field of the property descriptor from the role taker of the object if it exists.
+
+        :param obj: The object that has a role taker with a possible inverse descriptor of the current descriptor.
+        :return: The wrapped field of the inverse descriptor if it exists, None otherwise.
+        """
+        symbol_graph = SymbolGraph()
+        class_diagram = symbol_graph.class_diagram
+        role_taker = symbol_graph.get_role_takers_of_instance(obj)
+        role_taker_wrapped_cls = class_diagram.get_wrapped_class(type(role_taker))
+        if role_taker:
+            inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
+                role_taker_wrapped_cls, self.inverse_of
+            )
+            return role_taker, inverse_field
+        return None, None
+
+    def add_transitive_relations_to_graph(self, range_value: Symbol):
+        """
+        Add all transitive relations of this relation type that results from adding this relation to the graph.
+        """
+        if self.transitive:
+            wrapped_instance = SymbolGraph().get_wrapped_instance(range_value)
+            for nxt in wrapped_instance.neighbors_with_relation_type(self.__class__):
+                self.__class__(self.source, nxt, inferred=True).add_to_graph()
+            for nxt in self.source.neighbors_with_relation_type(
+                self.__class__, outgoing=False
+            ):
+                self.__class__(nxt, self.target, inferred=True).add_to_graph()
 
     @profile
     def _holds_direct(

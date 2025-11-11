@@ -4,7 +4,7 @@ import os
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
-from typing import Union
+from typing import Union, Callable, Tuple
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -51,6 +51,22 @@ class PredicateClassRelation:
     """
     Rather it was inferred or not.
     """
+    transitive: ClassVar[bool] = False
+    """
+    If the relation is transitive or not.
+    """
+    inverse_of: ClassVar[Optional[Type[PredicateClassRelation]]] = None
+    """
+    The inverse of the relation if it exists.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        Hook to set up inverse_of class variable automatically.
+        """
+        super().__init_subclass__(**kwargs)
+        if cls.inverse_of is not None:
+            cls.inverse_of.inverse_of = cls
 
     def __post_init__(self):
         self.source = SymbolGraph().ensure_wrapped_instance(self.source)
@@ -61,8 +77,8 @@ class PredicateClassRelation:
         Add the relation to the graph.
         """
         if SymbolGraph().add_relation(self):
-            for property_value in self.super_relations:
-                property_value.add(rv, inferred=True)
+            for super_domain, super_field in self.super_relations:
+                self.__class__(super_domain, self.target, inferred=True).add_to_graph()
             if self.inverse_of:
                 inverse = self.get_inverse(rv)
                 if self.source not in inverse:
@@ -70,18 +86,34 @@ class PredicateClassRelation:
             self.add_transitive_relations_to_graph()
 
     @property
-    def super_relations(self) -> Iterable[PredicateClassRelation]:
+    def super_relations(self) -> Iterable[Tuple[WrappedInstance, WrappedField]]:
         """
-        Yield all super relations of this relation type.
+        Find neighboring symbols connected by super edges.
+
+        This method identifies neighboring symbols that are connected
+        through edge with predicate types that are superclasses of the current predicate.
+
+        :return: A list containing neighboring symbols connected by super type edges.
         """
-        current_cls = self.__class__
-        while current_cls:
-            yield current_cls
-            current_cls = (
-                current_cls.__base__
-                if issubclass(current_cls.__base__, PredicateClassRelation)
-                else None
+        symbol_graph = SymbolGraph()
+        class_diagram = symbol_graph.class_diagram
+        source_type = self.source.instance_type
+        yield from (
+            (self.source, f)
+            for f in class_diagram.get_fields_of_superclass_property_descriptors(
+                source_type, self.__class__
             )
+        )
+        source_role_taker_field, role_taker_fields = (
+            class_diagram.get_role_taker_superclass_properties(
+                source_type, self.__class__
+            )
+        )
+        if not role_taker_fields:
+            return
+        role_taker = getattr(self.source.instance, source_role_taker_field.public_name)
+        role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
+        yield from ((role_taker, f) for f in role_taker_fields)
 
     def add_transitive_relations_to_graph(self):
         """
@@ -159,7 +191,7 @@ class WrappedInstance:
         :return: Iterable of neighbors.
         """
         if outgoing:
-            neighbors_getter = SymbolGraph().get_outgoing_neighbors_with_predicate_type
+            neighbors_getter = SymbolGraph().get_outgoing_neighbors_with_relation_type
         else:
             neighbors_getter = SymbolGraph().get_incoming_neighbors_with_predicate_type
         yield from neighbors_getter(self, relation_type)
@@ -373,21 +405,23 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance: Union[WrappedInstance, Symbol],
         predicate_subclass: Type[PredicateClassRelation],
     ) -> Iterable[WrappedInstance]:
-        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
-        if not wrapped_instance:
-            return
-        yield from (
-            self._instance_graph.get_node_data(child_idx)
-            for _, child_idx, edge in self._instance_graph.in_edges(
-                wrapped_instance.index
-            )
-            if issubclass(predicate_subclass, type(edge))
+        yield from self.get_outgoing_neighbors_with_edge_condition(
+            wrapped_instance, lambda edge: issubclass(predicate_subclass, type(edge))
         )
 
     def get_incoming_neighbors_with_predicate_type(
         self,
         wrapped_instance: Union[WrappedInstance, Symbol],
         predicate_type: Type[PredicateClassRelation],
+    ) -> Iterable[WrappedInstance]:
+        yield from self.get_incoming_neighbors_with_edge_condition(
+            wrapped_instance, lambda edge: isinstance(edge, predicate_type)
+        )
+
+    def get_incoming_neighbors_with_edge_condition(
+        self,
+        wrapped_instance: Union[WrappedInstance, Symbol],
+        edge_condition: Callable[[PredicateClassRelation], bool],
     ) -> Iterable[WrappedInstance]:
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         if not wrapped_instance:
@@ -397,7 +431,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             for parent_idx, _, edge in self._instance_graph.in_edges(
                 wrapped_instance.index
             )
-            if isinstance(edge, predicate_type)
+            if edge_condition(edge)
         )
 
     def get_incoming_neighbors(
@@ -411,31 +445,62 @@ class SymbolGraph(metaclass=SingletonMeta):
             )
         )
 
-    def get_outgoing_neighbors_with_predicate_type(
+    def get_outgoing_neighbors_with_relation_type(
         self,
         wrapped_instance: WrappedInstance,
         predicate_type: Type[PredicateClassRelation],
     ) -> Iterable[WrappedInstance]:
-        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
-        if not wrapped_instance:
-            return
+        yield from self.get_outgoing_neighbors_with_edge_condition(
+            wrapped_instance, lambda edge: isinstance(edge, predicate_type)
+        )
+
+    def get_outgoing_neighbors_with_edge_condition(
+        self,
+        wrapped_instance: WrappedInstance,
+        edge_condition: Callable[[PredicateClassRelation], bool],
+    ) -> Iterable[WrappedInstance]:
         yield from (
-            self._instance_graph.get_node_data(child_idx)
-            for _, child_idx, edge in self._instance_graph.out_edges(
-                wrapped_instance.index
+            edge.target
+            for edge in self.get_outgoing_relations_with_condition(
+                wrapped_instance, edge_condition
             )
-            if isinstance(edge, predicate_type)
         )
 
     def get_outgoing_neighbors(
         self, wrapped_instance: WrappedInstance
     ) -> Iterable[WrappedInstance]:
-        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
-            self._instance_graph.get_node_data(child_idx)
-            for _, child_idx, _ in self._instance_graph.out_edges(
-                wrapped_instance.index
-            )
+            edge.target for edge in self.get_outgoing_relations(wrapped_instance)
+        )
+
+    def get_outgoing_super_relations_of(
+        self,
+        wrapped_instance: WrappedInstance,
+        relation_type: Type[PredicateClassRelation],
+    ) -> Iterable[PredicateClassRelation]:
+        yield from self.get_outgoing_relations_with_condition(
+            wrapped_instance,
+            lambda edge: issubclass(relation_type, type(edge))
+            and type(edge) != relation_type,
+        )
+
+    def get_outgoing_relations_with_condition(
+        self,
+        wrapped_instance: WrappedInstance,
+        edge_condition: Callable[[PredicateClassRelation], bool],
+    ) -> Iterable[PredicateClassRelation]:
+        yield from filter(edge_condition, self.get_outgoing_relations(wrapped_instance))
+
+    def get_outgoing_relations(
+        self,
+        wrapped_instance: WrappedInstance,
+    ) -> Iterable[PredicateClassRelation]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
+        yield from (
+            edge
+            for _, _, edge in self._instance_graph.out_edges(wrapped_instance.index)
         )
 
     def get_neighbors(

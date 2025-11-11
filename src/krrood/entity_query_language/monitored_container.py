@@ -3,10 +3,20 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
-from typing_extensions import Optional, Union, Dict, Type
+from typing_extensions import (
+    Optional,
+    Union,
+    Dict,
+    Type,
+    Generic,
+    TYPE_CHECKING,
+    TypeVar,
+)
 
-from krrood.entity_query_language.predicate import Symbol
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+from .predicate import Symbol
+
+if TYPE_CHECKING:
+    from .property_descriptor import PropertyDescriptor
 
 
 monitored_type_map: Dict[Type, Type[MonitoredContainer]] = {}
@@ -14,8 +24,10 @@ monitored_type_map: Dict[Type, Type[MonitoredContainer]] = {}
 A mapping of container types to their monitored container types.
 """
 
+T = TypeVar("T", bound=Symbol)
 
-class MonitoredContainer(ABC):
+
+class MonitoredContainer(Generic[T], ABC):
     """
     A container abstract class to be inherited from for specific container types to invoke the on-add
     callback of the descriptor. This is used by the :py class:`krrood.entity_query_language.PropertyDescriptor` to apply
@@ -65,6 +77,22 @@ class MonitoredContainer(ABC):
             self._descriptor.on_add(owner, value, inferred=inferred)
         return value
 
+    def _update(
+        self, value: Symbol, inferred: bool = False, call_on_add: bool = False
+    ) -> bool:
+        """
+        Only add the value if it is not already in the container.
+
+        :param value: The value to be added to the container
+        :param inferred: If the value is inferred or not
+        :param call_on_add: Whether to call the descriptor on_add or not
+        :return: Whether the value was added or not
+        """
+        if value in self:
+            return False
+        self._add_item(value, inferred=inferred, call_on_add=call_on_add)
+        return True
+
     @abstractmethod
     def _remove_item(self, item):
         """
@@ -75,20 +103,29 @@ class MonitoredContainer(ABC):
         ...
 
     @abstractmethod
-    def _add_item(self, item):
+    def _add_item(self, item: Symbol, inferred: bool = False, call_on_add: bool = True):
         """
         This method is called when an item is added to the container. It should be implemented by subclasses.
         In addition, this method should call the descriptor on_add method.
 
         :param item: The item to be added
+        :param inferred: Whether the value is inferred or not
+        :param call_on_add: Whether to call the descriptor on_add or not
         """
         ...
 
     @classmethod
     @abstractmethod
-    def _get_monitored_type(cls):
+    def _get_monitored_type(cls) -> Type:
         """
         Get the monitored container type (i.e., the original container type)
+        """
+        ...
+
+    @abstractmethod
+    def _clear(self) -> None:
+        """
+        Clear the container.
         """
         ...
 
@@ -97,6 +134,10 @@ class MonitoredList(list, MonitoredContainer):
     """
     A list that invokes the descriptor on_add for further implicit inferences.
     """
+
+    @classmethod
+    def _get_monitored_type(cls):
+        return list
 
     def extend(self, items):
         for item in items:
@@ -120,11 +161,18 @@ class MonitoredList(list, MonitoredContainer):
     def _remove_item(self, item):
         self.remove(item)
 
+    def _clear(self):
+        self.clear()
+
 
 class MonitoredSet(set, MonitoredContainer):
     """
     A set that invokes the descriptor on_add for further implicit inferences.
     """
+
+    @classmethod
+    def _get_monitored_type(cls):
+        return set
 
     def add(self, value):
         self._add_item(value)
@@ -139,3 +187,6 @@ class MonitoredSet(set, MonitoredContainer):
 
     def _remove_item(self, item):
         self.remove(item)
+
+    def _clear(self):
+        self.clear()
