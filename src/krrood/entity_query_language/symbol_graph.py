@@ -22,6 +22,7 @@ from typing_extensions import (
 from .attribute_introspector import DescriptorAwareIntrospector
 from .. import logger
 from ..class_diagrams import ClassDiagram
+from ..class_diagrams.wrapped_field import WrappedField
 from ..singleton import SingletonMeta
 from ..utils import recursive_subclasses
 
@@ -63,6 +64,11 @@ class PredicateClassRelation:
     The inverse of the relation if it exists.
     """
 
+    wrapped_field: Optional[WrappedField] = None
+    """
+    The field that represents the relation in the class diagram if it exists.
+    """
+
     def __init_subclass__(cls, **kwargs):
         """
         Hook to set up inverse_of class variable automatically.
@@ -80,7 +86,27 @@ class PredicateClassRelation:
         Add the relation to the graph.
         """
         if SymbolGraph().add_relation(self):
+            for property_value in self.super_relations:
+                property_value.add(rv, inferred=True)
+            if self.inverse_of:
+                inverse = self.get_inverse(rv)
+                if self.source not in inverse:
+                    self.get_inverse(rv).add(domain_value, inferred=True)
             self.add_transitive_relations_to_graph()
+
+    @property
+    def super_relations(self) -> Iterable[PredicateClassRelation]:
+        """
+        Yield all super relations of this relation type.
+        """
+        current_cls = self.__class__
+        while current_cls:
+            yield current_cls
+            current_cls = (
+                current_cls.__base__
+                if issubclass(current_cls.__base__, PredicateClassRelation)
+                else None
+            )
 
     def add_transitive_relations_to_graph(self):
         """
