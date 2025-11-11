@@ -80,9 +80,10 @@ class PredicateClassRelation:
             for super_domain, super_field in self.super_relations:
                 self.__class__(super_domain, self.target, inferred=True).add_to_graph()
             if self.inverse_of:
-                inverse = self.get_inverse(rv)
-                if self.source not in inverse:
-                    self.get_inverse(rv).add(domain_value, inferred=True)
+                inverse_domain, inverse_field = self.inverse_domain_and_field
+                self.__class__(
+                    inverse_domain, self.source, inferred=True
+                ).add_to_graph()
             self.add_transitive_relations_to_graph()
 
     @property
@@ -114,6 +115,50 @@ class PredicateClassRelation:
         role_taker = getattr(self.source.instance, source_role_taker_field.public_name)
         role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
         yield from ((role_taker, f) for f in role_taker_fields)
+
+    @property
+    def inverse_domain_and_field(self) -> Tuple[WrappedInstance, WrappedField]:
+        """
+        Get the inverse of the property descriptor.
+
+        :return: The inverse domain instance and property descriptor field.
+        """
+        symbol_graph = SymbolGraph()
+        class_diagram = symbol_graph.class_diagram
+        source_type = self.source.instance_type
+        inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
+            source_type, self.inverse_of
+        )
+        if not inverse_field:
+            role_taker, inverse_field = self.inverse_domain_and_field_from_role_taker
+            if inverse_field:
+                role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
+                return role_taker, inverse_field
+            else:
+                raise ValueError(
+                    f"cannot find a field for the inverse {self.inverse_of} defined for {source_type}"
+                )
+        return self.source, inverse_field
+
+    @property
+    def inverse_domain_and_field_from_role_taker(
+        self,
+    ) -> Tuple[Optional[WrappedInstance], Optional[WrappedField]]:
+        """
+        Get the inverse field of the property descriptor from the role taker of the object if it exists.
+
+        :return: The role taker wrapped instance and the wrapped field of the inverse descriptor if they exist.
+        """
+        symbol_graph = SymbolGraph()
+        class_diagram = symbol_graph.class_diagram
+        role_taker = symbol_graph.get_role_takers_of_instance(self.source.instance)
+        if role_taker:
+            inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
+                type(role_taker), self.inverse_of
+            )
+            role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
+            return role_taker, inverse_field
+        return None, None
 
     def add_transitive_relations_to_graph(self):
         """
@@ -400,15 +445,6 @@ class SymbolGraph(metaclass=SingletonMeta):
     def wrapped_instances(self) -> List[WrappedInstance]:
         return self._instance_graph.nodes()
 
-    def get_outgoing_neighbors_with_predicate_subclass(
-        self,
-        wrapped_instance: Union[WrappedInstance, Symbol],
-        predicate_subclass: Type[PredicateClassRelation],
-    ) -> Iterable[WrappedInstance]:
-        yield from self.get_outgoing_neighbors_with_edge_condition(
-            wrapped_instance, lambda edge: issubclass(predicate_subclass, type(edge))
-        )
-
     def get_incoming_neighbors_with_predicate_type(
         self,
         wrapped_instance: Union[WrappedInstance, Symbol],
@@ -423,26 +459,36 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance: Union[WrappedInstance, Symbol],
         edge_condition: Callable[[PredicateClassRelation], bool],
     ) -> Iterable[WrappedInstance]:
-        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
-        if not wrapped_instance:
-            return
         yield from (
-            self._instance_graph.get_node_data(parent_idx)
-            for parent_idx, _, edge in self._instance_graph.in_edges(
-                wrapped_instance.index
+            edge.target
+            for edge in self.get_incoming_relations_with_condition(
+                wrapped_instance, edge_condition
             )
-            if edge_condition(edge)
         )
 
     def get_incoming_neighbors(
         self, wrapped_instance: WrappedInstance
     ) -> Iterable[WrappedInstance]:
-        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         yield from (
-            self._instance_graph.get_node_data(parent_idx)
-            for parent_idx, _, _ in self._instance_graph.in_edges(
-                wrapped_instance.index
-            )
+            edge.source for edge in self.get_incoming_relations(wrapped_instance)
+        )
+
+    def get_incoming_relations_with_condition(
+        self,
+        wrapped_instance: WrappedInstance,
+        edge_condition: Callable[[PredicateClassRelation], bool],
+    ):
+        yield from filter(edge_condition, self.get_incoming_relations(wrapped_instance))
+
+    def get_incoming_relations(
+        self,
+        wrapped_instance: WrappedInstance,
+    ) -> Iterable[PredicateClassRelation]:
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
+        yield from (
+            edge for _, _, edge in self._instance_graph.in_edges(wrapped_instance.index)
         )
 
     def get_outgoing_neighbors_with_relation_type(
@@ -471,17 +517,6 @@ class SymbolGraph(metaclass=SingletonMeta):
     ) -> Iterable[WrappedInstance]:
         yield from (
             edge.target for edge in self.get_outgoing_relations(wrapped_instance)
-        )
-
-    def get_outgoing_super_relations_of(
-        self,
-        wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation],
-    ) -> Iterable[PredicateClassRelation]:
-        yield from self.get_outgoing_relations_with_condition(
-            wrapped_instance,
-            lambda edge: issubclass(relation_type, type(edge))
-            and type(edge) != relation_type,
         )
 
     def get_outgoing_relations_with_condition(
