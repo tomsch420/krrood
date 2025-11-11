@@ -78,6 +78,10 @@ class WrappedField:
     def __post_init__(self):
         self.public_name = self.public_name or self.field.name
 
+    @cached_property
+    def name(self):
+        return self.public_name
+
     def __hash__(self):
         return hash((self.clazz.clazz, self.field))
 
@@ -163,7 +167,10 @@ class WrappedField:
                 if self.resolved_type is Type:
                     return self.resolved_type
                 else:
-                    raise
+                    raise ValueError(
+                        f"Could not determine contained type of field {self}, make sure to define the contained type"
+                        f" explicitly, e.g., List[MyClass]"
+                    )
 
     @cached_property
     def is_type_type(self) -> bool:

@@ -34,7 +34,6 @@ from typing_extensions import (
     ClassVar,
     Union as TypingUnion,
     Generic,
-    TypeVar,
     TYPE_CHECKING,
     List,
     Tuple,
@@ -84,8 +83,6 @@ def in_symbolic_mode(mode: Optional[EQLMode] = None) -> bool:
     current_mode = _symbolic_mode.get()
     return current_mode == mode if mode else current_mode is not None
 
-
-T = TypeVar("T")
 
 id_generator = IDGenerator()
 

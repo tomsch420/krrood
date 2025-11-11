@@ -43,39 +43,14 @@ class PredicateClassRelation:
     """
     The source of the predicate
     """
-
     target: WrappedInstance
     """
     The target of the predicate
     """
-
     inferred: bool = False
     """
     Rather it was inferred or not.
     """
-
-    transitive: ClassVar[bool] = False
-    """
-    If the relation is transitive or not.
-    """
-
-    inverse_of: ClassVar[Optional[Type[PredicateClassRelation]]] = None
-    """
-    The inverse of the relation if it exists.
-    """
-
-    wrapped_field: Optional[WrappedField] = None
-    """
-    The field that represents the relation in the class diagram if it exists.
-    """
-
-    def __init_subclass__(cls, **kwargs):
-        """
-        Hook to set up inverse_of class variable automatically.
-        """
-        super().__init_subclass__(**kwargs)
-        if cls.inverse_of is not None:
-            cls.inverse_of.inverse_of = cls
 
     def __post_init__(self):
         self.source = SymbolGraph().ensure_wrapped_instance(self.source)

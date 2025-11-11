@@ -1,55 +1,27 @@
 from __future__ import annotations
 
-from copy import copy
-from dataclasses import Field, dataclass, field, MISSING, fields
+from collections import defaultdict
+from dataclasses import dataclass, field, fields, InitVar
 from functools import cached_property
 from typing import (
-    Generic,
     ClassVar,
     Set,
     Type,
     Optional,
     Any,
     Iterable,
-    TypeVar,
     Tuple,
     Dict,
 )
 from weakref import WeakKeyDictionary, ref as weakref_ref
 
 from line_profiler import profile
+from typing_extensions import DefaultDict
 
-from .predicate import Symbol, T, Predicate, BinaryPredicate
-from .typing_utils import get_range_types
+from .predicate import Symbol
 from .utils import make_set
-
-
-class ThingMeta(type):
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
-        for attr_name, attr_value in copy(attrs).items():
-            if attr_name.startswith("__"):
-                continue
-            if isinstance(attr_value, Field):
-                if isinstance(attr_value.default_factory, type) and issubclass(
-                    attr_value.default_factory, PropertyDescriptor
-                ):
-                    instance = attr_value.default_factory(_cls_=cls)
-                    instance.create_managed_attribute_for_class(cls, attr_name)
-
-                    # Important: remove original annotation so dataclass does not shadow the descriptor
-                    if attr_name in cls.__annotations__:
-                        del cls.__annotations__[attr_name]
-
-                    # Bind the descriptor at the class attribute name so __get__/__set__ are used
-                    setattr(cls, attr_name, instance)
-
-
-@dataclass
-class Thing(Symbol, metaclass=ThingMeta): ...
-
-
-T = TypeVar("T")
+from ..class_diagrams.class_diagram import WrappedClass
+from ..class_diagrams.wrapped_field import WrappedField
 
 
 class MonitoredSet(set):
@@ -78,131 +50,164 @@ class MonitoredSet(set):
             self.descriptor.on_add(owner, value, inferred=inferred)
 
 
-@dataclass
-class PropertyDescriptor(Generic[T], BinaryPredicate):
-    """Descriptor storing values on instances while keeping type metadata on the descriptor.
+SymbolType = Type[Symbol]
+DomainRangeMap = Dict[SymbolType, SymbolType]
 
-    When used on dataclass fields and combined with Thing, the descriptor
-    injects a hidden dataclass-managed attribute (backing storage) into the owner class
+
+@dataclass
+class PropertyDescriptor:
+    """Descriptor managing a data class field while giving it metadata like superproperties,
+    sub-properties, inverse, transitivity, ...etc.
+
+    The descriptor injects a hidden dataclass-managed attribute (backing storage) into the owner class
     and collects domain and range types for introspection.
+
+    The way this should be used is after defining your dataclasses you declare either in the same file or in a separate
+    file the descriptors for each field that is considered a relation between two symbol types.
+
+    Example:
+        >>> from dataclasses import dataclass
+        >>> from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+        >>> @dataclass
+        ... class Company(Symbol):
+        ...     name: str
+        ...     members: Set[Person] = field(default_factory=set)
+        ...
+        >>> @dataclass
+        ... class Person(Symbol):
+        ...     name: str
+        ...     works_for: Set[Company] = field(default_factory=set)
+        ...
+        >>> @dataclass
+        >>> class Member(PropertyDescriptor):
+        ...     pass
+        ...
+        >>> @dataclass
+        ... class MemberOf(PropertyDescriptor):
+        ...     inverse_of = Member
+        ...
+        >>> @dataclass
+        >>> class WorksFor(MemberOf):
+        ...     pass
+        ...
+        >>> Person.works_for = WorksFor(Person, "works_for")
+        >>> Company.members = Member(Company, "members")
     """
 
-    domain_types: ClassVar[Set[Type]] = set()
-    range_types: ClassVar[Set[Type]] = set()
-
-    _domain_value: Optional[Any] = None
-    _range_value: Optional[Any] = None
-    _cls_: Optional[Type] = None
-
-    # Cache of discovered sub-properties per domain class and per descriptor subclass.
-    # Weak keys prevent memory leaks when domain classes are unloaded.
+    domain_type: InitVar[SymbolType]
+    """
+    The domain type for this descriptor instance.
+    """
+    field_name: InitVar[str]
+    """
+    The name of the field on the domain type that this descriptor instance manages.
+    """
+    wrapped_field: WrappedField = field(init=False)
+    """
+    The wrapped field instance that this descriptor instance manages.
+    """
     _subprops_cache: ClassVar[WeakKeyDictionary] = WeakKeyDictionary()
+    """
+    Cache of discovered sub-properties per domain class and per descriptor subclass. Weak keys prevent memory leaks
+     when domain classes are unloaded.
+    """
+    domain_range_map: ClassVar[
+        DefaultDict[Type[PropertyDescriptor], DomainRangeMap]
+    ] = defaultdict(dict)
+    """
+    A mapping from descriptor class to the mapping from domain types to range types for that descriptor class.
+    """
+    all_domains: ClassVar[Set[SymbolType]] = set()
+    """
+    A set of all domain types for this descriptor class.
+    """
+    all_ranges: ClassVar[Set[SymbolType]] = set()
+    """
+    A set of all range types for this descriptor class.
+    """
+    transitive: ClassVar[bool] = False
+    """
+    If the relation is transitive or not.
+    """
+    inverse_of: ClassVar[Optional[Type[PropertyDescriptor]]] = None
+    """
+    The inverse of the relation if it exists.
+    """
 
     def __init_subclass__(cls, **kwargs):
+        """
+        Hook to set up inverse_of class variable automatically.
+        """
         super().__init_subclass__(**kwargs)
-        cls.domain_types = set()
-        cls.range_types = set()
+        if cls.inverse_of is not None:
+            cls.inverse_of.inverse_of = cls
 
-    @property
-    def domain_value(self) -> Optional[Any]:
-        return self._domain_value
-
-    @property
-    def range_value(self) -> Optional[Any]:
-        return self._range_value
-
-    @cached_property
-    def attr_name(self) -> str:
-        return f"_{self.name}_{id(self)}"
+    def __post_init__(
+        self, domain_type: Optional[SymbolType] = None, field_name: Optional[str] = None
+    ):
+        self._validate_non_redundant_domain(domain_type)
+        self._update_wrapped_field(domain_type, field_name)
+        self._update_domain_and_range(domain_type)
 
     @cached_property
-    def name(self) -> str:
-        name = self.__class__.__name__
-        return name[0].lower() + name[1:]
+    def private_attr_name(self) -> str:
+        """
+        The name of the private attribute that stores the values on the owner instance.
+        """
+        return f"_{self.wrapped_field.name}"
+
+    def _validate_non_redundant_domain(self, domain_type: SymbolType):
+        """
+        Validate that this exact descriptor type has not already been defined for this domain type.
+
+        :param domain_type: The domain type to validate.
+        """
+        if domain_type in self.domain_range_map[self.__class__]:
+            raise ValueError(
+                f"Domain {domain_type} already exists, cannot define same descriptor more than once in "
+                f"the same class"
+            )
+
+    def _update_wrapped_field(self, domain_type: SymbolType, field_name: str):
+        """
+        Set the wrapped field attribute using the domain type and field name.
+
+        :param domain_type:  The domain type for this descriptor instance.
+        :param field_name:  The field name that this descriptor instance manages.
+        """
+        field_ = [f for f in fields(domain_type) if f.name == field_name][0]
+        self.wrapped_field = WrappedField(WrappedClass(domain_type), field_)
+
+    def _update_domain_and_range(self, domain_type: SymbolType):
+        """
+        Update the domain and range sets and the domain-range map for this descriptor type.
+
+        :param domain_type: The domain type for this descriptor instance.
+        """
+        range_type = self.wrapped_field.type_endpoint
+        assert issubclass(range_type, Symbol)
+        self.domain_range_map[self.__class__][domain_type] = range_type
+        self.all_domains.add(domain_type)
+        self.all_ranges.add(range_type)
 
     @cached_property
-    def nullable(self) -> bool:
-        return type(None) in self.range_types
+    def range(self):
+        return self.domain_range_map[self.__class__][self.domain]
 
-    def create_managed_attribute_for_class(self, cls: Type, attr_name: str) -> None:
-        """Create hidden dataclass field to store instance values and update type sets."""
-        setattr(
-            cls,
-            self.attr_name,
-            field(
-                default_factory=lambda: MonitoredSet(descriptor=self),
-                init=False,
-                repr=False,
-                hash=False,
-            ),
-        )
-        # Preserve the declared annotation for the hidden field
-        cls.__annotations__[self.attr_name] = cls.__annotations__[attr_name]
-
-        self.update_domain_types()
-        self.update_range_types()
+    @cached_property
+    def domain(self):
+        domain_type = self.wrapped_field.clazz.clazz
+        assert issubclass(domain_type, Symbol)
+        return domain_type
 
     def on_add(self, domain_value, val: Symbol, inferred: bool = False) -> None:
         """Add a value to the property descriptor."""
         self.add_relation(domain_value, val, inferred=inferred)
 
-    def update_domain_types(self) -> None:
-        """
-        Add a class to the domain types if it is not already a subclass of any existing domain type.
-
-        This method is used to keep track of the classes that are valid as values for the property descriptor.
-        It does not add a class if it is already a subclass of any existing domain type to avoid infinite recursion.
-        :return: None
-        """
-        cls = self._cls_
-        if any(issubclass(cls, domain_type) for domain_type in self.domain_types):
-            return
-        self.domain_types.add(cls)
-
-    @property
-    def range_type(self):
-        type_hint = self._cls_.__annotations__[self.attr_name]
-        if isinstance(type_hint, str):
-            try:
-                type_hint = eval(
-                    type_hint, vars(__import__(self._cls_.__module__, fromlist=["*"]))
-                )
-            except NameError:
-                # Try again with the class under construction injected; if still failing, skip for now.
-                try:
-                    module_globals = vars(
-                        __import__(self._cls_.__module__, fromlist=["*"])
-                    ).copy()
-                    module_globals[self._cls_.__name__] = self._cls_
-                    type_hint = eval(type_hint, module_globals)
-                except NameError:
-                    return
-        return get_range_types(type_hint)
-
-    def update_range_types(self) -> None:
-        range_types = self.range_type
-        if range_types is None:
-            return
-        for new_type in range_types:
-            try:
-                is_sub = any(
-                    issubclass(new_type, range_cls) for range_cls in self.range_types
-                )
-            except TypeError:
-                # new_type is not a class (e.g., typing constructs); skip subclass check
-                is_sub = False
-            if is_sub:
-                continue
-            try:
-                self.range_types.add(new_type)
-            except TypeError:
-                # Unhashable or invalid type; ignore
-                continue
-
     def __get__(self, obj, objtype=None):
         if obj is None:
             return self
-        container = getattr(obj, self.attr_name)
+        container = getattr(obj, self.private_attr_name)
         # Bind the owner so subsequent `add` calls know the instance
         if getattr(container, "owner", None) is not obj:
             container.bind_owner(obj)
@@ -211,7 +216,7 @@ class PropertyDescriptor(Generic[T], BinaryPredicate):
     def __set__(self, obj, value):
         if isinstance(value, PropertyDescriptor):
             return
-        attr = getattr(obj, self.attr_name)
+        attr = getattr(obj, self.private_attr_name)
         attr.clear()
         for v in make_set(value):
             attr.add(v, call_on_add=False)
@@ -242,9 +247,9 @@ class PropertyDescriptor(Generic[T], BinaryPredicate):
         range_value = range_value or self.range_value
 
         # If the concrete instance has our backing attribute, check it directly.
-        if hasattr(domain_value, self.attr_name):
+        if hasattr(domain_value, self.private_attr_name):
             if self._check_relation_value(
-                attr_name=self.attr_name,
+                attr_name=self.private_attr_name,
                 domain_value=domain_value,
                 range_value=range_value,
             ):
@@ -262,7 +267,9 @@ class PropertyDescriptor(Generic[T], BinaryPredicate):
         range_value = range_value or self.range_value
         for prop_data in self.get_sub_properties(domain_value):
             if self._check_relation_value(
-                prop_data.attr_name, domain_value=domain_value, range_value=range_value
+                prop_data.private_attr_name,
+                domain_value=domain_value,
+                range_value=range_value,
             ):
                 return True
         return False
