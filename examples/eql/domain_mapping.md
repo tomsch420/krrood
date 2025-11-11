@@ -12,12 +12,11 @@ kernelspec:
 ---
 # Domain Mapping
 
-Domain mapping transforms iterable attributes or nested collections into element-wise bindings while preserving existing variable bindings. This page covers two common patterns:
+Domain mapping transforms iterable attributes or nested collections into element-wise bindings while preserving existing
+variable bindings. This page covers two common patterns:
 
 - Flattening an iterable attribute (`flatten`)
 - Indexing into container attributes (capturing `__getitem__` symbolically)
-
-Both examples follow the same style as the other EQL docs and use MyST with `ipython3` code cells.
 
 ## Setup
 
@@ -96,7 +95,9 @@ world.views = [cabinet]
 
 ## Flatten iterable attributes
 
-Flatten turns an iterable-of-iterables into a flat sequence of items while keeping the original parent binding (similar to SQL UNNEST). It is handy when a selected variable has an attribute that is a list and you want one row per element of that list.
+Flatten turns an iterable-of-iterables into a flat sequence of items while keeping the original parent binding
+(similar to [SQL UNNEST](https://www.postgresql.org/docs/current/functions-array.html#:~:text=unnest%20(%20anyarray%20)%20%E2%86%92%20setof%20anyelement)).
+It is handy when a selected variable has an attribute that is a list and you want one row per element of that list.
 
 ```{code-cell} ipython3
 with symbolic_mode():
