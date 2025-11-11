@@ -3,10 +3,16 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing_extensions import Optional, Union, Dict, Type
 
 from krrood.entity_query_language.predicate import Symbol
 from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+
+
+monitored_type_map: Dict[Type, Type[MonitoredContainer]] = {}
+"""
+A mapping of container types to their monitored container types.
+"""
 
 
 class MonitoredContainer(ABC):
@@ -15,6 +21,13 @@ class MonitoredContainer(ABC):
     callback of the descriptor. This is used by the :py class:`krrood.entity_query_language.PropertyDescriptor` to apply
     implicit inferences.
     """
+
+    def __init_subclass__(cls, **kwargs):
+        """
+        Hook to update the monitored_type_map with the monitored type of the subclass.
+        """
+        super().__init_subclass__(**kwargs)
+        monitored_type_map[cls._get_monitored_type()] = cls
 
     def __init__(self, *args, descriptor: PropertyDescriptor, **kwargs):
         self._descriptor: PropertyDescriptor = descriptor
@@ -68,6 +81,14 @@ class MonitoredContainer(ABC):
         In addition, this method should call the descriptor on_add method.
 
         :param item: The item to be added
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
+    def _get_monitored_type(cls):
+        """
+        Get the monitored container type (i.e., the original container type)
         """
         ...
 
