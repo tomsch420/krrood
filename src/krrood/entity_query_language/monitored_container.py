@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import weakref
+from _weakref import ref as weakref_ref
+from abc import ABC, abstractmethod
+from typing import Optional, Union
+
+from krrood.entity_query_language.predicate import Symbol
+from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+
+
+class MonitoredContainer(ABC):
+    """
+    A container abstract class to be inherited from for specific container types to invoke the on-add
+    callback of the descriptor. This is used by the :py class:`krrood.entity_query_language.PropertyDescriptor` to apply
+    implicit inferences.
+    """
+
+    def __init__(self, *args, descriptor: PropertyDescriptor, **kwargs):
+        self._descriptor: PropertyDescriptor = descriptor
+        self._owner_ref: Optional[weakref.ref[Symbol]] = None
+        super().__init__(*args, **kwargs)
+
+    def _bind_owner(self, owner) -> MonitoredContainer:
+        """
+        Bind the owning instance via a weak reference and return self.
+        """
+        self._owner_ref = weakref_ref(owner)
+        return self
+
+    @property
+    def _owner(self):
+        """ "
+        Get the owner instance via the weak reference.
+        """
+        return self._owner_ref() if self._owner_ref is not None else None
+
+    def _on_add(
+        self, value: Symbol, inferred: bool = False, call_on_add: bool = True
+    ) -> Union[Symbol, weakref.ref[Symbol]]:
+        """Call the descriptor on_add with the concrete owner instance
+
+        :param value: The value to be added to the container
+        :param inferred: Whether the value is inferred or not
+        :param call_on_add: Whether to call the descriptor on_add or not
+        :return: The value with a weakref if inferred is True, otherwise the value itself
+        """
+        if inferred:
+            value = weakref.ref(value, self._remove_item)
+        owner = self._owner
+        if owner is not None and call_on_add:
+            self._descriptor.on_add(owner, value, inferred=inferred)
+        return value
+
+    @abstractmethod
+    def _remove_item(self, item):
+        """
+        This method is called when an item is removed from the container. It should be implemented by subclasses.
+
+        :param item: The item to be removed
+        """
+        ...
+
+    @abstractmethod
+    def _add_item(self, item):
+        """
+        This method is called when an item is added to the container. It should be implemented by subclasses.
+        In addition, this method should call the descriptor on_add method.
+
+        :param item: The item to be added
+        """
+        ...
+
+
+class MonitoredList(list, MonitoredContainer):
+    """
+    A list that invokes the descriptor on_add for further implicit inferences.
+    """
+
+    def extend(self, items):
+        for item in items:
+            self._add_item(item)
+
+    def append(self, item):
+        self._add_item(item)
+
+    def _add_item(self, item, inferred: bool = False, call_on_add: bool = True):
+        item = self._on_add(item, inferred=inferred, call_on_add=call_on_add)
+        super().append(item)
+
+    def __setitem__(self, idx, value):
+        value = self._on_add(value)
+        super().__setitem__(idx, value)
+
+    def insert(self, idx, item):
+        item = self._on_add(item)
+        super().insert(idx, item)
+
+    def _remove_item(self, item):
+        self.remove(item)
+
+
+class MonitoredSet(set, MonitoredContainer):
+    """
+    A set that invokes the descriptor on_add for further implicit inferences.
+    """
+
+    def add(self, value):
+        self._add_item(value)
+
+    def update(self, values):
+        for value in values:
+            self._add_item(value)
+
+    def _add_item(self, value, inferred: bool = False, call_on_add: bool = True):
+        value = self._on_add(value, inferred=inferred, call_on_add=call_on_add)
+        super().add(value)
+
+    def _remove_item(self, item):
+        self.remove(item)

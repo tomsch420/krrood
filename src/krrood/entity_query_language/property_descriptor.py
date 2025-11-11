@@ -13,7 +13,7 @@ from typing import (
     Tuple,
     Dict,
 )
-from weakref import WeakKeyDictionary, ref as weakref_ref
+from weakref import WeakKeyDictionary
 
 from line_profiler import profile
 from typing_extensions import DefaultDict
@@ -22,33 +22,6 @@ from .predicate import Symbol
 from .utils import make_set
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
-
-
-class MonitoredSet(set):
-
-    def __init__(self, *args, **kwargs):
-        self.descriptor: PropertyDescriptor = kwargs.pop("descriptor")
-        self._owner_ref = None  # weakref to owner instance
-        super().__init__(*args, **kwargs)
-
-    def bind_owner(self, owner) -> "MonitoredSet":
-        """
-        Bind the owning instance via a weak reference and return self.
-        """
-        self._owner_ref = weakref_ref(owner)
-        return self
-
-    @property
-    def owner(self):
-        return self._owner_ref() if self._owner_ref is not None else None
-
-    def add(self, value, inferred: bool = False, call_on_add: bool = True):
-        super().add(value)
-        # route through descriptor with the concrete owner instance
-        owner = self.owner
-        if owner is not None and call_on_add:
-            self.descriptor.on_add(owner, value, inferred=inferred)
-
 
 SymbolType = Type[Symbol]
 DomainRangeMap = Dict[SymbolType, SymbolType]
@@ -191,11 +164,17 @@ class PropertyDescriptor:
         self.all_ranges.add(range_type)
 
     @cached_property
-    def range(self):
+    def range(self) -> SymbolType:
+        """
+        The range type for this descriptor instance.
+        """
         return self.domain_range_map[self.__class__][self.domain]
 
     @cached_property
-    def domain(self):
+    def domain(self) -> SymbolType:
+        """
+        The domain type for this descriptor instance.
+        """
         domain_type = self.wrapped_field.clazz.clazz
         assert issubclass(domain_type, Symbol)
         return domain_type
@@ -210,7 +189,7 @@ class PropertyDescriptor:
         container = getattr(obj, self.private_attr_name)
         # Bind the owner so subsequent `add` calls know the instance
         if getattr(container, "owner", None) is not obj:
-            container.bind_owner(obj)
+            container._bind_owner(obj)
         return container
 
     def __set__(self, obj, value):
