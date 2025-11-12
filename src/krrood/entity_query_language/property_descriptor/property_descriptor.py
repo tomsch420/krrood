@@ -244,7 +244,7 @@ class PropertyDescriptor(Symbol):
                 monitored_type = monitored_type_map[type(value)]
             except KeyError:
                 raise UnMonitoredContainerTypeForDescriptor(
-                    f"Cannot use the descriptor on field {self.wrapped_field} from {obj} because it has a container type"
+                    f"Cannot use the descriptor on field {self.wrapped_field} from {obj} because it has a container type "
                     f"that is not monitored (i.e., is not a subclass of {MonitoredContainer}). Either use one of "
                     f"{MonitoredList} or {MonitoredSet} or implement a custom monitored container type."
                 )

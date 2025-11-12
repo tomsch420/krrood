@@ -23,7 +23,6 @@ from typing_extensions import (
     Union,
 )
 
-from .attribute_introspector import DiscoveredAttribute
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 

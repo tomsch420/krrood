@@ -31,7 +31,7 @@ class MonitoredContainer(Generic[T], ABC):
     """
     A container abstract class to be inherited from for specific container types to invoke the on-add
     callback of the descriptor. This is used by the
-    :py class:`krrood.entity_query_language.property_descriptor.PropertyDescriptor` to apply
+    :py:class:`krrood.entity_query_language.property_descriptor.PropertyDescriptor` to apply
     implicit inferences.
     """
 
@@ -56,7 +56,7 @@ class MonitoredContainer(Generic[T], ABC):
 
     @property
     def _owner(self):
-        """ "
+        """
         Get the owner instance via the weak reference.
         """
         return self._owner_ref() if self._owner_ref is not None else None

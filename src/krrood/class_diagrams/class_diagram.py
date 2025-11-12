@@ -458,7 +458,7 @@ class ClassDiagram:
         if isinstance(clazz, WrappedClass):
             return clazz
         try:
-            return self._cls_wrapped_cls_map.get(clazz)
+            return self._cls_wrapped_cls_map[clazz]
         except KeyError:
             raise ClassIsUnMappedInClassDiagram(clazz)
 

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, Field
 from dataclasses import fields as dc_fields
 
-from typing_extensions import Dict, Iterable, List, Type, Optional, TYPE_CHECKING
+from typing_extensions import List, Type, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..entity_query_language.property_descriptor import PropertyDescriptor

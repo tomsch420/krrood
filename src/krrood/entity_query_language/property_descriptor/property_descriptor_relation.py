@@ -202,7 +202,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     @cached_property
     def target_role_taker_association(self) -> Optional[Association]:
         """
-        Return role taker association of the target if it exists..
+        Return role taker association of the target if it exists.
         """
         class_diagram = SymbolGraph().class_diagram
         return class_diagram.get_role_taker_associations_of_cls(

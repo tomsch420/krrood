@@ -53,7 +53,7 @@ class PredicateClassRelation:
     """
     inferred: bool = False
     """
-    Rather it was inferred or not.
+    Whether it was inferred or not.
     """
 
     def __post_init__(self):
@@ -63,6 +63,9 @@ class PredicateClassRelation:
     def add_to_graph(self) -> bool:
         """
         Add the relation to the graph.
+
+        Returns:
+            bool: True if the relation was newly added, False if it already existed.
         """
         return SymbolGraph().add_relation(self)
 
