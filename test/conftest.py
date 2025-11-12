@@ -20,6 +20,7 @@ from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
+from .dataset import example_classes
 from .dataset.example_classes import (
     PhysicalObject,
     NotMappedParent,
@@ -51,6 +52,7 @@ def generate_sqlalchemy_interface():
         for alternative_mapping in recursive_subclasses(AlternativeMapping)
     }
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
+    all_classes |= set(classes_of_module(example_classes))
     all_classes |= {Symbol}
 
     # remove classes that don't need persistence
@@ -58,7 +60,11 @@ def generate_sqlalchemy_interface():
     all_classes -= {NotMappedParent, ChildNotMapped}
 
     # only keep dataclasses
-    all_classes = {c for c in all_classes if is_dataclass(c)}
+    all_classes = {
+        c
+        for c in all_classes
+        if is_dataclass(c) and not issubclass(c, AlternativeMapping)
+    }
 
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))

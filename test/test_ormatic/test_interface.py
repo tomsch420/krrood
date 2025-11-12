@@ -462,3 +462,11 @@ def test_relationship_overloading(session, database):
     queried = session.scalars(select(RelationshipParentDAO)).one()
     reconstructed = queried.from_dao()
     assert reconstructed.positions == Position(1, 2, 3)
+
+
+def test_alternative_mapping_inheritance(session, database):
+    assert issubclass(ChildBaseMappingDAO, ParentBaseMappingDAO)
+
+
+def test_inheritance_mapper_args(session, database):
+    assert InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.__mapper_args__
