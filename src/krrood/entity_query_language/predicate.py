@@ -16,7 +16,6 @@ from typing_extensions import (
 
 from .enums import PredicateType, EQLMode
 from .symbol_graph import (
-    PredicateClassRelation,
     WrappedInstance,
     SymbolGraph,
 )

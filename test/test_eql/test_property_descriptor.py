@@ -16,7 +16,7 @@ from krrood.entity_query_language.symbol_graph import SymbolGraph
 class Company(Symbol):
     name: str
     members: Set[Person] = field(default_factory=set)
-    sub_organization_of: Company = None
+    sub_organization_of: List[Company] = field(default_factory=list)
 
     def __hash__(self):
         return hash(self.name)
@@ -127,3 +127,18 @@ def test_setting_a_role_affects_role_taker():
     assert ceo1.person.works_for == company
     assert ceo1 in company.members
     assert company in ceo1.person.member_of
+
+
+def test_transitive_property():
+    company = Company(name="BassCo")
+    company2 = Company(name="AnotherBassCo")
+    company3 = Company(name="ThirdBassCo")
+    company4 = Company(name="FourthBassCo")
+
+    company4.sub_organization_of = company3
+    company3.sub_organization_of = company2
+    company2.sub_organization_of = company
+
+    assert company in company3.sub_organization_of
+    assert company2 in company4.sub_organization_of
+    assert company in company4.sub_organization_of
