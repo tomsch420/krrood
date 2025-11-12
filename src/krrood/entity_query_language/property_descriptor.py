@@ -272,37 +272,3 @@ class PropertyDescriptor:
             setattr(domain_value, self.private_attr_name, range_value)
             updated = True
         return updated
-
-    @profile
-    def _holds_direct(
-        self, domain_value: Optional[Any], range_value: Optional[Any]
-    ) -> bool:
-        """Return True if `range_value` is contained directly in the property of `domain_value`.
-        Also consider sub-properties declared on the domain type.
-        """
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-
-        # If the concrete instance has our backing attribute, check it directly.
-        if hasattr(domain_value, self.private_attr_name):
-            if self._check_relation_value(
-                attr_name=self.private_attr_name,
-                domain_value=domain_value,
-                range_value=range_value,
-            ):
-                return True
-        return False
-
-    def _check_relation_value(
-        self,
-        attr_name: str,
-        domain_value: Optional[Any] = None,
-        range_value: Optional[Any] = None,
-    ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        attr_value = getattr(domain_value, attr_name)
-        if make_set(range_value).issubset(make_set(attr_value)):
-            return True
-        # Do not handle transitivity here; it is now centralized in PredicateClassRelation.
-        return False
