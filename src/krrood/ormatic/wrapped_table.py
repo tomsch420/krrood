@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
+from typing import Type
 
 from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set
 
@@ -18,6 +19,18 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class WrappedTableNotFound(KeyError):
+    type_: Type
+    wrapped_field: WrappedField
+
+    def __post_init__(self):
+        super().__init__(
+            f"Didnt find a wrapped table for the type {self.type_}. "
+            f"This happened when trying to get a wrapped table for the wrapped field {self.wrapped_field}"
+        )
 
 
 @dataclass
@@ -219,10 +232,9 @@ class WrappedTable:
     def _original_wrapped_for_mapping(
         self, mapping_wrapped: WrappedClass
     ) -> Optional[WrappedClass]:
-        """Return the original class ``WrappedClass`` for an alternative mapping.
-
+        """
         :param mapping_wrapped: The mapping class as a ``WrappedClass``.
-        :return: The original class wrapped, or ``None`` if not found.
+        :return: The original class ``WrappedClass`` for an alternative mapping.
         """
         for rel in self.ormatic.alternatively_maps_relations:
             if rel.source == mapping_wrapped:
@@ -232,10 +244,9 @@ class WrappedTable:
     def _find_original_parent_wrapped(
         self, original_wrapped: WrappedClass
     ) -> Optional[WrappedClass]:
-        """Find the original parent ``WrappedClass`` of the given original class.
-
+        """
         :param original_wrapped: The original class wrapped node.
-        :return: The original parent wrapped node if present, else ``None``.
+        :return: The original parent ``WrappedClass`` of the given original class.
         """
         original_parents = self.ormatic.inheritance_graph.predecessors(
             original_wrapped.index
@@ -433,6 +444,23 @@ class WrappedTable:
             ColumnConstructor(column_name, column_type, column_constructor)
         )
 
+    def get_table_of_wrapped_field(self, wrapped_field: WrappedField) -> WrappedTable:
+        """
+        :param wrapped_field: The wrapped field to get the table for.
+        :return: The wrapped table for the given wrapped field.
+        """
+        try:
+            result = self.ormatic.wrapped_tables[
+                self.ormatic.class_dependency_graph.get_wrapped_class(
+                    wrapped_field.type_endpoint
+                )
+            ]
+            return result
+        except KeyError:
+            raise WrappedTableNotFound(
+                type_=wrapped_field.type_endpoint, wrapped_field=wrapped_field
+            )
+
     def create_one_to_one_relationship(self, wrapped_field: WrappedField):
         """
         Create a one-to-one relationship with using the given field.
@@ -449,11 +477,7 @@ class WrappedTable:
         )
 
         # get the target table
-        target_wrapped_table = self.ormatic.wrapped_tables[
-            self.ormatic.class_dependency_graph.get_wrapped_class(
-                wrapped_field.type_endpoint
-            )
-        ]
+        target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
         # columns have to be nullable and use_alter=True since the insertion order might be incorrect otherwise
         fk_column_constructor = f"mapped_column(ForeignKey('{target_wrapped_table.full_primary_key_name}', use_alter=True), nullable=True, use_existing_column=True)"
@@ -481,11 +505,7 @@ class WrappedTable:
         """
 
         # get the target table
-        target_wrapped_table = self.ormatic.wrapped_tables[
-            self.ormatic.class_dependency_graph.get_wrapped_class(
-                wrapped_field.type_endpoint
-            )
-        ]
+        target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
         # create a foreign key to this on the remote side
         fk_name = f"{self.tablename.lower()}_{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
