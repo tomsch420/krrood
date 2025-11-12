@@ -39,9 +39,18 @@ from .predicate import (
 
 T = TypeVar("T")  # Define type variable "T"
 
+ConditionType = Union[SymbolicExpression, bool, Predicate]
+"""
+The possible types for conditions.
+"""
+EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]
+"""
+The possible types for entities.
+"""
+
 
 def an(
-    entity_: Optional[Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]] = None,
+    entity_: EntityType,
     at_least: Optional[int] = None,
     at_most: Optional[int] = None,
     exactly: Optional[int] = None,
@@ -68,7 +77,7 @@ This is an alias to accommodate for words not starting with vowels.
 
 
 def the(
-    entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
+    entity_: EntityType,
 ) -> Union[The[T], T]:
     """
     Select the unique element satisfying the given entity description.
@@ -81,14 +90,14 @@ def the(
 
 
 def infer(
-    entity_: Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], None],
+    entity_: EntityType,
 ) -> Infer[T]:
     return select_one_or_select_many_or_infer(Infer, entity_)
 
 
 def select_one_or_select_many_or_infer(
-    quantifier: Union[Type[An], Type[The], Type[Infer]],
-    entity_: Union[SetOf[T], Entity[T], Type[T], None],
+    quantifier: Type[ResultQuantifier],
+    entity_: EntityType,
     **kwargs,
 ) -> Union[An[T], The[T], Infer[T]]:
     if isinstance(entity_, (Entity, SetOf)):
@@ -106,7 +115,7 @@ def select_one_or_select_many_or_infer(
 
 def entity(
     selected_variable: T,
-    *properties: Union[SymbolicExpression, bool, Predicate, Any],
+    *properties: ConditionType,
 ) -> Entity[T]:
     """
     Create an entity descriptor from a selected variable and its properties.
@@ -126,7 +135,7 @@ def entity(
 
 def set_of(
     selected_variables: Iterable[T],
-    *properties: Union[SymbolicExpression, bool, Predicate],
+    *properties: ConditionType,
 ) -> SetOf[T]:
     """
     Create a set descriptor from selected variables and their properties.
@@ -145,7 +154,7 @@ def set_of(
 
 
 def _extract_variables_and_expression(
-    selected_variables: Iterable[T], *properties: Union[SymbolicExpression, bool]
+    selected_variables: Iterable[T], *properties: ConditionType
 ) -> Tuple[List[T], SymbolicExpression]:
     """
     Extracts the variables and expressions from the selected variables.
@@ -196,7 +205,7 @@ def let(
     return var
 
 
-def and_(*conditions: Union[SymbolicExpression, bool, Predicate]):
+def and_(*conditions: ConditionType):
     """
     Logical conjunction of conditions.
 
@@ -229,7 +238,7 @@ def not_(operand: SymbolicExpression):
     return operand.__invert__()
 
 
-def contains(container, item):
+def contains(container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any):
     """
     Check whether a container contains an item.
 
@@ -241,7 +250,7 @@ def contains(container, item):
     return in_(item, container)
 
 
-def in_(item, container):
+def in_(item: Any, container: Union[Iterable, CanBehaveLikeAVariable[T]]):
     """
     Build a comparator for membership: ``item in container``.
 
@@ -266,14 +275,14 @@ def flatten(
 
 def for_all(
     universal_variable: Union[CanBehaveLikeAVariable[T], T],
-    condition: Union[SymbolicExpression, bool, Predicate],
+    condition: ConditionType,
 ):
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **every**
      value of the universal_variable.
 
     :param universal_variable: The universal on variable that the condition must satisfy for all its values.
-    :condition: A SymbolicExpression or bool representing a condition that must be satisfied.
+    :param condition: A SymbolicExpression or bool representing a condition that must be satisfied.
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
     return ForAll(universal_variable, condition)
@@ -281,14 +290,14 @@ def for_all(
 
 def exists(
     universal_variable: Union[CanBehaveLikeAVariable[T], T],
-    condition: Union[SymbolicExpression, bool, Predicate],
+    condition: ConditionType,
 ):
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **any**
      value of the universal_variable.
 
     :param universal_variable: The universal on variable that the condition must satisfy for any of its values.
-    :condition: A SymbolicExpression or bool representing a condition that must be satisfied.
+    :param condition: A SymbolicExpression or bool representing a condition that must be satisfied.
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
     return Exists(universal_variable, condition)
