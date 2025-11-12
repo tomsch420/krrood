@@ -29,7 +29,7 @@ from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
+    from ..ontomatic.property_descriptor import PropertyDescriptor
 
 
 @dataclass

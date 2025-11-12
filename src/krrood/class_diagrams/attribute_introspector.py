@@ -7,7 +7,7 @@ from dataclasses import fields as dc_fields
 from typing_extensions import List, Type, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..entity_query_language.property_descriptor import PropertyDescriptor
+    from ..ontomatic.property_descriptor import PropertyDescriptor
 
 
 @dataclass

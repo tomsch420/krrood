@@ -5,11 +5,11 @@ from typing import Set, List, Type
 
 from krrood.class_diagrams.utils import Role
 from krrood.entity_query_language.predicate import Symbol
-from krrood.entity_query_language.property_descriptor.mixins import (
+from krrood.ontomatic.property_descriptor.mixins import (
     HasInverseProperty,
     TransitiveProperty,
 )
-from krrood.entity_query_language.property_descriptor.property_descriptor import (
+from krrood.ontomatic.property_descriptor.property_descriptor import (
     PropertyDescriptor,
 )
 

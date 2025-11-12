@@ -26,11 +26,11 @@ from .monitored_container import (
     MonitoredList,
     MonitoredSet,
 )
-from ..predicate import Symbol
-from ..symbol_graph import (
+from ...entity_query_language.predicate import Symbol
+from ...entity_query_language.symbol_graph import (
     SymbolGraph,
 )
-from ..utils import make_set
+from ...entity_query_language.utils import make_set
 from ...class_diagrams.class_diagram import WrappedClass, Association
 from ...class_diagrams.wrapped_field import WrappedField
 
@@ -57,7 +57,7 @@ class PropertyDescriptor(Symbol):
 
     Example:
         >>> from dataclasses import dataclass
-        >>> from krrood.entity_query_language.property_descriptor.property_descriptor import PropertyDescriptor
+        >>> from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
         >>> @dataclass
         ... class Company(Symbol):
         ...     name: str

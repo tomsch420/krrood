@@ -7,7 +7,7 @@ from typing_extensions import Optional, Type, Iterable, Tuple, List, TYPE_CHECKI
 from ...class_diagrams.class_diagram import Association
 from ...class_diagrams.wrapped_field import WrappedField
 from .mixins import TransitiveProperty, HasInverseProperty
-from ..symbol_graph import (
+from ...entity_query_language.symbol_graph import (
     PredicateClassRelation,
     SymbolGraph,
     WrappedInstance,

@@ -18,7 +18,7 @@ from typing_extensions import (
     DefaultDict,
 )
 
-from .property_descriptor.attribute_introspector import (
+from ..ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
 from .. import logger
