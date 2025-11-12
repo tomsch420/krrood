@@ -4,7 +4,7 @@ import os
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
-from typing import Union, Callable, Tuple
+from typing import Callable, Tuple
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -120,12 +120,12 @@ class PredicateClassRelation:
         yield from (
             (self.source, f)
             for f in class_diagram.get_fields_of_superclass_property_descriptors(
-                source_type, self.__class__
+                source_type, self.wrapped_field.property_descriptor.__class__
             )
         )
         source_role_taker_field, role_taker_fields = (
             class_diagram.get_role_taker_superclass_properties(
-                source_type, self.__class__
+                source_type, self.wrapped_field.property_descriptor.__class__
             )
         )
         if not role_taker_fields:

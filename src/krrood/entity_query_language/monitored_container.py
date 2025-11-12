@@ -145,7 +145,7 @@ class MonitoredContainer(Generic[T], ABC):
         ...
 
 
-class MonitoredList(list, MonitoredContainer):
+class MonitoredList(MonitoredContainer, list):
     """
     A list that invokes the descriptor on_add for further implicit inferences.
     """
@@ -184,7 +184,7 @@ class MonitoredList(list, MonitoredContainer):
         self.clear()
 
 
-class MonitoredSet(set, MonitoredContainer):
+class MonitoredSet(MonitoredContainer, set):
     """
     A set that invokes the descriptor on_add for further implicit inferences.
     """

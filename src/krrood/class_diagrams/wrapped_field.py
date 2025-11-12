@@ -194,6 +194,12 @@ class WrappedField:
         return self.is_container and not self.is_builtin_type and not self.is_optional
 
     @cached_property
+    def is_iterable(self):
+        return self.is_one_to_many_relationship and hasattr(
+            self.container_type, "__iter__"
+        )
+
+    @cached_property
     def type_endpoint(self) -> Type:
         if self.is_container or self.is_optional:
             return self.contained_type

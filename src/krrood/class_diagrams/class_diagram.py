@@ -277,6 +277,9 @@ class ClassDiagram:
 
         A role taker is a field that is a one-to-one relationship and is not optional.
         """
+        cls = self.get_wrapped_class(cls)
+        if not cls:
+            return None
         for assoc in self.get_out_edges(cls):
             if isinstance(assoc, HasRoleTaker) and assoc.field.is_role_taker:
                 return assoc

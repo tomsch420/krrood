@@ -21,6 +21,8 @@ class DescriptorAwareIntrospector(AttributeIntrospector):
     """
 
     def discover(self, owner_cls: Type) -> List[DiscoveredAttribute]:
+        from .property_descriptor import PropertyDescriptor
+
         # Index all dataclass fields by name
         all_dc_fields = {f.name: f for f in dc_fields(owner_cls)}
 
@@ -36,22 +38,12 @@ class DescriptorAwareIntrospector(AttributeIntrospector):
             if public_name.startswith("_"):
                 continue
             property_descriptor = getattr(owner_cls, public_name)
-            has_descriptor_protocol = hasattr(
-                property_descriptor, "__get__"
-            ) and hasattr(property_descriptor, "__set__")
-            backing_name = getattr(property_descriptor, "attr_name", None)
-            if not (has_descriptor_protocol and isinstance(backing_name, str)):
+            if not isinstance(property_descriptor, PropertyDescriptor):
                 continue
-
-            backing_field = all_dc_fields.get(backing_name)
-            if backing_field is None:
-                # Hidden field not present as a dataclass field; skip defensively
-                continue
-
             discovered.append(
                 DiscoveredAttribute(
                     public_name=public_name,
-                    field=backing_field,
+                    field=property_descriptor.wrapped_field.field,
                     property_descriptor=property_descriptor,
                 )
             )

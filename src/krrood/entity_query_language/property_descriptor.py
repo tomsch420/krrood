@@ -146,7 +146,14 @@ class PropertyDescriptor(Symbol):
         :param field_name:  The field name that this descriptor instance manages.
         """
         field_ = [f for f in fields(domain_type) if f.name == field_name][0]
-        self.wrapped_field = WrappedField(WrappedClass(domain_type), field_)
+        self.wrapped_field = WrappedField(
+            WrappedClass(domain_type), field_, property_descriptor=self
+        )
+
+    @cached_property
+    def is_iterable(self):
+        """Whether the field is iterable or not"""
+        return self.wrapped_field.is_iterable
 
     def _update_domain_and_range(self, domain_type: SymbolType):
         """
@@ -187,9 +194,11 @@ class PropertyDescriptor(Symbol):
          relation).
         :param inferred: Whether the relation is inferred or not.
         """
-        PredicateClassRelation(
-            domain_value, range_value, self.wrapped_field, inferred=inferred
-        ).add_to_graph()
+        if domain_value and range_value:
+            for v in make_set(range_value):
+                PredicateClassRelation(
+                    domain_value, v, self.wrapped_field, inferred=inferred
+                ).add_to_graph()
 
     def __get__(self, obj, objtype=None):
         """
@@ -202,7 +211,6 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = getattr(obj, self.private_attr_name)
-        value = self._ensure_monitored_type(value, obj)
         self._bind_owner_if_container_type(value, owner=obj)
         return value
 
@@ -232,7 +240,7 @@ class PropertyDescriptor(Symbol):
         :param obj: The owner instance.
         :return: The value with a monitored container-type if it is iterable, otherwise the value itself.
         """
-        if is_iterable(value) and not isinstance(value, MonitoredContainer):
+        if self.is_iterable and not isinstance(value, MonitoredContainer):
             try:
                 monitored_type = monitored_type_map[type(value)]
             except KeyError:
@@ -241,7 +249,10 @@ class PropertyDescriptor(Symbol):
                     f"that is not monitored (i.e., is not a subclass of {MonitoredContainer}). Either use one of "
                     f"{MonitoredList} or {MonitoredSet} or implement a custom monitored container type."
                 )
-            value = monitored_type(descriptor=self)
+            monitored_value = monitored_type(descriptor=self)
+            for v in make_set(value):
+                monitored_value._add_item(v, inferred=False)
+            value = monitored_value
         return value
 
     def __set__(self, obj, value):
@@ -253,7 +264,11 @@ class PropertyDescriptor(Symbol):
         """
         if isinstance(value, PropertyDescriptor):
             return
-        attr = getattr(obj, self.private_attr_name)
+        attr = getattr(obj, self.private_attr_name, None)
+        if self.is_iterable and not isinstance(attr, MonitoredContainer):
+            attr = self._ensure_monitored_type(value, obj)
+            self._bind_owner_if_container_type(attr, owner=obj)
+            setattr(obj, self.private_attr_name, attr)
         if isinstance(attr, MonitoredContainer):
             attr._clear()
             for v in make_set(value):
