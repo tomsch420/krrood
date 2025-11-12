@@ -6,6 +6,7 @@ from copy import copy
 from dataclasses import dataclass
 from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
+from typing import Callable, Iterable
 
 import rustworkx as rx
 
@@ -228,22 +229,37 @@ class ClassDiagram:
                 association_fields.append(assoc.field)
         return tuple(association_fields)
 
-    @lru_cache(maxsize=None)
-    def get_the_field_of_property_descriptor_type(
+    def get_associations_with_condition(
         self,
         clazz: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Optional[WrappedField]:
+        condition: Callable[[ClassRelation], bool],
+    ) -> Iterable[Association]:
+        """
+        Get all associations that match the condition.
+
+        :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
+        :param condition: The condition to filter relations by.
+        """
+        yield from filter(
+            condition,
+            self.get_outgoing_relations_with_condition(
+                clazz, lambda rel: isinstance(rel, Association)
+            ),
+        )
+
+    def get_outgoing_relations_with_condition(
+        self,
+        clazz: Union[Type, WrappedClass],
+        condition: Callable[[ClassRelation], bool],
+    ) -> Iterable[ClassRelation]:
+        """
+        Get all outgoing edge relations that match the condition.
+
+        :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
+        :param condition: The condition to filter relations by.
+        """
         wrapped_cls = self.get_wrapped_class(clazz)
-        for assoc in self.get_out_edges(wrapped_cls):
-            if not isinstance(assoc, Association):
-                continue
-            if not assoc.field.property_descriptor:
-                continue
-            other_prop_type = type(assoc.field.property_descriptor)
-            if property_descriptor_cls is other_prop_type:
-                return assoc.field
-        return None
+        yield from filter(condition, self.get_out_edges(wrapped_cls))
 
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(

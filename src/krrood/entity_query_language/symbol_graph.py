@@ -142,11 +142,8 @@ class PredicateClassRelation:
         :return: The inverse domain instance and property descriptor field.
         """
         symbol_graph = SymbolGraph()
-        class_diagram = symbol_graph.class_diagram
         target_type = self.target.instance_type
-        inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
-            target_type, self.inverse_of
-        )
+        inverse_field = self.inverse_of.get_associated_field_of_domain_type(target_type)
         if not inverse_field:
             role_taker, inverse_field = self.inverse_domain_and_field_from_role_taker
             if inverse_field:
@@ -173,8 +170,8 @@ class PredicateClassRelation:
             self.target.instance_type
         )
         if role_taker_assoc:
-            inverse_field = class_diagram.get_the_field_of_property_descriptor_type(
-                role_taker_assoc.target, self.inverse_of
+            inverse_field = self.inverse_of.get_associated_field_of_domain_type(
+                role_taker_assoc.target
             )
             role_taker = getattr(
                 self.target.instance, role_taker_assoc.field.public_name

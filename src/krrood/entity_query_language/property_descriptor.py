@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field, fields, InitVar
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import (
     ClassVar,
     Set,
@@ -25,9 +25,9 @@ from .monitored_container import (
     MonitoredSet,
 )
 from .predicate import Symbol
-from .symbol_graph import PredicateClassRelation
+from .symbol_graph import PredicateClassRelation, SymbolGraph
 from .utils import make_set, is_iterable
-from ..class_diagrams.class_diagram import WrappedClass
+from ..class_diagrams.class_diagram import WrappedClass, Association
 from ..class_diagrams.wrapped_field import WrappedField
 
 SymbolType = Type[Symbol]
@@ -290,3 +290,28 @@ class PropertyDescriptor(Symbol):
             setattr(domain_value, self.private_attr_name, range_value)
             updated = True
         return updated
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_associated_field_of_domain_type(
+        cls,
+        domain_type: Union[Type[Symbol], WrappedClass],
+    ) -> Optional[WrappedField]:
+        """
+        Get the field of the domain type that is associated with this descriptor class.
+
+        :param domain_type: The domain type that has an associated field with this descriptor class.
+        """
+        class_diagram = SymbolGraph().class_diagram
+        association_condition = (
+            lambda association: type(association.field.property_descriptor) is cls
+        )
+        result = next(
+            iter(
+                class_diagram.get_associations_with_condition(
+                    domain_type, association_condition
+                )
+            ),
+            None,
+        )
+        return result.field if result else None
