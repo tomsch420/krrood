@@ -18,7 +18,6 @@ import builtins
 import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
-import krrood.entity_query_language.property_descriptor
 import krrood.entity_query_language.symbol_graph
 import krrood.ormatic.custom_types
 import test.dataset.example_classes
@@ -781,25 +780,6 @@ class PrivateDefaultFactoryDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "PrivateDefaultFactoryDAO",
-        "inherit_condition": database_id == SymbolDAO.database_id,
-    }
-
-
-class PropertyDescriptorDAO(
-    SymbolDAO,
-    DataAccessObject[
-        krrood.entity_query_language.property_descriptor.PropertyDescriptor
-    ],
-):
-
-    __tablename__ = "PropertyDescriptorDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "PropertyDescriptorDAO",
         "inherit_condition": database_id == SymbolDAO.database_id,
     }
 

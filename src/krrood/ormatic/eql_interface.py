@@ -8,7 +8,7 @@ import sqlalchemy.inspection
 from sqlalchemy import and_, or_, select, Select, func, literal, not_ as sa_not
 from sqlalchemy.orm import Session
 
-from krrood.entity_query_language.symbolic import (
+from ..entity_query_language.symbolic import (
     SymbolicExpression,
     Attribute,
     Comparator,

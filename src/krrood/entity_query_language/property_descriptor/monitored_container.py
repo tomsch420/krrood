@@ -13,7 +13,7 @@ from typing_extensions import (
     TypeVar,
 )
 
-from .predicate import Symbol
+from ..predicate import Symbol
 
 if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
@@ -30,7 +30,8 @@ T = TypeVar("T", bound=Symbol)
 class MonitoredContainer(Generic[T], ABC):
     """
     A container abstract class to be inherited from for specific container types to invoke the on-add
-    callback of the descriptor. This is used by the :py class:`krrood.entity_query_language.PropertyDescriptor` to apply
+    callback of the descriptor. This is used by the
+    :py class:`krrood.entity_query_language.property_descriptor.PropertyDescriptor` to apply
     implicit inferences.
     """
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from dataclasses import fields as dc_fields
 from typing import List, Type
 
-from ..class_diagrams.attribute_introspector import (
+from ...class_diagrams.attribute_introspector import (
     AttributeIntrospector,
     DiscoveredAttribute,
 )

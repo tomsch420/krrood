@@ -18,18 +18,21 @@ from typing import (
 
 from typing_extensions import DefaultDict
 
-from .failures import UnMonitoredContainerTypeForDescriptor
+from .property_descriptor_relation import PropertyDescriptorRelation
+from ..failures import UnMonitoredContainerTypeForDescriptor
 from .monitored_container import (
     MonitoredContainer,
     monitored_type_map,
     MonitoredList,
     MonitoredSet,
 )
-from .predicate import Symbol
-from .symbol_graph import PredicateClassRelation, SymbolGraph
-from .utils import make_set, is_iterable
-from ..class_diagrams.class_diagram import WrappedClass, Association
-from ..class_diagrams.wrapped_field import WrappedField
+from ..predicate import Symbol
+from ..symbol_graph import (
+    SymbolGraph,
+)
+from ..utils import make_set
+from ...class_diagrams.class_diagram import WrappedClass, Association
+from ...class_diagrams.wrapped_field import WrappedField
 
 SymbolType = Type[Symbol]
 """
@@ -54,7 +57,7 @@ class PropertyDescriptor(Symbol):
 
     Example:
         >>> from dataclasses import dataclass
-        >>> from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+        >>> from krrood.entity_query_language.property_descriptor.property_descriptor import PropertyDescriptor
         >>> @dataclass
         ... class Company(Symbol):
         ...     name: str
@@ -192,7 +195,7 @@ class PropertyDescriptor(Symbol):
         """
         if domain_value and range_value:
             for v in make_set(range_value):
-                PredicateClassRelation(
+                PropertyDescriptorRelation(
                     domain_value, v, self.wrapped_field, inferred=inferred
                 ).add_to_graph()
 

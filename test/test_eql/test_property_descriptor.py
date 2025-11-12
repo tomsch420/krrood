@@ -6,9 +6,14 @@ from typing import List
 from typing_extensions import Set, Type
 
 from krrood.class_diagrams.utils import Role
-from krrood.entity_query_language.mixins import HasInverseProperty, TransitiveProperty
+from krrood.entity_query_language.property_descriptor.mixins import (
+    HasInverseProperty,
+    TransitiveProperty,
+)
 from krrood.entity_query_language.predicate import Symbol
-from krrood.entity_query_language.property_descriptor import PropertyDescriptor
+from krrood.entity_query_language.property_descriptor.property_descriptor import (
+    PropertyDescriptor,
+)
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 
 
