@@ -92,11 +92,6 @@ class PropertyDescriptor(Symbol):
     """
     The wrapped field instance that this descriptor instance manages.
     """
-    _subprops_cache: ClassVar[WeakKeyDictionary] = WeakKeyDictionary()
-    """
-    Cache of discovered sub-properties per domain class and per descriptor subclass. Weak keys prevent memory leaks
-     when domain classes are unloaded.
-    """
     domain_range_map: ClassVar[
         DefaultDict[Type[PropertyDescriptor], DomainRangeMap]
     ] = defaultdict(dict)

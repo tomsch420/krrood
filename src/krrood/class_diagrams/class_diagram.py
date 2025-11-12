@@ -214,8 +214,6 @@ class ClassDiagram:
         property_descriptor_cls: Type[PropertyDescriptor],
     ) -> Tuple[WrappedField, ...]:
         wrapped_cls = self.get_wrapped_class(wrapped_cls)
-        if not wrapped_cls:
-            return ()
         association_fields = []
         for assoc in self.get_out_edges(wrapped_cls):
             if not isinstance(assoc, Association):
@@ -237,8 +235,6 @@ class ClassDiagram:
         property_descriptor_cls: Type[PropertyDescriptor],
     ) -> Optional[WrappedField]:
         wrapped_cls = self.get_wrapped_class(clazz)
-        if not wrapped_cls:
-            raise ClassIsUnMappedInClassDiagram(clazz)
         for assoc in self.get_out_edges(wrapped_cls):
             if not isinstance(assoc, Association):
                 continue
@@ -282,8 +278,6 @@ class ClassDiagram:
         A role taker is a field that is a one-to-one relationship and is not optional.
         """
         cls = self.get_wrapped_class(cls)
-        if not cls:
-            return None
         for assoc in self.get_out_edges(cls):
             if isinstance(assoc, HasRoleTaker) and assoc.field.is_role_taker:
                 return assoc
@@ -493,7 +487,10 @@ class ClassDiagram:
         """
         if isinstance(clazz, WrappedClass):
             return clazz
-        return self._cls_wrapped_cls_map.get(clazz, None)
+        try:
+            return self._cls_wrapped_cls_map.get(clazz)
+        except KeyError:
+            raise ClassIsUnMappedInClassDiagram(clazz)
 
     def add_node(self, clazz: WrappedClass):
         """
