@@ -41,7 +41,7 @@ Type alias for the domain-range map.
 
 
 @dataclass
-class PropertyDescriptor:
+class PropertyDescriptor(Symbol):
     """Descriptor managing a data class field while giving it metadata like superproperties,
     sub-properties, inverse, transitivity, ...etc.
 
@@ -111,22 +111,6 @@ class PropertyDescriptor:
     """
     A set of all range types for this descriptor class.
     """
-    transitive: ClassVar[bool] = False
-    """
-    If the relation is transitive or not.
-    """
-    inverse_of: ClassVar[Optional[Type[PropertyDescriptor]]] = None
-    """
-    The inverse of the relation if it exists.
-    """
-
-    def __init_subclass__(cls, **kwargs):
-        """
-        Hook to set up inverse_of class variable automatically.
-        """
-        super().__init_subclass__(**kwargs)
-        if cls.inverse_of is not None:
-            cls.inverse_of.inverse_of = cls
 
     def __post_init__(
         self, domain_type: Optional[SymbolType] = None, field_name: Optional[str] = None

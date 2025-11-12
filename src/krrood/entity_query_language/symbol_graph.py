@@ -24,6 +24,7 @@ from ..class_diagrams import ClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
 from ..singleton import SingletonMeta
 from ..utils import recursive_subclasses
+from .mixins import TransitiveProperty, HasInverseProperty
 
 if TYPE_CHECKING:
     from .predicate import Symbol
@@ -66,7 +67,9 @@ class PredicateClassRelation:
         If the relation is transitive or not.
         """
         if self.wrapped_field.property_descriptor:
-            return self.wrapped_field.property_descriptor.transitive
+            return isinstance(
+                self.wrapped_field.property_descriptor, TransitiveProperty
+            )
         else:
             return False
 
@@ -75,8 +78,9 @@ class PredicateClassRelation:
         """
         The inverse of the relation if it exists.
         """
-        if self.wrapped_field.property_descriptor:
-            return self.wrapped_field.property_descriptor.inverse_of
+        descriptor = self.wrapped_field.property_descriptor
+        if descriptor and isinstance(descriptor, HasInverseProperty):
+            return descriptor.get_inverse()
         else:
             return None
 
