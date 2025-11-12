@@ -10,13 +10,11 @@ from typing import (
     Optional,
     Any,
     Iterable,
-    Tuple,
     Dict,
     Union,
 )
 from weakref import WeakKeyDictionary
 
-from line_profiler import profile
 from typing_extensions import DefaultDict
 
 from .failures import UnMonitoredContainerTypeForDescriptor
@@ -27,13 +25,19 @@ from .monitored_container import (
     MonitoredSet,
 )
 from .predicate import Symbol
-from .symbol_graph import SymbolGraph, PredicateClassRelation
+from .symbol_graph import PredicateClassRelation
 from .utils import make_set, is_iterable
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 
 SymbolType = Type[Symbol]
+"""
+Type alias for symbol types.
+"""
 DomainRangeMap = Dict[SymbolType, SymbolType]
+"""
+Type alias for the domain-range map.
+"""
 
 
 @dataclass
@@ -188,15 +192,29 @@ class PropertyDescriptor:
         assert issubclass(domain_type, Symbol)
         return domain_type
 
-    def on_add(
+    def add_relation_to_the_graph(
         self, domain_value: Symbol, range_value: Symbol, inferred: bool = False
     ) -> None:
-        """Add a value to the property descriptor."""
+        """
+        Add the relation between the domain_value and the range_value to the symbol graph.
+
+        :param domain_value: The domain value (i.e., the instance that this descriptor is attached to).
+        :param range_value: The range value (i.e., the value to set on the managed attribute, and is the target of the
+         relation).
+        :param inferred: Whether the relation is inferred or not.
+        """
         PredicateClassRelation(
             domain_value, range_value, self.wrapped_field, inferred=inferred
         ).add_to_graph()
 
     def __get__(self, obj, objtype=None):
+        """
+        Get the value of the managed attribute. In addition, ensure that the value is a monitored container type if
+        it is an iterable and that the owner instance is bound to the monitored container.
+
+        :param obj: The owner instance (i.e., the instance that this descriptor is attached to).
+        :param objtype: The owner type.
+        """
         if obj is None:
             return self
         value = getattr(obj, self.private_attr_name)
@@ -243,6 +261,12 @@ class PropertyDescriptor:
         return value
 
     def __set__(self, obj, value):
+        """
+        Set the value of the managed attribute and add it to the symbol graph.
+
+        :param obj: The owner instance.
+        :param value: The value to set.
+        """
         if isinstance(value, PropertyDescriptor):
             return
         attr = getattr(obj, self.private_attr_name)
@@ -252,7 +276,7 @@ class PropertyDescriptor:
                 attr._add_item(v, inferred=False)
         else:
             setattr(obj, self.private_attr_name, value)
-            self.on_add(obj, value)
+            self.add_relation_to_the_graph(obj, value)
 
     def update_value(
         self,
@@ -267,7 +291,7 @@ class PropertyDescriptor:
         v = getattr(domain_value, self.private_attr_name)
         updated = False
         if isinstance(v, MonitoredContainer):
-            updated = v._update(range_value, call_on_add=False)
+            updated = v._update(range_value, add_relation_to_the_graph=False)
         elif v != range_value:
             setattr(domain_value, self.private_attr_name, range_value)
             updated = True

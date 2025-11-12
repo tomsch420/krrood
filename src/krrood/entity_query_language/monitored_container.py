@@ -61,36 +61,46 @@ class MonitoredContainer(Generic[T], ABC):
         return self._owner_ref() if self._owner_ref is not None else None
 
     def _on_add(
-        self, value: Symbol, inferred: bool = False, call_on_add: bool = True
+        self,
+        value: Symbol,
+        inferred: bool = False,
+        add_relation_to_the_graph: bool = True,
     ) -> Union[Symbol, weakref.ref[Symbol]]:
         """Call the descriptor on_add with the concrete owner instance
 
         :param value: The value to be added to the container
         :param inferred: Whether the value is inferred or not
-        :param call_on_add: Whether to call the descriptor on_add or not
+        :param add_relation_to_the_graph: Whether to add the relation to the graph or not.
         :return: The value with a weakref if inferred is True, otherwise the value itself
         """
         if inferred:
             value = weakref.ref(value, self._remove_item)
         owner = self._owner
-        if owner is not None and call_on_add:
-            self._descriptor.on_add(owner, value, inferred=inferred)
+        if owner is not None and add_relation_to_the_graph:
+            self._descriptor.add_relation_to_the_graph(owner, value, inferred=inferred)
         return value
 
     def _update(
-        self, value: Symbol, inferred: bool = False, call_on_add: bool = False
+        self,
+        value: Symbol,
+        inferred: bool = False,
+        add_relation_to_the_graph: bool = False,
     ) -> bool:
         """
         Only add the value if it is not already in the container.
 
         :param value: The value to be added to the container
         :param inferred: If the value is inferred or not
-        :param call_on_add: Whether to call the descriptor on_add or not
+        :param add_relation_to_the_graph: Whether to add the relation to the graph or not
         :return: Whether the value was added or not
         """
         if value in self:
             return False
-        self._add_item(value, inferred=inferred, call_on_add=call_on_add)
+        self._add_item(
+            value,
+            inferred=inferred,
+            add_relation_to_the_graph=add_relation_to_the_graph,
+        )
         return True
 
     @abstractmethod
@@ -103,14 +113,19 @@ class MonitoredContainer(Generic[T], ABC):
         ...
 
     @abstractmethod
-    def _add_item(self, item: Symbol, inferred: bool = False, call_on_add: bool = True):
+    def _add_item(
+        self,
+        item: Symbol,
+        inferred: bool = False,
+        add_relation_to_the_graph: bool = True,
+    ):
         """
         This method is called when an item is added to the container. It should be implemented by subclasses.
         In addition, this method should call the descriptor on_add method.
 
         :param item: The item to be added
         :param inferred: Whether the value is inferred or not
-        :param call_on_add: Whether to call the descriptor on_add or not
+        :param add_relation_to_the_graph: Whether to call the descriptor on_add or not
         """
         ...
 
@@ -146,8 +161,12 @@ class MonitoredList(list, MonitoredContainer):
     def append(self, item):
         self._add_item(item)
 
-    def _add_item(self, item, inferred: bool = False, call_on_add: bool = True):
-        item = self._on_add(item, inferred=inferred, call_on_add=call_on_add)
+    def _add_item(
+        self, item, inferred: bool = False, add_relation_to_the_graph: bool = True
+    ):
+        item = self._on_add(
+            item, inferred=inferred, add_relation_to_the_graph=add_relation_to_the_graph
+        )
         super().append(item)
 
     def __setitem__(self, idx, value):
@@ -181,8 +200,14 @@ class MonitoredSet(set, MonitoredContainer):
         for value in values:
             self._add_item(value)
 
-    def _add_item(self, value, inferred: bool = False, call_on_add: bool = True):
-        value = self._on_add(value, inferred=inferred, call_on_add=call_on_add)
+    def _add_item(
+        self, value, inferred: bool = False, add_relation_to_the_graph: bool = True
+    ):
+        value = self._on_add(
+            value,
+            inferred=inferred,
+            add_relation_to_the_graph=add_relation_to_the_graph,
+        )
         super().add(value)
 
     def _remove_item(self, item):
