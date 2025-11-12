@@ -437,3 +437,67 @@ class RelationshipChild(RelationshipParent):
     This class should produce a problem when reconstructed from the database as relationships must not be declared
     twice.
     """
+
+
+# %% Test deep alternative mappings
+
+
+@dataclass
+class InheritanceBaseWithoutSymbolButAlternativelyMapped:
+    """
+    Test that alternative mappings that have a hierarchy of its own are correctly created.
+    """
+
+    base_attribute: float = 0
+
+
+@dataclass
+class InheritanceLevel1WithoutSymbolButAlternativelyMapped(
+    InheritanceBaseWithoutSymbolButAlternativelyMapped
+):
+    level_one_attribute: float = 0
+
+
+@dataclass
+class InheritanceLevel2WithoutSymbolButAlternativelyMapped(
+    InheritanceLevel1WithoutSymbolButAlternativelyMapped
+):
+    level_two_attribute: float = 0
+
+
+@dataclass
+class InheritanceBaseWithoutSymbolButAlternativelyMappedMapping(
+    AlternativeMapping[InheritanceBaseWithoutSymbolButAlternativelyMapped]
+):
+    base_attribute: float = 0
+
+    @classmethod
+    def create_instance(cls, obj: T):
+        return cls(obj.base_attribute)
+
+    def create_from_dao(self) -> T:
+        raise NotImplementedError
+
+
+@dataclass
+class InheritanceLevel1WithoutSymbolButAlternativelyMappedMapping(
+    InheritanceBaseWithoutSymbolButAlternativelyMappedMapping,
+    AlternativeMapping[InheritanceLevel1WithoutSymbolButAlternativelyMapped],
+):
+    level_one_attribute: float = 0
+
+    @classmethod
+    def create_instance(cls, obj: T):
+        return cls(obj.base_attribute, obj.level_one_attribute)
+
+
+@dataclass
+class InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping(
+    InheritanceLevel1WithoutSymbolButAlternativelyMappedMapping,
+    AlternativeMapping[InheritanceLevel2WithoutSymbolButAlternativelyMapped],
+):
+    level_two_attribute: float = 0
+
+    @classmethod
+    def create_instance(cls, obj: T):
+        return cls(obj.base_attribute, obj.level_one_attribute, obj.level_two_attribute)

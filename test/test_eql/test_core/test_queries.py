@@ -960,6 +960,8 @@ def test_quantified_query(handles_and_containers_world):
 
     results = list(get_quantified_query(at_least=3).evaluate())
     assert len(results) == 3
+    results = list(get_quantified_query(at_least=2, at_most=4).evaluate())
+    assert len(results) == 3
     with pytest.raises(LessThanExpectedNumberOfSolutions):
         list(get_quantified_query(at_least=4).evaluate())
     with pytest.raises(GreaterThanExpectedNumberOfSolutions):

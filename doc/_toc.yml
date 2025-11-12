@@ -13,7 +13,7 @@ parts:
         - file: eql/logical_operators
         - file: eql/comparators
         - file: eql/domain_mapping
-        - file: eql/predicate
+        - file: eql/predicate_and_symbolic_function
         - file: eql/cache
         - file: eql/writing_rule_trees
         - file: eql/eql_for_sql_experts

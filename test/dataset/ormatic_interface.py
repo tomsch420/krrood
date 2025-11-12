@@ -37,6 +37,87 @@ class Base(DeclarativeBase):
     }
 
 
+class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
+    Base,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceBaseWithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    base_attribute: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO",
+    }
+
+
+class InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO(
+    InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceLevel1WithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(
+            InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.database_id
+        ),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_one_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO",
+        "inherit_condition": database_id
+        == InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.database_id,
+    }
+
+
+class InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO(
+    InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(
+            InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO.database_id
+        ),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_two_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO",
+        "inherit_condition": database_id
+        == InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO.database_id,
+    }
+
+
 class PredicateClassRelationDAO(
     Base,
     DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateClassRelation],
@@ -150,13 +231,13 @@ class AtomDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Atom]):
 
 
 class BackreferenceMappingDAO(
-    Base, DataAccessObject[test.dataset.example_classes.BackreferenceMapping]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.BackreferenceMapping]
 ):
 
     __tablename__ = "BackreferenceMappingDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     values: Mapped[typing.List[builtins.int]] = mapped_column(
@@ -172,6 +253,11 @@ class BackreferenceMappingDAO(
     reference: Mapped[ReferenceDAO] = relationship(
         "ReferenceDAO", uselist=False, foreign_keys=[reference_id], post_update=True
     )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BackreferenceMappingDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
 
 
 class ContainerGenerationDAO(
@@ -224,13 +310,13 @@ class DoublePositionAggregatorDAO(
 
 
 class CustomEntityDAO(
-    Base, DataAccessObject[test.dataset.example_classes.CustomEntity]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.CustomEntity]
 ):
 
     __tablename__ = "CustomEntityDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     overwritten_name: Mapped[builtins.str] = mapped_column(
@@ -251,6 +337,11 @@ class CustomEntityDAO(
         nullable=True,
         use_existing_column=True,
     )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "CustomEntityDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
 
 
 class DerivedEntityDAO(
@@ -546,29 +637,40 @@ class ChildMappedDAO(
 
 
 class ParentBaseMappingDAO(
-    Base, DataAccessObject[test.dataset.example_classes.ParentBaseMapping]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.ParentBaseMapping]
 ):
 
     __tablename__ = "ParentBaseMappingDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
+    __mapper_args__ = {
+        "polymorphic_identity": "ParentBaseMappingDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
 
 class ChildBaseMappingDAO(
-    Base, DataAccessObject[test.dataset.example_classes.ChildBaseMapping]
+    ParentBaseMappingDAO,
+    DataAccessObject[test.dataset.example_classes.ChildBaseMapping],
 ):
 
     __tablename__ = "ChildBaseMappingDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(ParentBaseMappingDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
     )
 
-    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
+    __mapper_args__ = {
+        "polymorphic_identity": "ChildBaseMappingDAO",
+        "inherit_condition": database_id == ParentBaseMappingDAO.database_id,
+    }
 
 
 class PoseDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Pose]):
@@ -859,16 +961,21 @@ class RelationshipChildDAO(
 
 
 class RotationMappedDAO(
-    Base, DataAccessObject[test.dataset.example_classes.RotationMapped]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.RotationMapped]
 ):
 
     __tablename__ = "RotationMappedDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     angle: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RotationMappedDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
 
 
 class ShapeDAO(SymbolDAO, DataAccessObject[test.dataset.example_classes.Shape]):
@@ -974,13 +1081,13 @@ class TorsoDAO(KinematicChainDAO, DataAccessObject[test.dataset.example_classes.
 
 
 class TransformationMappedDAO(
-    Base, DataAccessObject[test.dataset.example_classes.TransformationMapped]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.TransformationMapped]
 ):
 
     __tablename__ = "TransformationMappedDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     vector_id: Mapped[int] = mapped_column(
@@ -1001,15 +1108,20 @@ class TransformationMappedDAO(
         "RotationMappedDAO", uselist=False, foreign_keys=[rotation_id], post_update=True
     )
 
+    __mapper_args__ = {
+        "polymorphic_identity": "TransformationMappedDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
 
 class VectorMappedDAO(
-    Base, DataAccessObject[test.dataset.example_classes.VectorMapped]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.VectorMapped]
 ):
 
     __tablename__ = "VectorMappedDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     x: Mapped[builtins.float] = mapped_column(use_existing_column=True)
@@ -1022,15 +1134,20 @@ class VectorMappedDAO(
         )
     )
 
+    __mapper_args__ = {
+        "polymorphic_identity": "VectorMappedDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
 
 class VectorsWithPropertyMappedDAO(
-    Base, DataAccessObject[test.dataset.example_classes.VectorsWithPropertyMapped]
+    SymbolDAO, DataAccessObject[test.dataset.example_classes.VectorsWithPropertyMapped]
 ):
 
     __tablename__ = "VectorsWithPropertyMappedDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     vectors: Mapped[typing.List[VectorMappedDAO]] = relationship(
@@ -1038,6 +1155,11 @@ class VectorsWithPropertyMappedDAO(
         foreign_keys="[VectorMappedDAO.vectorswithpropertymappeddao_vectors_id]",
         post_update=True,
     )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "VectorsWithPropertyMappedDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
 
 
 class WorldDAO(

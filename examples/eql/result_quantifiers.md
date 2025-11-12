@@ -17,7 +17,8 @@ In EQL, there are two result quantifiers: `the` and `an`.
 
 `the` is used to fetch a single solution and assert that there is exactly one solution. This behaves like [one](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result.one) in SQLAlchemy.
 
-`an` is used to fetch all solutions. This creates an iterator which lazily evaluates the query. This behaves like [all](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result.all) in SQLAlchemy.
+`an` is used to fetch all solutions (or any specified number of solutions). This creates an iterator which lazily
+evaluates the query. This behaves like [all](https://docs.sqlalchemy.org/en/20/core/connections.html#sqlalchemy.engine.Result.all) in SQLAlchemy if not constraining result count using `at_least`, `at_most`, or `exactly`.
 
 Let's start with an example of a working query that requires exactly one result.
 
@@ -27,7 +28,7 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 from krrood.entity_query_language.entity import entity, let, the, Symbol, symbolic_mode, an
-from krrood.entity_query_language.failures import MultipleSolutionFound
+from krrood.entity_query_language.failures import MultipleSolutionFound, LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions
 
 
 @dataclass
@@ -68,4 +69,90 @@ with symbolic_mode():
     query = an(entity(body := let(Body, domain=None)))
 
 print(*query.evaluate(), sep="\n")
+```
+
+
+## Result Count Constraints
+
+EQL allows constraining the number of results produced by `an(...)` using the keyword arguments `at_least`, `at_most`, and `exactly`.
+
+Below we reuse the same `World` and `Body` setup from above. The world contains exactly two bodies, so all the following examples will evaluate successfully.
+
+```{code-cell} ipython3
+with symbolic_mode():
+    # Require at least two results
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        at_least=2,
+    )
+
+print(len(list(query.evaluate())))  # -> 2
+```
+
+You can also bound the number of results within a range using both `at_least` and `at_most`:
+
+```{code-cell} ipython3
+with symbolic_mode():
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        at_least=1,
+        at_most=3,
+    )
+
+print(len(list(query.evaluate())))  # -> 2
+```
+
+If you want an exact number of results, use `exactly`:
+
+```{code-cell} ipython3
+with symbolic_mode():
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        exactly=2,
+    )
+
+print(len(list(query.evaluate())))  # -> 2
+```
+
+
+
+## Handling Unmatched Result Counts
+
+The result count constraints will raise informative exceptions when the number of results does not match the expectation. You can handle these with try/except and print the error message, for example:
+
+```{code-cell} ipython3
+# The world from above has exactly two bodies: Body1 and Body2
+
+# at_least too high -> LessThanExpectedNumberOfSolutions
+with symbolic_mode():
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        at_least=3,
+    )
+try:
+    list(query.evaluate())
+except LessThanExpectedNumberOfSolutions as e:
+    print(e)
+
+# at_most too low -> GreaterThanExpectedNumberOfSolutions
+with symbolic_mode():
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        at_most=1,
+    )
+try:
+    list(query.evaluate())
+except GreaterThanExpectedNumberOfSolutions as e:
+    print(e)
+
+# exactly mismatch -> can raise either LessThan... or GreaterThan...
+with symbolic_mode():
+    query = an(
+        entity(body := let(Body, domain=world.bodies)),
+        exactly=1,
+    )
+try:
+    list(query.evaluate())
+except (LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions) as e:
+    print(e)
 ```
