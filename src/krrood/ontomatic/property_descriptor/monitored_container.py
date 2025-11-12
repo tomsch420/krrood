@@ -33,6 +33,32 @@ class MonitoredContainer(Generic[T], ABC):
     callback of the descriptor. This is used by the
     :py:class:`krrood.ontomatic.property_descriptor.PropertyDescriptor` to apply
     implicit inferences.
+
+    For example like here, the Set[Person] will be internally replaced with a MonitoredSet[Person] by the
+    descriptor, this allows for catching additions/insertions/removals to the Set and applying implicit inferences:
+    >>> from dataclasses import dataclass, field
+    >>> from typing import Set
+    >>> from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
+    >>> from krrood.entity_query_language.predicate import Symbol
+    ...
+    >>> @dataclass
+    >>> class Person(Symbol):
+    >>>     name: str
+    ...
+    >>> @dataclass
+    >>> class Company(Symbol):
+    >>>     name: str
+    >>>     members: Set[Person] = field(default_factory=set)
+    ...
+    >>> @dataclass
+    >>> class Member(PropertyDescriptor):
+    >>>     pass
+    ...
+    >>> Company.members = Member(Company, "members")
+    >>> company = Company("Company")
+    >>> person = Person("Person")
+    >>> company.members.add(person)
+    >>> assert isinstance(company.members, MonitoredSet)
     """
 
     def __init_subclass__(cls, **kwargs):
