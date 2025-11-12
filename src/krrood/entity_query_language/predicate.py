@@ -128,15 +128,6 @@ class Predicate(Symbol, ABC):
 
 
 @dataclass(eq=False)
-class BinaryPredicate(PredicateClassRelation, Predicate, ABC):
-    """
-    A predicate that has a domain and a range.
-    """
-
-    ...
-
-
-@dataclass(eq=False)
 class HasType(Predicate):
     """
     Represents a predicate to check if a given variable is an instance of a specified type.
