@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
-import pytest
 from typing_extensions import Set, Type
 
+from krrood.class_diagrams.utils import Role
 from krrood.entity_query_language.mixins import HasInverseProperty, TransitiveProperty
 from krrood.entity_query_language.predicate import Symbol
 from krrood.entity_query_language.property_descriptor import PropertyDescriptor
@@ -33,6 +33,15 @@ class Person(Symbol):
 
 
 @dataclass
+class CEO(Role[Person], Symbol):
+    person: Person
+    head_of: Company = None
+
+    def __hash__(self):
+        return hash(self.person)
+
+
+@dataclass
 class Member(PropertyDescriptor, HasInverseProperty):
 
     @classmethod
@@ -53,11 +62,17 @@ class WorksFor(MemberOf):
 
 
 @dataclass
+class HeadOf(WorksFor):
+    pass
+
+
+@dataclass
 class SubOrganizationOf(PropertyDescriptor, TransitiveProperty): ...
 
 
 Person.works_for = WorksFor(Person, "works_for")
 Person.member_of = MemberOf(Person, "member_of")
+CEO.head_of = HeadOf(CEO, "head_of")
 Company.members = Member(Company, "members")
 Company.sub_organization_of = SubOrganizationOf(Company, "sub_organization_of")
 
@@ -100,3 +115,15 @@ def test_set_container_property():
     assert company2 in person1.member_of
     assert person1 in company2.members
     assert person1.works_for != company2
+
+
+def test_setting_a_role_affects_role_taker():
+    company = Company(name="BassCo")
+    person1 = Person(name="Bass1")
+    ceo1 = CEO(person1)
+
+    ceo1.head_of = company
+    assert ceo1.head_of == company
+    assert ceo1.person.works_for == company
+    assert ceo1 in company.members
+    assert company in ceo1.person.member_of

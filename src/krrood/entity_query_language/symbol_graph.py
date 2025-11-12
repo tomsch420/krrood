@@ -328,7 +328,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     This enables quick behavior similar to selecting everything from an entire table in SQL.
     """
 
-    _relation_index: Dict[type, set[tuple[int, int]]] = field(
+    _relation_index: Dict[WrappedField, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
 
@@ -428,9 +428,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
-        if type(relation) not in self._relation_index:
-            self._relation_index[type(relation)] = set()
-        self._relation_index[type(relation)].add(
+        if relation.wrapped_field not in self._relation_index:
+            self._relation_index[relation.wrapped_field] = set()
+        self._relation_index[relation.wrapped_field].add(
             (relation.source.index, relation.target.index)
         )
         return True
@@ -439,7 +439,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         return (
             relation.source.index,
             relation.target.index,
-        ) in self._relation_index.get(type(relation), set())
+        ) in self._relation_index.get(relation.wrapped_field, set())
 
     def relations(self) -> Iterable[PredicateClassRelation]:
         yield from self._instance_graph.edges()
