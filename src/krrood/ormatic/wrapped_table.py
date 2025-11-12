@@ -171,13 +171,103 @@ class WrappedTable:
 
     @cached_property
     def parent_table(self) -> Optional[WrappedTable]:
+        """
+        Resolve the parent DAO table for this table.
+
+        This first tries to use a direct inheritance relation. If that is not
+        available and this table is an alternative mapping, it resolves the
+        parent through the original classes' inheritance and maps back to the
+        correct DAO table.
+
+        :return: The parent ``WrappedTable`` or ``None`` if there is no parent.
+        """
+
+        direct_parent = self._find_direct_parent_wrapped()
+        if direct_parent is not None:
+            return self.ormatic.wrapped_tables[direct_parent]
+
+        if not self.is_alternatively_mapped:
+            return None
+
+        original = self._original_wrapped_for_mapping(self.wrapped_clazz)
+        if original is None:
+            return None
+
+        original_parent = self._find_original_parent_wrapped(original)
+        if original_parent is None:
+            return None
+
+        resolved_parent_wrapped = self._resolve_alternative_parent_wrapped(
+            original_parent
+        )
+        key = self._to_wrapped_tables_key(resolved_parent_wrapped)
+        return self.ormatic.wrapped_tables.get(key)
+
+    # ---------------------------- helper methods ---------------------------- #
+
+    def _find_direct_parent_wrapped(self) -> Optional[WrappedClass]:
+        """Return the directly inherited parent ``WrappedClass`` if present.
+
+        This uses the inheritance graph edges between the concrete wrapped
+        classes to find a predecessor.
+        """
         parents = self.ormatic.inheritance_graph.predecessors(self.wrapped_clazz.index)
         if len(parents) == 0:
             return None
+        return self.ormatic.class_dependency_graph._dependency_graph[parents[0]]
 
-        return self.ormatic.wrapped_tables[
-            self.ormatic.class_dependency_graph._dependency_graph[parents[0]]
+    def _original_wrapped_for_mapping(
+        self, mapping_wrapped: WrappedClass
+    ) -> Optional[WrappedClass]:
+        """Return the original class ``WrappedClass`` for an alternative mapping.
+
+        :param mapping_wrapped: The mapping class as a ``WrappedClass``.
+        :return: The original class wrapped, or ``None`` if not found.
+        """
+        for rel in self.ormatic.alternatively_maps_relations:
+            if rel.source == mapping_wrapped:
+                return rel.target
+        return None
+
+    def _find_original_parent_wrapped(
+        self, original_wrapped: WrappedClass
+    ) -> Optional[WrappedClass]:
+        """Find the original parent ``WrappedClass`` of the given original class.
+
+        :param original_wrapped: The original class wrapped node.
+        :return: The original parent wrapped node if present, else ``None``.
+        """
+        original_parents = self.ormatic.inheritance_graph.predecessors(
+            original_wrapped.index
+        )
+        if len(original_parents) == 0:
+            return None
+        return self.ormatic.class_dependency_graph._dependency_graph[
+            original_parents[0]
         ]
+
+    def _resolve_alternative_parent_wrapped(
+        self, original_parent_wrapped: WrappedClass
+    ) -> WrappedClass:
+        """Return the mapping parent if available, otherwise the original parent.
+
+        :param original_parent_wrapped: The original parent wrapped node.
+        :return: The wrapped node to use as parent in DAO generation.
+        """
+        alt_parent = self.ormatic.get_alternative_mapping(original_parent_wrapped)
+        return alt_parent if alt_parent is not None else original_parent_wrapped
+
+    def _to_wrapped_tables_key(self, wrapped: WrappedClass) -> WrappedClass:
+        """Translate a mapping wrapped node to the original wrapped for table lookup.
+
+        ``wrapped_tables`` are keyed by the original class nodes, even if an
+        alternative mapping is used. This ensures we always use the correct key.
+        """
+        if issubclass(wrapped.clazz, AlternativeMapping):
+            for rel in self.ormatic.alternatively_maps_relations:
+                if rel.source == wrapped:
+                    return rel.target
+        return wrapped
 
     @property
     def is_alternatively_mapped(self):
