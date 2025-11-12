@@ -52,6 +52,15 @@ class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
 
     base_attribute: Mapped[builtins.float] = mapped_column(use_existing_column=True)
 
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO",
+    }
+
 
 class InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO(
     InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO,

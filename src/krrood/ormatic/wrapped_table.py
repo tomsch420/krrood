@@ -137,10 +137,30 @@ class WrappedTable:
             )
         ]
 
-    def create_mapper_args(self):
+    @property
+    def has_children(self) -> bool:
+        """
+        Indicate whether this table has subclasses in the generated DAO model.
 
+        The check is performed in two simple steps:
+        - Use the inheritance graph to determine direct children of this wrapped class.
+        - Additionally, scan existing wrapped tables for any table that resolves this
+          instance as its ``parent_table`` (covers alternative-mapping hierarchies).
+        """
+        if len(self.child_tables) > 0:
+            return True
+
+        # Fallback: look for any table that points to this table as its parent
+        for table in self.ormatic.wrapped_tables.values():
+            if table is self:
+                continue
+            if table.parent_table is self:
+                return True
+        return False
+
+    def create_mapper_args(self):
         # this is the root of an inheritance structure
-        if self.parent_table is None and len(self.child_tables) > 0:
+        if self.parent_table is None and self.has_children:
             self.custom_columns.append(
                 (
                     ColumnConstructor(
