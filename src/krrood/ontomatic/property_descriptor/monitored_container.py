@@ -3,6 +3,8 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
 from typing_extensions import (
     Optional,
     Union,
@@ -27,6 +29,7 @@ A mapping of container types to their monitored container types.
 T = TypeVar("T", bound=Symbol)
 
 
+@dataclass(init=False)
 class MonitoredContainer(Generic[T], ABC):
     """
     A container abstract class to be inherited from for specific container types to invoke the on-add
@@ -172,6 +175,7 @@ class MonitoredContainer(Generic[T], ABC):
         ...
 
 
+@dataclass(init=False)
 class MonitoredList(MonitoredContainer, list):
     """
     A list that invokes the descriptor on_add for further implicit inferences.
@@ -211,6 +215,7 @@ class MonitoredList(MonitoredContainer, list):
         self.clear()
 
 
+@dataclass(init=False)
 class MonitoredSet(MonitoredContainer, set):
     """
     A set that invokes the descriptor on_add for further implicit inferences.
