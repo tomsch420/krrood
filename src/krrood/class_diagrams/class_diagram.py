@@ -9,6 +9,8 @@ from functools import cached_property, lru_cache
 
 import rustworkx as rx
 
+from .failures import ClassIsUnMappedInClassDiagram
+
 try:
     from rustworkx_utils import RWXNode
 except ImportError:
@@ -231,10 +233,12 @@ class ClassDiagram:
     @lru_cache(maxsize=None)
     def get_the_field_of_property_descriptor_type(
         self,
-        wrapped_cls: Union[Type, WrappedClass],
+        clazz: Union[Type, WrappedClass],
         property_descriptor_cls: Type[PropertyDescriptor],
     ) -> Optional[WrappedField]:
-        wrapped_cls = self.get_wrapped_class(wrapped_cls)
+        wrapped_cls = self.get_wrapped_class(clazz)
+        if not wrapped_cls:
+            raise ClassIsUnMappedInClassDiagram(clazz)
         for assoc in self.get_out_edges(wrapped_cls):
             if not isinstance(assoc, Association):
                 continue

@@ -26,14 +26,18 @@ class Company(Symbol):
 class Person(Symbol):
     name: str
     works_for: Company = None
+    member_of: List[Company] = field(default_factory=list)
 
     def __hash__(self):
         return hash(self.name)
 
 
 @dataclass
-class Member(PropertyDescriptor):
-    pass
+class Member(PropertyDescriptor, HasInverseProperty):
+
+    @classmethod
+    def get_inverse(cls) -> Type[MemberOf]:
+        return MemberOf
 
 
 @dataclass
@@ -53,6 +57,7 @@ class SubOrganizationOf(PropertyDescriptor, TransitiveProperty): ...
 
 
 Person.works_for = WorksFor(Person, "works_for")
+Person.member_of = MemberOf(Person, "member_of")
 Company.members = Member(Company, "members")
 Company.sub_organization_of = SubOrganizationOf(Company, "sub_organization_of")
 
@@ -74,3 +79,24 @@ def test_set_non_container_property():
     assert person2.works_for == another_company
     assert person2 in another_company.members
     assert person2 not in company.members
+
+
+def test_set_container_property():
+    company = Company(name="BassCo")
+    company2 = Company(name="AnotherBassCo")
+    person1 = Person(name="Bass1")
+    person2 = Person(name="Bass2")
+
+    # test direct setting of a set
+    company.members = {person1, person2}
+    assert person1 in company.members
+    assert person2 in company.members
+    assert company in person1.member_of
+    assert company in person2.member_of
+    assert person1.works_for != company
+    assert person2.works_for != company
+
+    person1.member_of.append(company2)
+    assert company2 in person1.member_of
+    assert person1 in company2.members
+    assert person1.works_for != company2
