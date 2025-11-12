@@ -23,6 +23,7 @@ from typing_extensions import (
     Union,
 )
 
+from .failures import MissingContainedTypeOfContainer
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
@@ -166,9 +167,8 @@ class WrappedField:
                 if self.resolved_type is Type:
                     return self.resolved_type
                 else:
-                    raise ValueError(
-                        f"Could not determine contained type of field {self}, make sure to define the contained type"
-                        f" explicitly, e.g., List[MyClass]"
+                    raise MissingContainedTypeOfContainer(
+                        self.clazz.clazz, self.name, self.container_type
                     )
 
     @cached_property

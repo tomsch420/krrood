@@ -503,7 +503,10 @@ class ClassDiagram:
         """
         for clazz in self.wrapped_classes:
             for superclass in clazz.clazz.__bases__:
-                source = self.get_wrapped_class(superclass)
+                try:
+                    source = self.get_wrapped_class(superclass)
+                except ClassIsUnMappedInClassDiagram:
+                    continue
                 if source:
                     relation = Inheritance(
                         source=source,
@@ -531,9 +534,9 @@ class ClassDiagram:
             for wrapped_field in clazz.fields:
                 target_type = wrapped_field.type_endpoint
 
-                wrapped_target_class = self.get_wrapped_class(target_type)
-
-                if not wrapped_target_class:
+                try:
+                    wrapped_target_class = self.get_wrapped_class(target_type)
+                except ClassIsUnMappedInClassDiagram:
                     continue
 
                 association_type = Association
