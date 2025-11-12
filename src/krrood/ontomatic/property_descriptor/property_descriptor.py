@@ -84,11 +84,11 @@ class PropertyDescriptor(Symbol):
         >>> Company.members = Member(Company, "members")
     """
 
-    domain_type: InitVar[SymbolType]
+    domain: SymbolType
     """
     The domain type for this descriptor instance.
     """
-    field_name: InitVar[str]
+    field_name: str
     """
     The name of the field on the domain type that this descriptor instance manages.
     """
@@ -111,12 +111,10 @@ class PropertyDescriptor(Symbol):
     A set of all range types for this descriptor class.
     """
 
-    def __post_init__(
-        self, domain_type: Optional[SymbolType] = None, field_name: Optional[str] = None
-    ):
-        self._validate_non_redundant_domain(domain_type)
-        self._update_wrapped_field(domain_type, field_name)
-        self._update_domain_and_range(domain_type)
+    def __post_init__(self):
+        self._validate_non_redundant_domain()
+        self._update_wrapped_field()
+        self._update_domain_and_range()
 
     @cached_property
     def private_attr_name(self) -> str:
@@ -125,28 +123,25 @@ class PropertyDescriptor(Symbol):
         """
         return f"_{self.wrapped_field.name}"
 
-    def _validate_non_redundant_domain(self, domain_type: SymbolType):
+    def _validate_non_redundant_domain(self):
         """
         Validate that this exact descriptor type has not already been defined for this domain type.
 
         :param domain_type: The domain type to validate.
         """
-        if domain_type in self.domain_range_map[self.__class__]:
+        if self.domain in self.domain_range_map[self.__class__]:
             raise ValueError(
-                f"Domain {domain_type} already exists, cannot define same descriptor more than once in "
+                f"Domain {self.domain} already exists, cannot define same descriptor more than once in "
                 f"the same class"
             )
 
-    def _update_wrapped_field(self, domain_type: SymbolType, field_name: str):
+    def _update_wrapped_field(self):
         """
         Set the wrapped field attribute using the domain type and field name.
-
-        :param domain_type:  The domain type for this descriptor instance.
-        :param field_name:  The field name that this descriptor instance manages.
         """
-        field_ = [f for f in fields(domain_type) if f.name == field_name][0]
+        field_ = [f for f in fields(self.domain) if f.name == self.field_name][0]
         self.wrapped_field = WrappedField(
-            WrappedClass(domain_type), field_, property_descriptor=self
+            WrappedClass(self.domain), field_, property_descriptor=self
         )
 
     @cached_property
@@ -154,16 +149,14 @@ class PropertyDescriptor(Symbol):
         """Whether the field is iterable or not"""
         return self.wrapped_field.is_iterable
 
-    def _update_domain_and_range(self, domain_type: SymbolType):
+    def _update_domain_and_range(self):
         """
         Update the domain and range sets and the domain-range map for this descriptor type.
-
-        :param domain_type: The domain type for this descriptor instance.
         """
         range_type = self.wrapped_field.type_endpoint
         assert issubclass(range_type, Symbol)
-        self.domain_range_map[self.__class__][domain_type] = range_type
-        self.all_domains.add(domain_type)
+        self.domain_range_map[self.__class__][self.domain] = range_type
+        self.all_domains.add(self.domain)
         self.all_ranges.add(range_type)
 
     @cached_property
@@ -172,15 +165,6 @@ class PropertyDescriptor(Symbol):
         The range type for this descriptor instance.
         """
         return self.domain_range_map[self.__class__][self.domain]
-
-    @cached_property
-    def domain(self) -> SymbolType:
-        """
-        The domain type for this descriptor instance.
-        """
-        domain_type = self.wrapped_field.clazz.clazz
-        assert issubclass(domain_type, Symbol)
-        return domain_type
 
     def add_relation_to_the_graph(
         self, domain_value: Symbol, range_value: Symbol, inferred: bool = False
@@ -244,9 +228,7 @@ class PropertyDescriptor(Symbol):
                 monitored_type = monitored_type_map[type(value)]
             except KeyError:
                 raise UnMonitoredContainerTypeForDescriptor(
-                    f"Cannot use the descriptor on field {self.wrapped_field} from {obj} because it has a container type "
-                    f"that is not monitored (i.e., is not a subclass of {MonitoredContainer}). Either use one of "
-                    f"{MonitoredList} or {MonitoredSet} or implement a custom monitored container type."
+                    self.domain, self.wrapped_field.name, type(value)
                 )
             monitored_value = monitored_type(descriptor=self)
             for v in make_set(value):
