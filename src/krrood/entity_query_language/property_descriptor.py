@@ -27,7 +27,7 @@ from .monitored_container import (
     MonitoredSet,
 )
 from .predicate import Symbol
-from .symbol_graph import SymbolGraph
+from .symbol_graph import SymbolGraph, PredicateClassRelation
 from .utils import make_set, is_iterable
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
@@ -188,9 +188,13 @@ class PropertyDescriptor:
         assert issubclass(domain_type, Symbol)
         return domain_type
 
-    def on_add(self, domain_value, val: Symbol, inferred: bool = False) -> None:
+    def on_add(
+        self, domain_value: Symbol, range_value: Symbol, inferred: bool = False
+    ) -> None:
         """Add a value to the property descriptor."""
-        self.add_relation(domain_value, val, inferred=inferred)
+        PredicateClassRelation(
+            domain_value, range_value, self.wrapped_field, inferred=inferred
+        ).add_to_graph()
 
     def __get__(self, obj, objtype=None):
         if obj is None:
@@ -245,8 +249,7 @@ class PropertyDescriptor:
         if isinstance(attr, MonitoredContainer):
             attr._clear()
             for v in make_set(value):
-                attr._add_item(v, call_on_add=False)
-                self.add_relation(obj, v, set_attr=False)
+                attr._add_item(v, inferred=False)
         else:
             setattr(obj, self.private_attr_name, value)
             self.on_add(obj, value)
@@ -255,13 +258,11 @@ class PropertyDescriptor:
         self,
         domain_value: Symbol,
         range_value: Symbol,
-        inferred: bool = False,
-    ) -> None:
+    ) -> bool:
         """Update the value of the managed attribute
 
         :param domain_value: The domain value to update (i.e., the instance that this descriptor is attached to).
         :param range_value: The range value to update (i.e., the value to set on the managed attribute).
-        :param inferred: Whether the update is due to an inferred relation.
         """
         v = getattr(domain_value, self.private_attr_name)
         updated = False
@@ -270,30 +271,7 @@ class PropertyDescriptor:
         elif v != range_value:
             setattr(domain_value, self.private_attr_name, range_value)
             updated = True
-        if not updated:
-            return
-        for super_domain, super_field in self.get_super_properties(domain_value):
-            super_descriptor = super_field.property_descriptor
-            super_descriptor.update_value(super_domain, range_value, inferred=True)
-        if self.inverse_of:
-            inverse_domain, inverse_field = self.get_inverse_field(range_value)
-            inverse_field.property_descriptor.update_value(
-                inverse_domain, domain_value, inferred=True
-            )
-        self.add_transitive_relations_to_graph()
-
-    def add_transitive_relations_to_graph(self, range_value: Symbol):
-        """
-        Add all transitive relations of this relation type that results from adding this relation to the graph.
-        """
-        if self.transitive:
-            wrapped_instance = SymbolGraph().get_wrapped_instance(range_value)
-            for nxt in wrapped_instance.neighbors_with_relation_type(self.__class__):
-                self.__class__(self.source, nxt, inferred=True).add_to_graph()
-            for nxt in self.source.neighbors_with_relation_type(
-                self.__class__, outgoing=False
-            ):
-                self.__class__(nxt, self.target, inferred=True).add_to_graph()
+        return updated
 
     @profile
     def _holds_direct(
@@ -313,24 +291,6 @@ class PropertyDescriptor:
                 range_value=range_value,
             ):
                 return True
-        # Fallback: check subclass properties declared on the domain type
-        return self._check_relation_holds_for_subclasses_of_property(
-            domain_value=domain_value, range_value=range_value
-        )
-
-    @profile
-    def _check_relation_holds_for_subclasses_of_property(
-        self, domain_value: Optional[Any] = None, range_value: Optional[Any] = None
-    ) -> bool:
-        domain_value = domain_value or self.domain_value
-        range_value = range_value or self.range_value
-        for prop_data in self.get_sub_properties(domain_value):
-            if self._check_relation_value(
-                prop_data.private_attr_name,
-                domain_value=domain_value,
-                range_value=range_value,
-            ):
-                return True
         return False
 
     def _check_relation_value(
@@ -344,61 +304,5 @@ class PropertyDescriptor:
         attr_value = getattr(domain_value, attr_name)
         if make_set(range_value).issubset(make_set(attr_value)):
             return True
-        # Do not handle transitivity here; it is now centralized in Predicate.__call__
+        # Do not handle transitivity here; it is now centralized in PredicateClassRelation.
         return False
-
-    def get_sub_properties(
-        self, domain_value: Optional[Any] = None
-    ) -> Iterable["PropertyDescriptor"]:
-        """Return sub-properties declared on the domain type.
-
-        The result is cached per domain class and per descriptor subclass.
-        """
-        domain_value = domain_value or self.domain_value
-        owner = domain_value.__class__
-        prop_cls: Type[PropertyDescriptor] = self.__class__
-
-        # Two-level cache: domain class -> (descriptor subclass -> tuple of sub-props)
-        level1: Dict[Type, Dict[Type, Tuple[PropertyDescriptor, ...]]] = (
-            self._subprops_cache
-        )
-        per_owner = level1.get(owner)
-        if per_owner is not None:
-            cached = per_owner.get(prop_cls)
-            if cached is not None:
-                return cached
-
-        # Compute and store
-        props: Tuple[PropertyDescriptor, ...] = tuple(
-            getattr(owner, name)
-            for name in dir(owner)
-            if not name.startswith("_")
-            for attr in (getattr(owner, name),)
-            if issubclass(type(attr), prop_cls)
-        )
-
-        if per_owner is None:
-            per_owner = {}
-            level1[owner] = per_owner
-        per_owner[prop_cls] = props
-        return props
-
-    @classmethod
-    def clear_subproperties_cache(cls, owner: Optional[Type] = None) -> None:
-        """Clear the sub-properties cache.
-
-        If a domain class is provided, only its cached entries are removed.
-        Use this when mutating classes at runtime.
-        """
-        cache: WeakKeyDictionary = cls._subprops_cache
-        if owner is None:
-            cache.clear()
-            return
-        per_owner = cache.get(owner)
-        if per_owner is not None:
-            per_owner.clear()
-            # Remove the empty mapping for cleanliness
-            try:
-                del cache[owner]
-            except KeyError:
-                pass
