@@ -466,3 +466,7 @@ def test_relationship_overloading(session, database):
 
 def test_alternative_mapping_inheritance(session, database):
     assert issubclass(ChildBaseMappingDAO, ParentBaseMappingDAO)
+
+
+def test_inheritance_mapper_args(session, database):
+    assert InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.__mapper_args__

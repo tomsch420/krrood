@@ -37,6 +37,78 @@ class Base(DeclarativeBase):
     }
 
 
+class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
+    Base,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceBaseWithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    base_attribute: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+
+class InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO(
+    InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceLevel1WithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(
+            InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.database_id
+        ),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_one_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO",
+        "inherit_condition": database_id
+        == InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.database_id,
+    }
+
+
+class InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO(
+    InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO,
+    DataAccessObject[
+        test.dataset.example_classes.InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping
+    ],
+):
+
+    __tablename__ = "InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(
+            InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO.database_id
+        ),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_two_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO",
+        "inherit_condition": database_id
+        == InheritanceLevel1WithoutSymbolButAlternativelyMappedMappingDAO.database_id,
+    }
+
+
 class PredicateClassRelationDAO(
     Base,
     DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateClassRelation],
