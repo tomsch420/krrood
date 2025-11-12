@@ -4,6 +4,7 @@ import os
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
+from functools import cached_property
 from typing import Callable, Tuple
 
 from rustworkx import PyDiGraph
@@ -21,6 +22,7 @@ from typing_extensions import (
 from .attribute_introspector import DescriptorAwareIntrospector
 from .. import logger
 from ..class_diagrams import ClassDiagram
+from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 from ..singleton import SingletonMeta
 from ..utils import recursive_subclasses
@@ -86,23 +88,42 @@ class PredicateClassRelation:
 
     def add_to_graph(self):
         """
-        Add the relation to the graph.
+        Add the relation to the graph and infer additional relations if possible. In addition, update the value of
+         the wrapped field in the source instance if this relation is an inferred relation.
         """
         if SymbolGraph().add_relation(self):
             if self.inferred:
-                self.wrapped_field.property_descriptor.update_value(
-                    self.source.instance, self.target.instance
-                )
-            for super_domain, super_field in self.super_relations:
-                self.__class__(
-                    super_domain, self.target, super_field, inferred=True
-                ).add_to_graph()
-            if self.inverse_of:
-                inverse_domain, inverse_field = self.inverse_domain_and_field
-                self.__class__(
-                    inverse_domain, self.source, inverse_field, inferred=True
-                ).add_to_graph()
-            self.add_transitive_relations_to_graph()
+                self.update_source_wrapped_field_value()
+            self.infer_super_relations()
+            self.infer_inverse_relation()
+            self.infer_transitive_relations()
+
+    def update_source_wrapped_field_value(self):
+        """
+        Update the wrapped field value for the source instance.
+        """
+        self.wrapped_field.property_descriptor.update_value(
+            self.source.instance, self.target.instance
+        )
+
+    def infer_super_relations(self):
+        """
+        Infer all super relations of this relation.
+        """
+        for super_domain, super_field in self.super_relations:
+            self.__class__(
+                super_domain, self.target, super_field, inferred=True
+            ).add_to_graph()
+
+    def infer_inverse_relation(self):
+        """
+        Infer the inverse relation if it exists.
+        """
+        if self.inverse_of:
+            inverse_domain, inverse_field = self.inverse_domain_and_field
+            self.__class__(
+                inverse_domain, self.source, inverse_field, inferred=True
+            ).add_to_graph()
 
     @property
     def super_relations(self) -> Iterable[Tuple[WrappedInstance, WrappedField]]:
@@ -110,29 +131,71 @@ class PredicateClassRelation:
         Find neighboring symbols connected by super edges.
 
         This method identifies neighboring symbols that are connected
-        through edge with predicate types that are superclasses of the current predicate.
+        through edge with relation types that are superclasses of the current relation type.
 
-        :return: A list containing neighboring symbols connected by super type edges.
+        Also, it looks for role taker super relations of the source if it exists.
+
+        :return: An iterator over neighboring symbols and relations that are super relations.
         """
-        symbol_graph = SymbolGraph()
-        class_diagram = symbol_graph.class_diagram
+        yield from self.direct_super_relations
+        yield from self.role_taker_super_relations
+
+    @property
+    def direct_super_relations(self):
+        """
+        Return the direct super relations of the source.
+        """
         source_type = self.source.instance_type
+        property_descriptor_cls: PropertyDescriptor = (
+            self.wrapped_field.property_descriptor.__class__
+        )
         yield from (
             (self.source, f)
-            for f in class_diagram.get_fields_of_superclass_property_descriptors(
-                source_type, self.wrapped_field.property_descriptor.__class__
-            )
+            for f in property_descriptor_cls.get_fields_of_superproperties(source_type)
         )
-        source_role_taker_field, role_taker_fields = (
-            class_diagram.get_role_taker_superclass_properties(
-                source_type, self.wrapped_field.property_descriptor.__class__
-            )
-        )
-        if not role_taker_fields:
+
+    @property
+    def role_taker_super_relations(self):
+        """
+        Return the source role taker super relations.
+        """
+        if not self.role_taker_fields:
             return
-        role_taker = getattr(self.source.instance, source_role_taker_field.public_name)
-        role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
-        yield from ((role_taker, f) for f in role_taker_fields)
+        role_taker = getattr(
+            self.source.instance, self.source_role_taker_association.field.public_name
+        )
+        role_taker = SymbolGraph().ensure_wrapped_instance(role_taker)
+        yield from ((role_taker, f) for f in self.role_taker_fields)
+
+    @cached_property
+    def role_taker_fields(self) -> List[WrappedField]:
+        """
+        Return the role taker fields of the source role taker association.
+        """
+        if not self.source_role_taker_association:
+            return []
+        return list(
+            self.property_descriptor_cls.get_fields_of_superproperties(
+                self.source_role_taker_association.target
+            )
+        )
+
+    @cached_property
+    def property_descriptor_cls(self) -> PropertyDescriptor:
+        """
+        Return the property descriptor class of the relation.
+        """
+        return self.wrapped_field.property_descriptor.__class__
+
+    @cached_property
+    def source_role_taker_association(self) -> Optional[Association]:
+        """
+        Return the source role taker association of the relation.
+        """
+        class_diagram = SymbolGraph().class_diagram
+        return class_diagram.get_role_taker_associations_of_cls(
+            self.source.instance_type
+        )
 
     @property
     def inverse_domain_and_field(self) -> Tuple[WrappedInstance, WrappedField]:
@@ -141,69 +204,94 @@ class PredicateClassRelation:
 
         :return: The inverse domain instance and property descriptor field.
         """
-        symbol_graph = SymbolGraph()
-        target_type = self.target.instance_type
-        inverse_field = self.inverse_of.get_associated_field_of_domain_type(target_type)
-        if not inverse_field:
-            role_taker, inverse_field = self.inverse_domain_and_field_from_role_taker
-            if inverse_field:
-                role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
-                return role_taker, inverse_field
-            else:
-                raise ValueError(
-                    f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self}"
-                )
-        return self.target, inverse_field
+        if self.inverse_field:
+            return self.target, self.inverse_field
+        elif self.inverse_field_from_target_role_taker:
+            return self.target_role_taker, self.inverse_field_from_target_role_taker
+        else:
+            raise ValueError(
+                f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self}"
+            )
 
-    @property
-    def inverse_domain_and_field_from_role_taker(
-        self,
-    ) -> Tuple[Optional[WrappedInstance], Optional[WrappedField]]:
+    @cached_property
+    def target_role_taker(self) -> Optional[WrappedInstance]:
         """
-        Get the inverse field of the property descriptor from the role taker of the object if it exists.
+        Return the role taker of the target if it exists.
+        """
+        if not self.target_role_taker_association:
+            return None
+        role_taker = getattr(
+            self.target.instance,
+            self.target_role_taker_association.field.public_name,
+            None,
+        )
+        return SymbolGraph().ensure_wrapped_instance(role_taker)
 
-        :return: The role taker wrapped instance and the wrapped field of the inverse descriptor if they exist.
+    @cached_property
+    def inverse_field_from_target_role_taker(self) -> Optional[WrappedField]:
         """
-        symbol_graph = SymbolGraph()
-        class_diagram = symbol_graph.class_diagram
-        role_taker_assoc = class_diagram.get_role_taker_associations_of_cls(
+        Return the inverse field of this relation field that is stored in the role taker of the target.
+        """
+        if not self.target_role_taker_association:
+            return None
+        return self.inverse_of.get_associated_field_of_domain_type(
+            self.target_role_taker_association.target
+        )
+
+    @cached_property
+    def target_role_taker_association(self) -> Optional[Association]:
+        """
+        Return role taker association of the target if it exists..
+        """
+        class_diagram = SymbolGraph().class_diagram
+        return class_diagram.get_role_taker_associations_of_cls(
             self.target.instance_type
         )
-        if role_taker_assoc:
-            inverse_field = self.inverse_of.get_associated_field_of_domain_type(
-                role_taker_assoc.target
-            )
-            role_taker = getattr(
-                self.target.instance, role_taker_assoc.field.public_name
-            )
-            role_taker = symbol_graph.ensure_wrapped_instance(role_taker)
-            return role_taker, inverse_field
-        return None, None
 
-    def add_transitive_relations_to_graph(self):
+    @cached_property
+    def inverse_field(self) -> Optional[WrappedField]:
+        """
+        Return the inverse field (if it exists) stored in the target of this relation.
+        """
+        return self.inverse_of.get_associated_field_of_domain_type(
+            self.target.instance_type
+        )
+
+    def infer_transitive_relations(self):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
         if self.transitive:
-            symbol_graph = SymbolGraph()
-            for nxt_relation in symbol_graph.get_outgoing_relations_with_type(
-                self.target, self.__class__
-            ):
-                self.__class__(
-                    self.source,
-                    nxt_relation.target,
-                    nxt_relation.wrapped_field,
-                    inferred=True,
-                ).add_to_graph()
-            for nxt_relation in symbol_graph.get_incoming_relations_with_type(
-                self.source, self.__class__
-            ):
-                self.__class__(
-                    nxt_relation.source,
-                    self.target,
-                    nxt_relation.wrapped_field,
-                    inferred=True,
-                ).add_to_graph()
+            self.infer_transitive_relations_outgoing_from_source()
+            self.infer_transitive_relations_incoming_to_target()
+
+    def infer_transitive_relations_outgoing_from_source(self):
+        """
+        Infer transitive relations outgoing from the source.
+        """
+        for nxt_relation in SymbolGraph().get_outgoing_relations_with_type(
+            self.target, self.__class__
+        ):
+            self.__class__(
+                self.source,
+                nxt_relation.target,
+                nxt_relation.wrapped_field,
+                inferred=True,
+            ).add_to_graph()
+
+    def infer_transitive_relations_incoming_to_target(self):
+        """
+        Infer transitive relations incoming to the target.
+        """
+        for nxt_relation in SymbolGraph().get_incoming_relations_with_type(
+            self.source, self.__class__
+        ):
+            self.__class__(
+                nxt_relation.source,
+                self.target,
+                nxt_relation.wrapped_field,
+                inferred=True,
+            ).add_to_graph()
 
     def __str__(self):
         """Return the predicate type name for labeling the edge."""

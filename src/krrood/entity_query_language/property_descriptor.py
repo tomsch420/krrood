@@ -12,8 +12,9 @@ from typing import (
     Iterable,
     Dict,
     Union,
+    Tuple,
+    List,
 )
-from weakref import WeakKeyDictionary
 
 from typing_extensions import DefaultDict
 
@@ -315,3 +316,52 @@ class PropertyDescriptor(Symbol):
             None,
         )
         return result.field if result else None
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_fields_of_superproperties_in_role_taker_of_class(
+        cls,
+        domain_type: Union[SymbolType, WrappedClass],
+    ) -> Tuple[Optional[WrappedField], List[WrappedField]]:
+        """
+        Return the role-taker field and all associated fields that are superproperties of this descriptor class.
+
+        :param domain_type: The domain type that has a role-taker, where the role-taker has associated fields with the
+         super properties of this descriptor class.
+        """
+        class_diagram = SymbolGraph().class_diagram
+        role_taker_assoc = class_diagram.get_role_taker_associations_of_cls(domain_type)
+        if role_taker_assoc:
+            role_taker_fields = cls.get_fields_of_superproperties(
+                role_taker_assoc.target
+            )
+            return role_taker_assoc.field, list(role_taker_fields)
+        return None, []
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_fields_of_superproperties(
+        cls,
+        domain_type: Union[SymbolType, WrappedClass],
+    ) -> Tuple[WrappedField, ...]:
+        """
+        Get the fields of the domain type that are associated with the super classes of this descriptor class.
+
+        :param domain_type: The domain type that has an associated field with the super classes of this descriptor class.
+        """
+
+        def association_condition(association: Association) -> bool:
+            return (
+                issubclass(cls, type(association.field.property_descriptor))
+                and type(association.field.property_descriptor) is not cls
+            )
+
+        class_diagram = SymbolGraph().class_diagram
+
+        association_fields = [
+            assoc.field
+            for assoc in class_diagram.get_associations_with_condition(
+                domain_type, association_condition
+            )
+        ]
+        return tuple(association_fields)

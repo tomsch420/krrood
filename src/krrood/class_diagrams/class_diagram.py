@@ -188,51 +188,10 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
-    @lru_cache(maxsize=None)
-    def get_role_taker_superclass_properties(
-        self,
-        wrapped_cls: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Tuple[Optional[WrappedField], List[WrappedField]]:
-        """
-        Return the role-taker field and all its superclass property descriptor fields of the given type.
-
-        :param wrapped_cls:
-        :param property_descriptor_cls:
-        """
-        role_taker_assoc = self.get_role_taker_associations_of_cls(wrapped_cls)
-        if role_taker_assoc:
-            role_taker_fields = self.get_fields_of_superclass_property_descriptors(
-                role_taker_assoc.target, property_descriptor_cls
-            )
-            return role_taker_assoc.field, list(role_taker_fields)
-        return None, []
-
-    @lru_cache(maxsize=None)
-    def get_fields_of_superclass_property_descriptors(
-        self,
-        wrapped_cls: Union[Type, WrappedClass],
-        property_descriptor_cls: Type[PropertyDescriptor],
-    ) -> Tuple[WrappedField, ...]:
-        wrapped_cls = self.get_wrapped_class(wrapped_cls)
-        association_fields = []
-        for assoc in self.get_out_edges(wrapped_cls):
-            if not isinstance(assoc, Association):
-                continue
-            if not assoc.field.property_descriptor:
-                continue
-            other_prop_type = type(assoc.field.property_descriptor)
-            if (
-                issubclass(property_descriptor_cls, other_prop_type)
-                and property_descriptor_cls is not other_prop_type
-            ):
-                association_fields.append(assoc.field)
-        return tuple(association_fields)
-
     def get_associations_with_condition(
         self,
         clazz: Union[Type, WrappedClass],
-        condition: Callable[[ClassRelation], bool],
+        condition: Callable[[Association], bool],
     ) -> Iterable[Association]:
         """
         Get all associations that match the condition.
@@ -240,26 +199,21 @@ class ClassDiagram:
         :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
         :param condition: The condition to filter relations by.
         """
-        yield from filter(
-            condition,
-            self.get_outgoing_relations_with_condition(
-                clazz, lambda rel: isinstance(rel, Association)
-            ),
-        )
+        for relation in self.get_outgoing_relations(clazz):
+            if isinstance(relation, Association) and condition(relation):
+                yield relation
 
-    def get_outgoing_relations_with_condition(
+    def get_outgoing_relations(
         self,
         clazz: Union[Type, WrappedClass],
-        condition: Callable[[ClassRelation], bool],
     ) -> Iterable[ClassRelation]:
         """
-        Get all outgoing edge relations that match the condition.
+        Get all outgoing edge relations of the given class.
 
         :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
-        :param condition: The condition to filter relations by.
         """
         wrapped_cls = self.get_wrapped_class(clazz)
-        yield from filter(condition, self.get_out_edges(wrapped_cls))
+        yield from self.get_out_edges(wrapped_cls)
 
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(
