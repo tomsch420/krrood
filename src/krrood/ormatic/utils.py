@@ -21,7 +21,7 @@ from typing_extensions import (
     Dict,
 )
 
-from krrood.ormatic.dao import AlternativeMapping, DataAccessObject
+from .dao import AlternativeMapping, DataAccessObject
 
 
 class classproperty:

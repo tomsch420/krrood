@@ -13,12 +13,10 @@ from .symbolic import (
 )
 
 if TYPE_CHECKING:
-    from .predicate import BinaryPredicate
+    from .entity import ConditionType
 
 
-def refinement(
-    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
-) -> SymbolicExpression[T]:
+def refinement(*conditions: ConditionType) -> SymbolicExpression[T]:
     """
     Add a refinement branch (ExceptIf node with its right the new conditions and its left the base/parent rule/query)
      to the current condition tree.
@@ -39,9 +37,7 @@ def refinement(
     return new_conditions_root.right
 
 
-def alternative(
-    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
-) -> SymbolicExpression[T]:
+def alternative(*conditions: ConditionType) -> SymbolicExpression[T]:
     """
     Add an alternative branch (logical ElseIf) to the current condition tree.
 
@@ -54,9 +50,7 @@ def alternative(
     return alternative_or_next(RDREdge.Alternative, *conditions)
 
 
-def next_rule(
-    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate]
-) -> SymbolicExpression[T]:
+def next_rule(*conditions: ConditionType) -> SymbolicExpression[T]:
     """
     Add a consequent rule that gets always executed after the current rule.
 
@@ -71,7 +65,7 @@ def next_rule(
 
 def alternative_or_next(
     type_: Union[RDREdge.Alternative, RDREdge.Next],
-    *conditions: Union[SymbolicExpression[T], bool, BinaryPredicate],
+    *conditions: ConditionType,
 ) -> SymbolicExpression[T]:
     """
     Add an alternative/next branch to the current condition tree.

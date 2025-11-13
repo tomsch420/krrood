@@ -23,11 +23,13 @@ from typing_extensions import (
     Union,
 )
 
+from .failures import MissingContainedTypeOfContainer
 from .utils import is_builtin_class
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
     from .class_diagram import WrappedClass
+    from ..ontomatic.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -63,6 +65,11 @@ class WrappedField:
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
     """
 
+    property_descriptor: Optional[PropertyDescriptor] = None
+    """
+    The property descriptor instance that manages the field.
+    """
+
     container_types: ClassVar[List[Type]] = [list, set, tuple, type, Sequence]
     """
     A list of container types that are supported by the parser.
@@ -70,6 +77,10 @@ class WrappedField:
 
     def __post_init__(self):
         self.public_name = self.public_name or self.field.name
+
+    @cached_property
+    def name(self):
+        return self.public_name
 
     def __hash__(self):
         return hash((self.clazz.clazz, self.field))
@@ -156,7 +167,9 @@ class WrappedField:
                 if self.resolved_type is Type:
                     return self.resolved_type
                 else:
-                    raise
+                    raise MissingContainedTypeOfContainer(
+                        self.clazz.clazz, self.name, self.container_type
+                    )
 
     @cached_property
     def is_type_type(self) -> bool:
@@ -178,6 +191,12 @@ class WrappedField:
     @cached_property
     def is_one_to_many_relationship(self) -> bool:
         return self.is_container and not self.is_builtin_type and not self.is_optional
+
+    @cached_property
+    def is_iterable(self):
+        return self.is_one_to_many_relationship and hasattr(
+            self.container_type, "__iter__"
+        )
 
     @cached_property
     def type_endpoint(self) -> Type:

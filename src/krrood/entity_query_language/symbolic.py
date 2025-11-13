@@ -10,6 +10,7 @@ from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
 
 """
@@ -34,7 +35,6 @@ from typing_extensions import (
     ClassVar,
     Union as TypingUnion,
     Generic,
-    TypeVar,
     TYPE_CHECKING,
     List,
     Tuple,
@@ -84,8 +84,6 @@ def in_symbolic_mode(mode: Optional[EQLMode] = None) -> bool:
     current_mode = _symbolic_mode.get()
     return current_mode == mode if mode else current_mode is not None
 
-
-T = TypeVar("T")
 
 id_generator = IDGenerator()
 
@@ -1212,26 +1210,26 @@ class Attribute(DomainMapping):
         super().__post_init__()
         with symbolic_mode(mode=None):
             if self._child_wrapped_cls_:
-                self._path_ = self._child_._path_ + [
-                    Association(
-                        self._child_wrapped_cls_,
-                        self._wrapped_type_,
-                        self._wrapped_field_,
-                    )
-                ]
+                self._update_path_()
 
     def _update_path_(self):
-        self._path_ = self._child_._path_ + [self._relation_]
+        if self._relation_:
+            self._path_ = self._child_._path_ + [self._relation_]
 
     @cached_property
     def _relation_(self):
-        return Association(
-            self._child_wrapped_cls_, self._wrapped_type_, self._wrapped_field_
-        )
+        if self._wrapped_field_ and self._wrapped_type_:
+            return Association(
+                self._child_wrapped_cls_, self._wrapped_type_, self._wrapped_field_
+            )
+        return None
 
     @cached_property
     def _wrapped_type_(self):
-        return SymbolGraph().class_diagram.get_wrapped_class(self._type_)
+        try:
+            return SymbolGraph().class_diagram.get_wrapped_class(self._type_)
+        except ClassIsUnMappedInClassDiagram:
+            return None
 
     @cached_property
     def _type_(self):
@@ -1261,7 +1259,10 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _child_wrapped_cls_(self):
-        return SymbolGraph().class_diagram.get_wrapped_class(self._child_type_)
+        try:
+            return SymbolGraph().class_diagram.get_wrapped_class(self._child_type_)
+        except ClassIsUnMappedInClassDiagram:
+            return None
 
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         yield HashedValue(id_=value.id_, value=getattr(value.value, self._attr_name_))

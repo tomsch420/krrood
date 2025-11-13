@@ -30,7 +30,6 @@ from krrood.entity_query_language.predicate import (
     HasType,
     symbolic_function,
     Predicate,
-    BinaryPredicate,
 )
 from ...dataset.semantic_world_like_classes import (
     Handle,
@@ -642,54 +641,6 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         for b2 in world.bodies
         for b3 in world.bodies
         if b1 != b2 and b2 != b3 and b1 != b3 and (b1, b2, b3) not in body_pairs
-    ), ("All not generated items " "should not satisfy the " "predicate.")
-
-
-def test_generate_with_using_inherited_binary_predicate(handles_and_containers_world):
-    """
-    Test the generation of handles in the HandlesAndContainersWorld.
-    """
-    world = handles_and_containers_world
-
-    @dataclass
-    class HaveSameFirstCharacter(BinaryPredicate):
-
-        @cached_property
-        def body1(self) -> Body:
-            return self.source.instance
-
-        @cached_property
-        def body2(self) -> Body:
-            return self.target.instance
-
-        def __call__(self):
-            return self.body1.name[0] == self.body2.name[0]
-
-    with symbolic_mode():
-        query = a(
-            set_of(
-                (body1 := let(Body, world.bodies), body2 := let(Body, world.bodies)),
-                body1 != body2,
-                HaveSameFirstCharacter(body1, body2),
-            )
-        )
-
-    body_pairs = list(query.evaluate())
-    body_pairs = [(body_pair[body1], body_pair[body2]) for body_pair in body_pairs]
-
-    print(body_pairs)
-    expected = factorial(
-        len([h for h in world.bodies if isinstance(h, Handle)])
-    ) + factorial(len([c for c in world.bodies if isinstance(c, Container)]))
-    assert len(body_pairs) == expected, "Should generate at least one handle."
-    assert all(
-        HaveSameFirstCharacter(b1, b2)() for b1, b2 in body_pairs
-    ), "All generated items should satisfy the predicate."
-    assert all(
-        not HaveSameFirstCharacter(b1, b2)()
-        for b1 in world.bodies
-        for b2 in world.bodies
-        if b1 != b2 and (b1, b2) not in body_pairs and (b2, b1) not in body_pairs
     ), ("All not generated items " "should not satisfy the " "predicate.")
 
 

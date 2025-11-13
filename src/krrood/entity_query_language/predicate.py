@@ -16,7 +16,6 @@ from typing_extensions import (
 
 from .enums import PredicateType, EQLMode
 from .symbol_graph import (
-    PredicateClassRelation,
     WrappedInstance,
     SymbolGraph,
 )
@@ -125,15 +124,6 @@ class Predicate(Symbol, ABC):
         """
         Evaluate the predicate for the supplied values.
         """
-
-
-@dataclass(eq=False)
-class BinaryPredicate(PredicateClassRelation, Predicate, ABC):
-    """
-    A predicate that has a domain and a range.
-    """
-
-    ...
 
 
 @dataclass(eq=False)

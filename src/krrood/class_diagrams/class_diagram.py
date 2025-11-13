@@ -6,15 +6,18 @@ from copy import copy
 from dataclasses import dataclass
 from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
+from typing import Callable, Iterable
 
 import rustworkx as rx
+
+from .failures import ClassIsUnMappedInClassDiagram
 
 try:
     from rustworkx_utils import RWXNode
 except ImportError:
     RWXNode = None
 from typing_extensions import List, Optional, Dict, Union, Tuple
-from typing_extensions import Type
+from typing_extensions import Type, TYPE_CHECKING
 
 from .attribute_introspector import (
     AttributeIntrospector,
@@ -22,6 +25,9 @@ from .attribute_introspector import (
 )
 from .utils import Role, get_generic_type_param
 from .wrapped_field import WrappedField
+
+if TYPE_CHECKING:
+    from ..entity_query_language.predicate import PropertyDescriptor
 
 
 @dataclass
@@ -139,6 +145,7 @@ class WrappedClass:
                     self,
                     item.field,
                     public_name=item.public_name,
+                    property_descriptor=item.property_descriptor,
                 )
                 # Map under the public attribute name
                 self._wrapped_field_name_map_[item.public_name] = wf
@@ -181,6 +188,33 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
+    def get_associations_with_condition(
+        self,
+        clazz: Union[Type, WrappedClass],
+        condition: Callable[[Association], bool],
+    ) -> Iterable[Association]:
+        """
+        Get all associations that match the condition.
+
+        :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
+        :param condition: The condition to filter relations by.
+        """
+        for relation in self.get_outgoing_relations(clazz):
+            if isinstance(relation, Association) and condition(relation):
+                yield relation
+
+    def get_outgoing_relations(
+        self,
+        clazz: Union[Type, WrappedClass],
+    ) -> Iterable[ClassRelation]:
+        """
+        Get all outgoing edge relations of the given class.
+
+        :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
+        """
+        wrapped_cls = self.get_wrapped_class(clazz)
+        yield from self.get_out_edges(wrapped_cls)
+
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(
         self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
@@ -213,6 +247,7 @@ class ClassDiagram:
 
         A role taker is a field that is a one-to-one relationship and is not optional.
         """
+        cls = self.get_wrapped_class(cls)
         for assoc in self.get_out_edges(cls):
             if isinstance(assoc, HasRoleTaker) and assoc.field.is_role_taker:
                 return assoc
@@ -422,7 +457,10 @@ class ClassDiagram:
         """
         if isinstance(clazz, WrappedClass):
             return clazz
-        return self._cls_wrapped_cls_map.get(clazz, None)
+        try:
+            return self._cls_wrapped_cls_map[clazz]
+        except KeyError:
+            raise ClassIsUnMappedInClassDiagram(clazz)
 
     def add_node(self, clazz: WrappedClass):
         """
@@ -465,7 +503,10 @@ class ClassDiagram:
         """
         for clazz in self.wrapped_classes:
             for superclass in clazz.clazz.__bases__:
-                source = self.get_wrapped_class(superclass)
+                try:
+                    source = self.get_wrapped_class(superclass)
+                except ClassIsUnMappedInClassDiagram:
+                    continue
                 if source:
                     relation = Inheritance(
                         source=source,
@@ -493,9 +534,9 @@ class ClassDiagram:
             for wrapped_field in clazz.fields:
                 target_type = wrapped_field.type_endpoint
 
-                wrapped_target_class = self.get_wrapped_class(target_type)
-
-                if not wrapped_target_class:
+                try:
+                    wrapped_target_class = self.get_wrapped_class(target_type)
+                except ClassIsUnMappedInClassDiagram:
                     continue
 
                 association_type = Association

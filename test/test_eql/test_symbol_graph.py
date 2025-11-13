@@ -21,7 +21,7 @@ except ImportError:
 def test_visualize_symbol_graph():
     SymbolGraph().clear()
     symbol_graph = SymbolGraph()
-    symbol_graph.to_dot("symbol_graph.svg", format="svg", graph_type="type")
+    symbol_graph.to_dot("symbol_graph.svg", format_="svg", graph_type="type")
     assert len(symbol_graph._class_diagram.wrapped_classes) >= 59
     if os.path.exists("symbol_graph.svg"):
         os.remove("symbol_graph.svg")
