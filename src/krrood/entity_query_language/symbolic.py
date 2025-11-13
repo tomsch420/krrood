@@ -23,7 +23,7 @@ import contextvars
 import operator
 import typing
 from abc import abstractmethod, ABC
-from dataclasses import dataclass, field, fields, MISSING
+from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
 
 from typing_extensions import (
@@ -414,11 +414,6 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
-        if not in_symbolic_mode():
-            raise AttributeError(
-                f"{self.__class__.__name__} object has no attribute {name}, maybe you forgot to "
-                f"use the symbolic_mode context manager?"
-            )
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(
                 f"{self.__class__.__name__} object has no attribute {name}"
@@ -430,47 +425,32 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
         return self._var_._type_ if self._var_ else None
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
-        self._if_not_in_symbolic_mode_raise_error_("__getitem__")
         return Index(self, key)
 
     def __call__(self, *args, **kwargs) -> CanBehaveLikeAVariable[T]:
-        self._if_not_in_symbolic_mode_raise_error_("__call__")
+
         return Call(self, args, kwargs)
 
     def __eq__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__eq__")
         return Comparator(self, other, operator.eq)
 
     def __contains__(self, item) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__contains__")
         return Comparator(item, self, operator.contains)
 
     def __ne__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__ne__")
         return Comparator(self, other, operator.ne)
 
     def __lt__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__lt__")
         return Comparator(self, other, operator.lt)
 
     def __le__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__le__")
         return Comparator(self, other, operator.le)
 
     def __gt__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__gt__")
         return Comparator(self, other, operator.gt)
 
     def __ge__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__ge__")
         return Comparator(self, other, operator.ge)
-
-    def _if_not_in_symbolic_mode_raise_error_(self, method_name: str) -> None:
-        if not in_symbolic_mode():
-            raise AttributeError(
-                f"You are not in symbolic_mode {self.__class__.__name__} object has no attribute"
-                f" {method_name}"
-            )
 
     def __hash__(self):
         return super().__hash__()
@@ -1201,16 +1181,24 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
 class Attribute(DomainMapping):
     """
     A symbolic attribute that can be used to access attributes of symbolic variables.
+
+    For instance, if Body.name is called, then the attribute name is "name" and `_owner_class_` is `Body`
     """
 
     _attr_name_: str
-    _child_type_: Type
+    """
+    The name of the attribute.
+    """
+
+    _owner_class_: Type
+    """
+    The class that owns this attribute.
+    """
 
     def __post_init__(self):
         super().__post_init__()
-        with symbolic_mode(mode=None):
-            if self._child_wrapped_cls_:
-                self._update_path_()
+        if self._wrapped_owner_class_:
+            self._update_path_()
 
     def _update_path_(self):
         if self._relation_:
@@ -1220,7 +1208,7 @@ class Attribute(DomainMapping):
     def _relation_(self):
         if self._wrapped_field_ and self._wrapped_type_:
             return Association(
-                self._child_wrapped_cls_, self._wrapped_type_, self._wrapped_field_
+                self._wrapped_owner_class_, self._wrapped_type_, self._wrapped_field_
             )
         return None
 
@@ -1232,19 +1220,28 @@ class Attribute(DomainMapping):
             return None
 
     @cached_property
-    def _type_(self):
-        if self._child_wrapped_cls_:
+    def _type_(self) -> Optional[Type]:
+        """
+        :return: The type of the accessed attribute.
+        """
+
+        if not is_dataclass(self._owner_class_):
+            return None
+
+        if self._wrapped_owner_class_:
             # try to get the type endpoint from a field
             try:
                 return self._wrapped_field_.type_endpoint
             except (KeyError, AttributeError):
                 return None
         else:
-            wrapped_cls = WrappedClass(self._child_type_)
+            wrapped_cls = WrappedClass(self._owner_class_)
             wrapped_cls._class_diagram = SymbolGraph().class_diagram
             wrapped_field = WrappedField(
                 wrapped_cls,
-                [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
+                [f for f in fields(self._owner_class_) if f.name == self._attr_name_][
+                    0
+                ],
             )
             try:
                 return wrapped_field.type_endpoint
@@ -1253,14 +1250,17 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_field_(self) -> Optional[WrappedField]:
-        return self._child_wrapped_cls_._wrapped_field_name_map_.get(
+        return self._wrapped_owner_class_._wrapped_field_name_map_.get(
             self._attr_name_, None
         )
 
     @cached_property
-    def _child_wrapped_cls_(self):
+    def _wrapped_owner_class_(self):
+        """
+        :return: The owner class of the attribute from the symbol graph.
+        """
         try:
-            return SymbolGraph().class_diagram.get_wrapped_class(self._child_type_)
+            return SymbolGraph().class_diagram.get_wrapped_class(self._owner_class_)
         except ClassIsUnMappedInClassDiagram:
             return None
 
