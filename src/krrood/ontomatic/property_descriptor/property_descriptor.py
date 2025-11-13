@@ -56,6 +56,7 @@ class PropertyDescriptor(Symbol):
     file the descriptors for each field that is considered a relation between two symbol types.
 
     Example:
+        >>> from krrood.ontomatic.property_descriptor.mixins import HasInverseProperty
         >>> from dataclasses import dataclass
         >>> from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
         >>> @dataclass
@@ -73,8 +74,10 @@ class PropertyDescriptor(Symbol):
         ...     pass
         ...
         >>> @dataclass
-        ... class MemberOf(PropertyDescriptor):
-        ...     inverse_of = Member
+        ... class MemberOf(PropertyDescriptor, HasInverseProperty):
+        ...     @classmethod
+        ...     def get_inverse(cls) -> Type[PropertyDescriptor]:
+        ...         return Member
         ...
         >>> @dataclass
         >>> class WorksFor(MemberOf):
@@ -126,8 +129,6 @@ class PropertyDescriptor(Symbol):
     def _validate_non_redundant_domain(self):
         """
         Validate that this exact descriptor type has not already been defined for this domain type.
-
-        :param domain_type: The domain type to validate.
         """
         if self.domain in self.domain_range_map[self.__class__]:
             raise ValueError(
