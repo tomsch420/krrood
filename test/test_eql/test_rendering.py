@@ -25,6 +25,7 @@ from krrood.entity_query_language.entity import (
     symbolic_mode,
     let,
     an,
+    create,
 )
 from krrood.entity_query_language.conclusion import Add
 from krrood.entity_query_language.symbolic import rule_mode
@@ -35,16 +36,16 @@ from krrood.entity_query_language.rule import alternative
 @pytest.mark.skipif(GraphVisualizer is None, reason="requires rustworkx_utils")
 def test_render_rx_graph_as_igraph_simple(handles_and_containers_world):
     world = handles_and_containers_world
-    with rule_mode():
-        fixed_connection = let(FixedConnection, world.connections)
-        container = fixed_connection.parent
-        handle = fixed_connection.child
-        rule = infer(
-            entity(
-                Drawer(handle=handle, container=container, world=world),
-                HasType(handle, Handle),
-            )
+
+    fixed_connection = let(FixedConnection, world.connections)
+    container = fixed_connection.parent
+    handle = fixed_connection.child
+    rule = infer(
+        entity(
+            create(Drawer)(handle=handle, container=container, world=world),
+            HasType(handle, Handle),
         )
+    )
     drawers = list(rule.evaluate())
     if os.path.exists("pdf_graph.pdf"):
         os.remove("pdf_graph.pdf")

@@ -29,6 +29,7 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
     Predicate,
 )
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
@@ -344,9 +345,9 @@ def test_generate_with_more_than_one_source(handles_and_containers_world):
             handle == fixed_connection.child,
             container == prismatic_connection.child,
         )
-    ).evaluate()
+    )
 
-    all_solutions = list(solutions)
+    all_solutions = list(solutions.evaluate())
     assert (
         len(all_solutions) == 2
     ), "Should generate components for two possible drawer."

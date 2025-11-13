@@ -10,7 +10,14 @@ from typing_extensions import Any, Optional, List, Dict
 from .enums import RDREdge
 from .hashed_data import HashedValue
 from .rxnode import ColorLegend
-from .symbolic import SymbolicExpression, T, Variable, OperationResult, An
+from .symbolic import (
+    SymbolicExpression,
+    T,
+    Variable,
+    OperationResult,
+    An,
+    ResultQuantifier,
+)
 
 
 @dataclass(eq=False)
@@ -101,7 +108,7 @@ class Add(Conclusion[T]):
 
 
 @dataclass(eq=False)
-class Infer(An[T]):
+class Infer(ResultQuantifier[T]):
 
     def __post_init__(self):
         super().__post_init__()

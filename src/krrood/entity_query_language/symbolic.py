@@ -371,9 +371,8 @@ class SymbolicExpression(Generic[T], ABC):
 
     def __enter__(self, in_rule_mode: bool = False):
         node = self
-        if in_rule_mode or in_symbolic_mode(EQLMode.Rule):
-            if (node is self._root_) or (node._parent_ is self._root_):
-                node = node._conditions_root_
+        if (node is self._root_) or (node._parent_ is self._root_):
+            node = node._conditions_root_
         SymbolicExpression._symbolic_expression_stack_.append(node)
         return self
 
@@ -493,17 +492,15 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         SymbolGraph().remove_dead_instances()
-        with symbolic_mode(mode=None):
-            results = self._evaluate__()
-            assert not in_symbolic_mode()
-            result_count = 0
-            for result in map(
-                self._process_result_, filter(lambda r: r.is_true, results)
-            ):
-                result_count += 1
-                self._assert_less_than_upper_limit_(result_count)
-                yield result
-            self._assert_more_than_lower_limit_(result_count)
+
+        results = self._evaluate__()
+
+        result_count = 0
+        for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
+            result_count += 1
+            self._assert_less_than_upper_limit_(result_count)
+            yield result
+        self._assert_more_than_lower_limit_(result_count)
         self._reset_cache_()
 
     def _validate_cardinality_constraints_(self):

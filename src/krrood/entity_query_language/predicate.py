@@ -3,7 +3,8 @@ from __future__ import annotations
 import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import wraps
+from functools import wraps, lru_cache
+from typing import Self, Dict
 
 from typing_extensions import (
     Callable,
@@ -28,6 +29,7 @@ from .symbolic import (
     Entity,
     properties_to_expression_tree,
     From,
+    CanBehaveLikeAVariable,
 )
 from .utils import is_iterable
 from ..utils import recursive_subclasses
@@ -77,12 +79,9 @@ class Symbol:
     """Base class for things that can be described by property descriptors."""
 
     def __new__(cls, *args, **kwargs):
-        if in_symbolic_mode():
-            return cls._symbolic_new_(cls, *args, **kwargs)
-        else:
-            instance = super().__new__(cls)
-            update_cache(instance)
-            return instance
+        instance = super().__new__(cls)
+        update_cache(instance)
+        return instance
 
     @classmethod
     def _symbolic_new_(cls, *args, **kwargs):
@@ -118,6 +117,28 @@ class Predicate(Symbol, ABC):
     """
 
     is_expensive: ClassVar[bool] = False
+
+    def __new__(cls, *args, **kwargs):
+        all_kwargs = {}
+        for name, arg in zip(get_cls_args(cls)[1:], args):
+            all_kwargs[name] = arg
+
+        all_kwargs.update(kwargs)
+
+        if cls._any_of_the_kwargs_is_a_variable(all_kwargs):
+            return Variable(
+                _type_=cls,
+                _name__=cls.__name__,
+                _kwargs_=all_kwargs,
+                _predicate_type_=PredicateType.SubClassOfPredicate,
+            )
+        return super().__new__(cls)
+
+    @classmethod
+    def _any_of_the_kwargs_is_a_variable(cls, bindings: Dict[str, Any]) -> bool:
+        return any(
+            isinstance(binding, CanBehaveLikeAVariable) for binding in bindings.values()
+        )
 
     @abstractmethod
     def __call__(self) -> bool:
@@ -177,7 +198,7 @@ def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
     :return: The domain and updated kwargs.
     """
     domain = None
-    update_cls_args(symbolic_cls)
+    get_cls_args(symbolic_cls)
     init_args = cls_args[symbolic_cls]
     for i, arg in enumerate(args):
         if isinstance(arg, From):
@@ -246,7 +267,8 @@ def update_cache(instance: Symbol):
         SymbolGraph().add_node(WrappedInstance(instance))
 
 
-def update_cls_args(symbolic_cls: Type):
+@lru_cache
+def get_cls_args(symbolic_cls: Type):
     """
     Updates the global `cls_args` dictionary with the constructor arguments
     of the given symbolic class, if it is not already present. The keys in
@@ -259,8 +281,4 @@ def update_cls_args(symbolic_cls: Type):
 
     :param symbolic_cls: A symbolic class type to be inspected.
     """
-    global cls_args
-    if symbolic_cls not in cls_args:
-        cls_args[symbolic_cls] = list(
-            inspect.signature(symbolic_cls.__init__).parameters.keys()
-        )
+    return list(inspect.signature(symbolic_cls.__init__).parameters.keys())
