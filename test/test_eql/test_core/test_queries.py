@@ -31,6 +31,7 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
     Predicate,
 )
+from ..factories import world
 from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
@@ -970,3 +971,30 @@ def test_quantified_query(handles_and_containers_world):
         list(get_quantified_query(exactly=2).evaluate())
     with pytest.raises(LessThanExpectedNumberOfSolutions):
         list(get_quantified_query(exactly=4).evaluate())
+
+
+def test_no_symbolic_mode(handles_and_containers_world):
+    world = handles_and_containers_world
+
+    body = let(type_=Body, domain=world.bodies)
+    sub_query = contains(body.name, "Handle")
+    query = an(
+        entity(
+            body,
+            sub_query,
+            body.name.endswith("1"),
+        )
+    )
+    query_with_not = an(
+        entity(
+            body,
+            not_(sub_query),
+            body.name.endswith("1"),
+        )
+    )
+    results = list(query.evaluate())
+    results_with_not = list(query_with_not.evaluate())
+    assert len(results) == 1
+    assert isinstance(results[0], Handle)
+    assert len(results_with_not) == 1
+    assert isinstance(results_with_not[0], Container)
