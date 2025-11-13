@@ -1,28 +1,18 @@
-from __future__ import annotations
-
-from collections import UserDict
-from contextlib import contextmanager
-from copy import copy
-
-from . import logger
-from .enums import EQLMode, PredicateType
-from .rxnode import RWXNode, ColorLegend
-from .symbol_graph import SymbolGraph
-from ..class_diagrams import ClassRelation
-from ..class_diagrams.class_diagram import Association, WrappedClass
-from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
-from ..class_diagrams.wrapped_field import WrappedField
-
 """
 Core symbolic expression system used to build and evaluate entity queries.
 
 This module defines the symbolic types (variables, sources, logical and
 comparison operators) and the evaluation mechanics.
 """
+
+from __future__ import annotations
+
 import contextvars
 import operator
 import typing
 from abc import abstractmethod, ABC
+from collections import UserDict
+from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
 
@@ -41,24 +31,30 @@ from typing_extensions import (
     Callable,
 )
 
-
+from . import logger
 from .cache_data import (
     is_caching_enabled,
     SeenSet,
     IndexedCache,
 )
+from .enums import EQLMode, PredicateType
 from .failures import (
     MultipleSolutionFound,
     NoSolutionFound,
-    UsageError,
     UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
     CardinalityConsistencyError,
     CardinalityValueError,
 )
-from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
+from .rxnode import RWXNode, ColorLegend
+from .symbol_graph import SymbolGraph
+from .utils import IDGenerator, is_iterable, generate_combinations
+from ..class_diagrams import ClassRelation
+from ..class_diagrams.class_diagram import Association, WrappedClass
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
+from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
     from .conclusion import Conclusion
