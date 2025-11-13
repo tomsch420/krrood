@@ -1849,66 +1849,31 @@ def chained_logic(
     return prev_operation
 
 
-@contextmanager
-def rule_mode(query: Optional[SymbolicExpression] = None):
-    """
-    Wrapper around symbolic construction mode to easily enable rule mode
-    """
-    # delegate to symbolic_mode
-    with symbolic_mode(query, EQLMode.Rule) as ctx:
-        yield ctx
-
-
-@contextmanager
-def symbolic_mode(
-    query: Optional[SymbolicExpression] = None, mode: EQLMode = EQLMode.Query
-):
-    """
-    Context manager to temporarily enable symbolic construction mode.
-
-    Within the context, calling classes decorated with ``@symbol`` produces
-    symbolic Variables instead of real instances.
-
-    :param query: Optional symbolic expression to also enter/exit as a context.
-    :param mode: The symbolic mode to set. (Default: EQLMode.Query)
-    """
-    prev_mode = _symbolic_mode.get()
-    try:
-        if query is not None:
-            query.__enter__(in_rule_mode=True)
-        _set_symbolic_mode(mode)
-        yield SymbolicExpression._current_parent_()
-    finally:
-        if query is not None:
-            query.__exit__()
-        _set_symbolic_mode(prev_mode)
-
-
 def properties_to_expression_tree(
     var: CanBehaveLikeAVariable, properties: Dict[str, Any]
 ) -> SymbolicExpression:
     """
     Convert properties of a variable to a symbolic expression.
     """
-    with symbolic_mode():
-        conditions = [getattr(var, k) == v for k, v in properties.items()]
-        expression = None
-        if len(conditions) == 1:
-            expression = conditions[0]
-        elif len(conditions) > 1:
-            expression = chained_logic(AND, *conditions)
+
+    conditions = [getattr(var, k) == v for k, v in properties.items()]
+    expression = None
+    if len(conditions) == 1:
+        expression = conditions[0]
+    elif len(conditions) > 1:
+        expression = chained_logic(AND, *conditions)
     return expression
 
 
 def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
-    with symbolic_mode(mode=None):
-        left_vars = left._unique_variables_.filter(
-            lambda v: not isinstance(v.value, Literal)
-        )
-        right_vars = right._unique_variables_.filter(
-            lambda v: not isinstance(v.value, Literal)
-        )
-        if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
-            return ElseIf(left, right)
-        else:
-            return Union(left, right)
+
+    left_vars = left._unique_variables_.filter(
+        lambda v: not isinstance(v.value, Literal)
+    )
+    right_vars = right._unique_variables_.filter(
+        lambda v: not isinstance(v.value, Literal)
+    )
+    if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
+        return ElseIf(left, right)
+    else:
+        return Union(left, right)

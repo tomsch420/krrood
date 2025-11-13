@@ -1,5 +1,5 @@
 from ..dataset.example_classes import VectorsWithProperty
-from krrood.entity_query_language.symbolic import symbolic_mode, From
+
 from krrood.entity_query_language.entity import (
     flatten,
     entity,
@@ -24,10 +24,9 @@ class CabinetLike(View):
 def test_flatten_iterable_attribute(handles_and_containers_world):
     world = handles_and_containers_world
 
-    with symbolic_mode():
-        views = let(Cabinet, world.views)
-        drawers = flatten(views.drawers)
-        query = an(entity(drawers))
+    views = let(Cabinet, world.views)
+    drawers = flatten(views.drawers)
+    query = an(entity(drawers))
 
     results = list(query.evaluate())
 
@@ -39,11 +38,10 @@ def test_flatten_iterable_attribute(handles_and_containers_world):
 def test_flatten_iterable_attribute_and_use_not_equal(handles_and_containers_world):
     world = handles_and_containers_world
 
-    with symbolic_mode():
-        cabinets = let(Cabinet, world.views)
-        drawer_1 = an(entity(d := let(Drawer, world.views), d.handle.name == "Handle1"))
-        drawers = flatten(cabinets.drawers)
-        query = an(entity(drawers, drawer_1 != drawers))
+    cabinets = let(Cabinet, world.views)
+    drawer_1 = an(entity(d := let(Drawer, world.views), d.handle.name == "Handle1"))
+    drawers = flatten(cabinets.drawers)
+    query = an(entity(drawers, drawer_1 != drawers))
 
     results = list(query.evaluate())
 
@@ -55,30 +53,24 @@ def test_flatten_iterable_attribute_and_use_not_equal(handles_and_containers_wor
 def test_exists_and_for_all(handles_and_containers_world):
     world = handles_and_containers_world
 
-    with symbolic_mode():
-        cabinets = let(Cabinet, world.views)
-        my_drawers = an(
-            entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
+    cabinets = let(Cabinet, world.views)
+    my_drawers = an(entity(d := let(Drawer, world.views), d.handle.name == "Handle1"))
+    cabinet_drawers = cabinets.drawers
+    query = an(
+        entity(
+            my_drawers,
+            for_all(cabinet_drawers, not_(in_(my_drawers, cabinet_drawers))),
         )
-        cabinet_drawers = cabinets.drawers
-        query = an(
-            entity(
-                my_drawers,
-                for_all(cabinet_drawers, not_(in_(my_drawers, cabinet_drawers))),
-            )
-        )
+    )
 
     results = list(query.evaluate())
 
     assert len(results) == 0
 
-    with symbolic_mode():
-        cabinets = let(Cabinet, world.views)
-        my_drawers = an(
-            entity(d := let(Drawer, world.views), d.handle.name == "Handle1")
-        )
-        drawers = cabinets.drawers
-        query = an(entity(my_drawers, exists(drawers, in_(my_drawers, drawers))))
+    cabinets = let(Cabinet, world.views)
+    my_drawers = an(entity(d := let(Drawer, world.views), d.handle.name == "Handle1"))
+    drawers = cabinets.drawers
+    query = an(entity(my_drawers, exists(drawers, in_(my_drawers, drawers))))
 
     results = list(query.evaluate())
 
@@ -90,19 +82,16 @@ def test_exists_and_for_all(handles_and_containers_world):
 def test_for_all(handles_and_containers_world):
     world = handles_and_containers_world
 
-    with symbolic_mode():
-        cabinets = let(Cabinet, world.views)
-        the_cabinet_container = the(
-            entity(c := let(Container, world.bodies), c.name == "Container2")
+    cabinets = let(Cabinet, world.views)
+    the_cabinet_container = the(
+        entity(c := let(Container, world.bodies), c.name == "Container2")
+    )
+    query = an(
+        entity(
+            the_cabinet_container,
+            for_all(cabinets.container, the_cabinet_container == cabinets.container),
         )
-        query = an(
-            entity(
-                the_cabinet_container,
-                for_all(
-                    cabinets.container, the_cabinet_container == cabinets.container
-                ),
-            )
-        )
+    )
 
     results = list(query.evaluate())
 
@@ -110,19 +99,16 @@ def test_for_all(handles_and_containers_world):
     assert len(results) == 1
     assert results[0].name == "Container2"
 
-    with symbolic_mode():
-        cabinets = let(Cabinet, world.views)
-        the_cabinet_container = the(
-            entity(c := let(Container, world.bodies), c.name == "Container2")
+    cabinets = let(Cabinet, world.views)
+    the_cabinet_container = the(
+        entity(c := let(Container, world.bodies), c.name == "Container2")
+    )
+    query = an(
+        entity(
+            the_cabinet_container,
+            for_all(cabinets.container, the_cabinet_container != cabinets.container),
         )
-        query = an(
-            entity(
-                the_cabinet_container,
-                for_all(
-                    cabinets.container, the_cabinet_container != cabinets.container
-                ),
-            )
-        )
+    )
 
     results = list(query.evaluate())
 
@@ -134,5 +120,5 @@ def test_property_selection():
     """
     Test that properties can be selected from entities in a query.
     """
-    with symbolic_mode():
-        q = an(entity(v := let(VectorsWithProperty, None), v.vectors[0].x == 1))
+
+    q = an(entity(v := let(VectorsWithProperty, None), v.vectors[0].x == 1))

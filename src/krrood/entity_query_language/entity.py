@@ -22,7 +22,6 @@ from .symbolic import (
     CanBehaveLikeAVariable,
     ResultQuantifier,
     From,
-    symbolic_mode,
     Variable,
     optimize_or,
     Flatten,

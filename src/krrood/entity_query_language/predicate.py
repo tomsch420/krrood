@@ -56,19 +56,18 @@ def symbolic_function(
 
     @wraps(function)
     def wrapper(*args, **kwargs) -> Optional[Any]:
-        if in_symbolic_mode():
-            function_arg_names = [
-                pname
-                for pname, p in inspect.signature(function).parameters.items()
-                if p.default == inspect.Parameter.empty
-            ]
-            kwargs.update(dict(zip(function_arg_names, args)))
-            return Variable(
-                _name__=function.__name__,
-                _type_=function,
-                _kwargs_=kwargs,
-                _predicate_type_=PredicateType.DecoratedMethod,
-            )
+        function_arg_names = [
+            pname
+            for pname, p in inspect.signature(function).parameters.items()
+            if p.default == inspect.Parameter.empty
+        ]
+        kwargs.update(dict(zip(function_arg_names, args)))
+        return Variable(
+            _name__=function.__name__,
+            _type_=function,
+            _kwargs_=kwargs,
+            _predicate_type_=PredicateType.DecoratedMethod,
+        )
         return function(*args, **kwargs)
 
     return wrapper
