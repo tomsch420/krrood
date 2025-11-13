@@ -64,8 +64,7 @@ class PredicateClassRelation:
         """
         Add the relation to the graph.
 
-        Returns:
-            bool: True if the relation was newly added, False if it already existed.
+        :return: True if the relation was newly added, False if it already existed.
         """
         return SymbolGraph().add_relation(self)
 

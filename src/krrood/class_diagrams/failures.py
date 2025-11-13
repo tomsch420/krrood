@@ -23,10 +23,7 @@ class MissingContainedTypeOfContainer(Exception):
     field_name: str
     container_type: Type
 
-    def __init__(self, class_: Type, field_name: str, container_type: Type):
-        self.class_ = class_
-        self.field_name = field_name
-        self.container_type = container_type
+    def __post_init__(self):
         super().__init__(
             f"Container type {self.container_type} is missing its contained type"
             f" for field '{self.field_name}' of class {self.class_}, please specify it."
