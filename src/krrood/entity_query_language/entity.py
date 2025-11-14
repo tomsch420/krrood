@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing
 from enum import Enum
 
 from .symbol_graph import SymbolGraph
@@ -11,7 +10,17 @@ User interface (grammar & vocabulary) for entity query language.
 """
 import operator
 
-from typing_extensions import Any, Optional, Union, Iterable, TypeVar, Type, Tuple, List
+from typing_extensions import (
+    Any,
+    Optional,
+    Union,
+    Iterable,
+    TypeVar,
+    Type,
+    Tuple,
+    List,
+    Literal as TypingLiteral,
+)
 
 from .symbolic import (
     SymbolicExpression,
@@ -186,7 +195,7 @@ class DomainKind(Enum):
     INFERRED = 1
 
 
-DomainType = Union[Iterable, typing.Literal[DomainKind.INFERRED], None]
+DomainType = Union[Iterable, TypingLiteral[DomainKind.INFERRED], None]
 
 
 def let(
