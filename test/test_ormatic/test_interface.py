@@ -470,3 +470,9 @@ def test_alternative_mapping_inheritance(session, database):
 
 def test_inheritance_mapper_args(session, database):
     assert InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO.__mapper_args__
+
+def test_to_dao_alternatively_mapped_parent(session, database):
+    ch2 = ChildLevel2NormallyMapped(1, 2, 3)
+    ch2_dao = to_dao(ch2)
+
+    assert ch2_dao == ChildLevel2NormallyMappedDAO(1, 2, 3)

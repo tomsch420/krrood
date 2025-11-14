@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 
 from sqlalchemy import types, TypeDecorator
-from typing_extensions import Dict, Any, Sequence
+from typing_extensions import Dict, Any, Sequence, Self
 from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.predicate import Symbol
@@ -501,3 +501,29 @@ class InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping(
     @classmethod
     def create_instance(cls, obj: T):
         return cls(obj.base_attribute, obj.level_one_attribute, obj.level_two_attribute)
+
+@dataclass
+class ParentAlternativelyMapped:
+    base_attribute: float = 0
+
+
+@dataclass
+class ChildLevel1NormallyMapped(ParentAlternativelyMapped):
+    level_one_attribute: float = 0
+
+
+@dataclass
+class ChildLevel2NormallyMapped(ChildLevel1NormallyMapped):
+    level_two_attribute: float = 0
+
+
+@dataclass
+class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMapped]):
+    derived_attribute: float = 0
+
+    @classmethod
+    def create_instance(cls, obj: T) -> Self:
+        return cls(obj.base_attribute)
+
+    def create_from_dao(self) -> T:
+        raise NotImplementedError
