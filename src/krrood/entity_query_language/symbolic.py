@@ -1846,22 +1846,6 @@ def chained_logic(
     return prev_operation
 
 
-def properties_to_expression_tree(
-    var: CanBehaveLikeAVariable, properties: Dict[str, Any]
-) -> Optional[SymbolicExpression]:
-    """
-    Convert properties of a variable to a symbolic expression.
-    """
-
-    conditions = [getattr(var, k) == v for k, v in properties.items()]
-    if len(conditions) == 1:
-        return conditions[0]
-    elif len(conditions) > 1:
-        return chained_logic(AND, *conditions)
-    else:
-        return None
-
-
 def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
 
     left_vars = left._unique_variables_.filter(

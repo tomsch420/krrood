@@ -21,7 +21,6 @@ from ..dataset.semantic_world_like_classes import (
 )
 from krrood.entity_query_language.entity import (
     entity,
-    infer,
     let,
     an,
     inference,
@@ -39,7 +38,7 @@ def test_render_rx_graph_as_igraph_simple(handles_and_containers_world):
     fixed_connection = let(FixedConnection, world.connections)
     container = fixed_connection.parent
     handle = fixed_connection.child
-    rule = infer(
+    rule = an(
         entity(
             inference(Drawer)(handle=handle, container=container, world=world),
             HasType(handle, Handle),
@@ -78,7 +77,7 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
             r.child == handle,
         )
     )
-    rule = infer(
+    rule = an(
         entity(views := let(View, domain=None), fixed_connection, prismatic_connection)
     )
 

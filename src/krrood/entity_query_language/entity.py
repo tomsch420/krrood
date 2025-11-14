@@ -65,7 +65,7 @@ def an(
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    return select_one_or_select_many_or_infer(
+    return select_one_or_select_many_or_an(
         An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
     )
 
@@ -86,16 +86,10 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_infer(The, entity_)
+    return select_one_or_select_many_or_an(The, entity_)
 
 
-def infer(
-    entity_: EntityType,
-) -> Infer[T]:
-    return select_one_or_select_many_or_infer(Infer, entity_)
-
-
-def select_one_or_select_many_or_infer(
+def select_one_or_select_many_or_an(
     quantifier: Type[ResultQuantifier],
     entity_: EntityType,
     **kwargs,

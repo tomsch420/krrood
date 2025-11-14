@@ -40,7 +40,7 @@ class MonitoredContainer(Generic[T], ABC):
     For example like here, the Set[Person] will be internally replaced with a MonitoredSet[Person] by the
     descriptor, this allows for catching additions/insertions/removals to the Set and applying implicit inferences:
     >>> from dataclasses import dataclass, field
-    >>> typing_extensions import Set
+    >>> from typing_extensions import Set
     >>> from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
     >>> from krrood.entity_query_language.predicate import Symbol
     ...

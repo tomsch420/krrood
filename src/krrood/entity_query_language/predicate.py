@@ -25,7 +25,6 @@ from .symbolic import (
     T,
     SymbolicExpression,
     Variable,
-    properties_to_expression_tree,
     From,
     _any_of_the_kwargs_is_a_variable,
 )
