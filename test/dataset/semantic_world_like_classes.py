@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable
 
-from typing_extensions import List, Optional, Type
+from typing_extensions import List, Optional, Type, Iterable
 
 from krrood.entity_query_language.predicate import Symbol, Predicate
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import ClassVar, Dict, Type, Any
+from typing_extensions import ClassVar, Dict, Type, Any
 
 
 class SingletonMeta(type):

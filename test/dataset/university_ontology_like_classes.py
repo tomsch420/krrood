@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Set, List, Type
+
+from typing_extensions import Set, List, Type
 
 from krrood.class_diagrams.utils import Role
 from krrood.entity_query_language.predicate import Symbol

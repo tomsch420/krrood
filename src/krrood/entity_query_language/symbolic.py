@@ -29,6 +29,7 @@ from typing_extensions import (
     List,
     Tuple,
     Callable,
+    Self,
 )
 
 from . import logger
@@ -365,7 +366,7 @@ class SymbolicExpression(Generic[T], ABC):
     def __invert__(self):
         return Not(self)
 
-    def __enter__(self, in_rule_mode: bool = False):
+    def __enter__(self) -> Self:
         node = self
         if (node is self._root_) or (node._parent_ is self._root_):
             node = node._conditions_root_
@@ -1873,3 +1874,13 @@ def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
         return ElseIf(left, right)
     else:
         return Union(left, right)
+
+
+def _any_of_the_kwargs_is_a_variable(bindings: Dict[str, Any]) -> bool:
+    """
+    :param bindings: A kwarg like dict mapping strings to objects
+    :return: Rather any of the objects is a variable or not.
+    """
+    return any(
+        isinstance(binding, CanBehaveLikeAVariable) for binding in bindings.values()
+    )

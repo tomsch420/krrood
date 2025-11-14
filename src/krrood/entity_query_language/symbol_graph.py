@@ -4,7 +4,6 @@ import os
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
-from typing import Callable
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -16,14 +15,15 @@ from typing_extensions import (
     Type,
     Dict,
     DefaultDict,
+    Callable,
 )
 
-from ..ontomatic.property_descriptor.attribute_introspector import (
-    DescriptorAwareIntrospector,
-)
 from .. import logger
 from ..class_diagrams import ClassDiagram
 from ..class_diagrams.wrapped_field import WrappedField
+from ..ontomatic.property_descriptor.attribute_introspector import (
+    DescriptorAwareIntrospector,
+)
 from ..singleton import SingletonMeta
 from ..utils import recursive_subclasses
 

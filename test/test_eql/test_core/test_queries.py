@@ -415,7 +415,6 @@ def test_the(handles_and_containers_world):
     world = handles_and_containers_world
 
     with pytest.raises(MultipleSolutionFound):
-
         handle = the(
             entity(
                 body := let(type_=Handle, domain=world.bodies),
@@ -423,12 +422,12 @@ def test_the(handles_and_containers_world):
             )
         ).evaluate()
 
-        handle = the(
-            entity(
-                body := let(type_=Handle, domain=world.bodies),
-                body.name.startswith("Handle1"),
-            )
-        ).evaluate()
+    handle = the(
+        entity(
+            body := let(type_=Handle, domain=world.bodies),
+            body.name.startswith("Handle1"),
+        )
+    ).evaluate()
 
 
 def test_not_domain_mapping(handles_and_containers_world):
@@ -556,7 +555,7 @@ def test_not_and_or_with_domain_mapping(handles_and_containers_world):
 
 def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     """
-    Test the generation of handles in the HandlesAndContainersWorld.
+    Test that symbolic functions can be used inside and outside of queries
     """
     world = handles_and_containers_world
 
@@ -573,6 +572,9 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     assert all(
         isinstance(h, Handle) for h in handles
     ), "All generated items should be of type Handle."
+
+    b = world.bodies[0]
+    assert is_handle(b) is True
 
 
 def test_generate_with_using_inherited_predicate(handles_and_containers_world):

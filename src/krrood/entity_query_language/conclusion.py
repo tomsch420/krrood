@@ -3,9 +3,8 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Iterable
 
-from typing_extensions import Any, Optional, List, Dict
+from typing_extensions import Any, Optional, List, Dict, Iterable
 
 from .enums import RDREdge
 from .hashed_data import HashedValue
@@ -15,7 +14,6 @@ from .symbolic import (
     T,
     Variable,
     OperationResult,
-    An,
     ResultQuantifier,
 )
 

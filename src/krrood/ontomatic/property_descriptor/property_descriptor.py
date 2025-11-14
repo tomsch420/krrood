@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field, fields, InitVar
+from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
-from typing import (
+
+from typing_extensions import (
     ClassVar,
     Set,
     Type,
@@ -14,25 +15,22 @@ from typing import (
     Union,
     Tuple,
     List,
+    DefaultDict,
 )
 
-from typing_extensions import DefaultDict
-
-from .property_descriptor_relation import PropertyDescriptorRelation
-from ..failures import UnMonitoredContainerTypeForDescriptor
 from .monitored_container import (
     MonitoredContainer,
     monitored_type_map,
-    MonitoredList,
-    MonitoredSet,
 )
+from .property_descriptor_relation import PropertyDescriptorRelation
+from ..failures import UnMonitoredContainerTypeForDescriptor
+from ...class_diagrams.class_diagram import WrappedClass, Association
+from ...class_diagrams.wrapped_field import WrappedField
 from ...entity_query_language.predicate import Symbol
 from ...entity_query_language.symbol_graph import (
     SymbolGraph,
 )
 from ...entity_query_language.utils import make_set
-from ...class_diagrams.class_diagram import WrappedClass, Association
-from ...class_diagrams.wrapped_field import WrappedField
 
 SymbolType = Type[Symbol]
 """

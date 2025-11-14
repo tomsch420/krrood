@@ -99,7 +99,7 @@ def select_one_or_select_many_or_infer(
     quantifier: Type[ResultQuantifier],
     entity_: EntityType,
     **kwargs,
-) -> Union[An[T], The[T], Infer[T]]:
+) -> ResultQuantifier[T]:
     """
     Selects one or many entities or infers the result based on the provided quantifier
     and entity type. This function facilitates creating or managing quantified results
@@ -112,18 +112,17 @@ def select_one_or_select_many_or_infer(
         one provided.
     :raises ValueError: If the provided entity is invalid.
     """
-    if isinstance(entity_, (Entity, SetOf)):
-        q = quantifier(entity_, **kwargs)
-    elif isinstance(entity_, ResultQuantifier):
+    if isinstance(entity_, ResultQuantifier):
         if isinstance(entity_, quantifier):
-            q = entity_
-        else:
-            entity_._child_._parent_ = None
-            q = quantifier(entity_._child_, **kwargs)
-    else:
-        raise ValueError(f"Invalid entity: {entity_}")
-    return q
+            return entity_
 
+        entity_._child_._parent_ = None
+        return quantifier(entity_._child_, **kwargs)
+
+    if isinstance(entity_, (Entity, SetOf)):
+        return quantifier(entity_, **kwargs)
+
+    raise ValueError(f"Invalid entity: {entity_}")
 
 def entity(
     selected_variable: T,
@@ -195,7 +194,7 @@ def let(
 
     .. warning::
 
-        If no domain is provided, the domain will be inferred from the SymbolGraph, which may contain unnecessary many
+        If no domain is provided, the domain will be inferred from the SymbolGraph, which may contain unnecessarily many
         elements.
 
     :param type_: The type of variable.

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 from copy import copy
-from functools import lru_cache
-
-from typing_extensions import Type
 
 from .hashed_data import HashedIterable
 from .utils import All
@@ -17,7 +14,7 @@ It also exposes a runtime switch to enable/disable caching.
 import contextvars
 from collections import UserDict
 from dataclasses import dataclass, field, InitVar
-from typing import Dict, List, Any, Iterable, Hashable, Optional, Tuple
+from typing_extensions import Dict, Any, Iterable, Hashable, Optional, Tuple
 
 
 # Runtime switch to enable/disable caching paths

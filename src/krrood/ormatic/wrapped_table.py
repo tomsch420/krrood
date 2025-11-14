@@ -3,9 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
-from typing import Type
 
-from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set
+from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set, Type
 
 from .dao import AlternativeMapping
 from .utils import InheritanceStrategy, module_and_class_name
