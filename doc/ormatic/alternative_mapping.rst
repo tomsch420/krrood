@@ -18,7 +18,7 @@ Alternative Mapping (Explicit Control)
 --------------------------------------
 If a dataclass does not fit the standard rules or requires a more specialized schema, and a referencing of its fields
 define an explicit mapping by subclassing :class:`krrood.ormatic.dao.AlternativeMapping`. The generic variable
-has to be the class you inference the alternative mapping for. This lets you:
+has to be the class you create the alternative mapping for. This lets you:
 
 - Override column names or shapes
 - Introduce association tables explicitly
