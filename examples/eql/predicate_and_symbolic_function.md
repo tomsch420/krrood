@@ -16,7 +16,8 @@ kernelspec:
 Custom predicates allow you to encapsulate reusable boolean logic that can be used inside queries. 
 In addition, any Python function decorated with `@symbolic_function` can be used.
 A Predicate class is a dataclass that inherits from EQL `Predicate` class.
-These two become symbolic variables when used within `symbolic_mode()`.
+These two become symbolic variables when any of the arguments are variables of a query.
+If all the arguments are ordinary python objects, you can use them normally.
 
 
 Lets first define our model and some sample data.
@@ -25,7 +26,7 @@ Lets first define our model and some sample data.
 from dataclasses import dataclass
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, let, an, symbolic_mode, Symbol
+from krrood.entity_query_language.entity import entity, let, an, Symbol
 from krrood.entity_query_language.predicate import Predicate, symbolic_function
 
 
@@ -79,14 +80,13 @@ class HasThreeInItsName(Predicate):
         return '3' in self.body.name
 
 # Build the query using the predicate inside symbolic mode
-with symbolic_mode():
-    query = an(
-        entity(
-            body := let(type_=Body, domain=world.bodies),
-            is_handle(body_=body),  # use the predicate just like any other condition
-            HasThreeInItsName(body)
-        )
+query = an(
+    entity(
+        body := let(type_=Body, domain=world.bodies),
+        is_handle(body_=body),  # use the predicate just like any other condition
+        HasThreeInItsName(body)
     )
+)
 
 # Evaluate and inspect the results
 results = list(query.evaluate())
@@ -95,7 +95,3 @@ assert isinstance(results[0], Handle)
 assert results[0].name == "Handle3"
 print(*results, sep="\n")
 ```
-
-Notes:
-- The `@symbolic_function` decorator enables the function to participate in symbolic analysis when used under `symbolic_mode()`.
-- The `Predicate` class is a dataclass used to define custom predicates by implementing the `__call__` method.

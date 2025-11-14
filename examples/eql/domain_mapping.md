@@ -32,7 +32,6 @@ from krrood.entity_query_language.entity import (
     an,
     let,
     flatten,
-    symbolic_mode,
     Symbol,
 )
 
@@ -100,10 +99,9 @@ Flatten turns an iterable-of-iterables into a flat sequence of items while keepi
 It is handy when a selected variable has an attribute that is a list and you want one row per element of that list.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    views = let(type_=View, domain=world.views)
-    drawers = flatten(views.drawers)  # UNNEST-like flatten of each view's drawers
-    query = an(set_of([views, drawers]))
+views = let(type_=View, domain=world.views)
+drawers = flatten(views.drawers)  # UNNEST-like flatten of each view's drawers
+query = an(set_of([views, drawers]))
 
 rows = list(query.evaluate())
 # Each solution contains both the parent view and one flattened drawer
@@ -138,10 +136,9 @@ score_world = ScoreWorld([
     ScoredBody("Body2", {"score": 2}),
 ])
 
-with symbolic_mode():
-    b = let(type_=ScoredBody, domain=score_world.bodies)
-    # Use indexing on a dict field; the indexing is preserved symbolically
-    query = an(entity(b, b.props["score"] == 2))
+b = let(type_=ScoredBody, domain=score_world.bodies)
+# Use indexing on a dict field; the indexing is preserved symbolically
+query = an(entity(b, b.props["score"] == 2))
 
 results = list(query.evaluate())
 assert len(results) == 1 and results[0].name == "Body2"

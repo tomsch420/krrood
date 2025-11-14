@@ -56,7 +56,6 @@ from dataclasses import dataclass, field
 from typing_extensions import List
 
 from krrood.entity_query_language.entity import let, Symbol, entity, an, and_, in_, contains, set_of
-from krrood.entity_query_language.symbolic import symbolic_mode
 
 
 @dataclass
@@ -107,8 +106,7 @@ WHERE body.name = 'Body2';
 can be translated to EQL as
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    query = an(entity(b := let(Body, domain=world.bodies), b.name == "Body2"))
+query = an(entity(b := let(Body, domain=world.bodies), b.name == "Body2"))
 print(*query.evaluate(), sep="\n")
 ```
 
@@ -126,9 +124,8 @@ WHERE body.name LIKE 'Body%'
 EQL
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    body = let(Body, domain=world.bodies)
-    query = an(entity(body, and_(body.name.startswith("Body"), body.name.endswith("2"))
+body = let(Body, domain=world.bodies)
+query = an(entity(body, and_(body.name.startswith("Body"), body.name.endswith("2"))
                                   ))
 print(*query.evaluate(), sep="\n")
 ```
@@ -147,10 +144,10 @@ EQL
 
 ```{code-cell} ipython3
 names = ["Container1", "Handle1"]
-with symbolic_mode():
-    body = let(Body, domain=world.bodies)
-    in_results_generator = an(entity(body, in_(body.name, names)))
-    contains_results_generator = an(entity(body, contains(names, body.name)))
+
+body = let(Body, domain=world.bodies)
+in_results_generator = an(entity(body, in_(body.name, names)))
+contains_results_generator = an(entity(body, contains(names, body.name)))
 print(*in_results_generator.evaluate(), sep="\n")
 print(*contains_results_generator.evaluate(), sep="\n")
 ```
@@ -177,20 +174,19 @@ FROM bodies AS parent_container
 EQL
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    parent_container = let(Body, domain=world.bodies)
-    prismatic_connection = let(Prismatic, domain=world.connections)
-    drawer_body = let(Body, domain=world.bodies)
-    fixed_connection = let(Fixed, domain=world.connections)
-    handle = let(Body, domain=world.bodies)
+parent_container = let(Body, domain=world.bodies)
+prismatic_connection = let(Prismatic, domain=world.connections)
+drawer_body = let(Body, domain=world.bodies)
+fixed_connection = let(Fixed, domain=world.connections)
+handle = let(Body, domain=world.bodies)
 
-    # SELECT (parent_container, prismatic_connection, drawer_body, fixed_connection, handle) WHERE relationships hold
-    query = an(set_of((parent_container, prismatic_connection, drawer_body, fixed_connection, handle),
-                                  and_(parent_container == prismatic_connection.parent,
-                                       drawer_body == prismatic_connection.child,
-                                       drawer_body == fixed_connection.parent,
-                                       handle == fixed_connection.child)
-                                  ))
+# SELECT (parent_container, prismatic_connection, drawer_body, fixed_connection, handle) WHERE relationships hold
+query = an(set_of((parent_container, prismatic_connection, drawer_body, fixed_connection, handle),
+                              and_(parent_container == prismatic_connection.parent,
+                                   drawer_body == prismatic_connection.child,
+                                   drawer_body == fixed_connection.parent,
+                                   handle == fixed_connection.child)
+                              ))
 print(*query.evaluate(), sep="\n")                          
 ```
 

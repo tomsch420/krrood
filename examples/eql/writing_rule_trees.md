@@ -24,11 +24,10 @@ Lets define our domain model and build a small world. We will then build a rule 
 instances to the world.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import entity, an, let, and_, symbolic_mode, Symbol, infer
+from krrood.entity_query_language.entity import entity, an, let, and_, Symbol, infer, inference
 
 from krrood.entity_query_language.rule import refinement, alternative
 from krrood.entity_query_language.conclusion import Add
-from krrood.entity_query_language.symbolic import rule_mode
 
 from dataclasses import dataclass, field
 from typing_extensions import List
@@ -119,40 +118,39 @@ First build the base query.
 from krrood.entity_query_language.predicate import HasType
 
 # --- Build the starting query
-with symbolic_mode():
-    # Declare the variables
-    fixed_connection = let(type_=FixedConnection, domain=world.connections)
-    revolute_connection = let(type_=RevoluteConnection, domain=world.connections)
-    views = let(type_=View, domain=None)
+# Declare the variables
+fixed_connection = let(type_=FixedConnection, domain=world.connections)
+revolute_connection = let(type_=RevoluteConnection, domain=world.connections)
+views = let(type_=View, domain=None)
 
-    # Define aliases for convenience
-    handle = fixed_connection.child
-    body = fixed_connection.parent
-    container = revolute_connection.parent
+# Define aliases for convenience
+handle = fixed_connection.child
+body = fixed_connection.parent
+container = revolute_connection.parent
 
-    # Describe base query
-    # We use a single selected variable that we will Add to in the rule tree.
-    query = infer(entity(views, HasType(fixed_connection.child, Handle)))
+# Describe base query
+# We use a single selected variable that we will Add to in the rule tree.
+query = infer(entity(views, HasType(fixed_connection.child, Handle)))
 ```
 
 Then we build the rule tree.
 
 ```{code-cell} ipython3
 # --- Build the rule tree
-with rule_mode(query):
+with query:
     # Base conclusion: if a fixed connection exists between body and handle,
     # we consider it a Drawer by default.
-    Add(views, Drawer(handle=handle, container=body))
+    Add(views, inference(Drawer)(handle=handle, container=body))
 
     # Exception (refinement): If the body is "bigger" (size > 1), instead add a Door.
     # This refinement branch is more specific and can be seen as a refinement to the base rule.
     with refinement(body.size > 1):
-        Add(views, Door(handle=handle, body=body))
+        Add(views, inference(Door)(handle=handle, body=body))
 
         # Alternative refinement when the first refinement didn't fire: if the body is also connected to a parent
         # container via a revolute connection (alternative pattern), add a Wardrobe instead.
         with alternative(body == revolute_connection.child, container == revolute_connection.parent):
-            Add(views, Wardrobe(handle=handle, body=body, container=container))
+            Add(views, inference(Wardrobe)(handle=handle, body=body, container=container))
 ```
 
 Finally, we evaluate the rule tree.

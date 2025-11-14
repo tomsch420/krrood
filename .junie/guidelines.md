@@ -28,7 +28,7 @@
 ## Documentation
 - Write docstrings in ReStructuredText format 
 - Write docstrings that explain what the function does and not how it does it
-- Do not inference type information for docstring
+- Do not create type information for docstring
 - Keep docstrings short and concise
 
 ## Misc
