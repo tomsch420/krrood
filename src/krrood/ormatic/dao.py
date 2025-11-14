@@ -84,14 +84,14 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
 
     relationship: RelationshipProperty
     """
-    The relationship that tried to create the DAO.
+    The relationship that tried to inference the DAO.
     """
 
     def __init__(self, obj: Any, dao: Type, relationship: RelationshipProperty = None):
         TypeError.__init__(
             self,
             f"Class {type(obj)} does not have a DAO. This happened when trying"
-            f"to create a dao for {dao}) on the relationship {relationship} with the "
+            f"to inference a dao for {dao}) on the relationship {relationship} with the "
             f"relationship value {obj}."
             f"Expected a relationship value of type {relationship.target}.",
         )
@@ -188,7 +188,7 @@ class FromDAOState:
 
         :param dao_obj: The data access object whose identifier is used to memoize
             the created instance.
-        :param original_cls: The class type to create a new instance for.
+        :param original_cls: The class type to inference a new instance for.
         :return: A newly allocated instance of the given class.
         """
         result = original_cls.__new__(original_cls)
@@ -416,7 +416,7 @@ class DataAccessObject(HasGeneric[T]):
             temp_dao = state.memo[id(obj)]
             del state.memo[id(obj)]
 
-        # create dao of alternatively mapped superclass
+        # inference dao of alternatively mapped superclass
         parent_dao = base.original_class().to_dao(obj, state)
 
         # Restore the object in the memo dictionary
@@ -747,7 +747,7 @@ class AlternativeMapping(HasGeneric[T], abc.ABC):
         """
         Create a DAO from the obj if it doesn't exist.
 
-        :param obj: The obj to create the DAO from.
+        :param obj: The obj to inference the DAO from.
         :param state: The state to use for the conversion.
 
         :return: An instance of this class created from the obj.
@@ -768,7 +768,7 @@ class AlternativeMapping(HasGeneric[T], abc.ABC):
         Create a DAO from the obj.
         The method needs to be overloaded by the user.
 
-        :param obj: The obj to create the DAO from.
+        :param obj: The obj to inference the DAO from.
         :return: An instance of this class created from the obj.
         """
         raise NotImplementedError

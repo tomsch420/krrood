@@ -97,7 +97,7 @@ jobs:
 #        env:
 #          GITHUB_TOKEN: ${{ github.token }}
 #        run: >-
-#          gh release create
+#          gh release inference
 #          '${{ github.ref_name }}'
 #          --repo '${{ github.repository }}'
 #          --notes ""

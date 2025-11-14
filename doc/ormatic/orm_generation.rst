@@ -104,7 +104,7 @@ following:
     # specify new classes
     classes += [CustomPosition, AggregatorOfExternalInstances]
 
-    # create the new ormatic interface
+    # inference the new ormatic interface
     class_diagram = ClassDiagram(
         list(sorted(classes, key=lambda c: c.__name__, reverse=True))
     )

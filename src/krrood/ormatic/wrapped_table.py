@@ -35,7 +35,7 @@ class WrappedTableNotFound(KeyError):
 @dataclass
 class ColumnConstructor:
     """
-    Represents a column constructor that can be used to create a column in SQLAlchemy.
+    Represents a column constructor that can be used to inference a column in SQLAlchemy.
     """
 
     name: str
@@ -64,7 +64,7 @@ class ColumnConstructor:
 @dataclass
 class WrappedTable:
     """
-    A class that wraps a dataclass and contains all the information needed to create a SQLAlchemy table from it.
+    A class that wraps a dataclass and contains all the information needed to inference a SQLAlchemy table from it.
     """
 
     wrapped_clazz: WrappedClass
@@ -362,7 +362,7 @@ class WrappedTable:
 
     def parse_field(self, wrapped_field: WrappedField):
         """
-        Parses a given `WrappedField` and determines its type or relationship to create the
+        Parses a given `WrappedField` and determines its type or relationship to inference the
         appropriate column or define relationships in an ORM context.
         The method processes several
         types of fields, such as type types, built-in types, enumerations, one-to-one relationships,
@@ -423,7 +423,7 @@ class WrappedTable:
         column definitions and adds them to the respective list of database mappings.
 
         :param wrapped_field: The WrappedField instance representing the field
-            to create a built-in column for.
+            to inference a built-in column for.
         """
 
         self.ormatic.imported_modules.add(wrapped_field.type_endpoint.__module__)
@@ -487,7 +487,7 @@ class WrappedTable:
 
         :param wrapped_field: The field to get the information from.
         """
-        # create foreign key
+        # inference foreign key
         fk_name = f"{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
         fk_type = (
             f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
@@ -505,7 +505,7 @@ class WrappedTable:
             ColumnConstructor(fk_name, fk_type, fk_column_constructor)
         )
 
-        # create relationship to remote side
+        # inference relationship to remote side
         rel_name = f"{wrapped_field.field.name}"
         rel_type = f"Mapped[{target_wrapped_table.tablename}]"
         # relationships have to be post updated since since it won't work in the case of subclasses with another ref otherwise
@@ -526,7 +526,7 @@ class WrappedTable:
         # get the target table
         target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
-        # create a foreign key to this on the remote side
+        # inference a foreign key to this on the remote side
         fk_name = f"{self.tablename.lower()}_{wrapped_field.field.name}{self.ormatic.foreign_key_postfix}"
         fk_type = (
             f"Mapped[{module_and_class_name(Optional)}[{module_and_class_name(int)}]]"
@@ -536,7 +536,7 @@ class WrappedTable:
             ColumnConstructor(fk_name, fk_type, fk_column_constructor)
         )
 
-        # create a relationship with a list to collect the other side
+        # inference a relationship with a list to collect the other side
         rel_name = f"{wrapped_field.field.name}"
         rel_type = (
             f"Mapped[{module_and_class_name(List)}[{target_wrapped_table.tablename}]]"

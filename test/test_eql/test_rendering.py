@@ -24,7 +24,7 @@ from krrood.entity_query_language.entity import (
     infer,
     let,
     an,
-    create,
+    inference,
 )
 from krrood.entity_query_language.conclusion import Add
 
@@ -41,7 +41,7 @@ def test_render_rx_graph_as_igraph_simple(handles_and_containers_world):
     handle = fixed_connection.child
     rule = infer(
         entity(
-            create(Drawer)(handle=handle, container=container, world=world),
+            inference(Drawer)(handle=handle, container=container, world=world),
             HasType(handle, Handle),
         )
     )
@@ -83,9 +83,9 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
     )
 
     with rule:
-        Add(views, create(Drawer)(handle=handle, container=body, world=world))
+        Add(views, inference(Drawer)(handle=handle, container=body, world=world))
         with alternative(revolute_connection):
-            Add(views, create(Door)(handle=handle, body=body, world=world))
+            Add(views, inference(Door)(handle=handle, body=body, world=world))
         with alternative(
             fixed_connection,
             body == revolute_connection.child,
@@ -94,7 +94,7 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
         ):
             Add(
                 views,
-                create(Wardrobe)(
+                inference(Wardrobe)(
                     handle=handle, body=body, container=container, world=world
                 ),
             )

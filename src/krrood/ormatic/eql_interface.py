@@ -761,7 +761,7 @@ class EQLTranslator:
             # Return the existing alias so downstream uses the same FROM element
             return self.join_manager.get_alias_for_path(dao_class, attribute_name)
 
-        # Resolve target DAO class and create a dedicated alias for this path
+        # Resolve target DAO class and inference a dedicated alias for this path
         target_dao = relationship.entity.class_
         from sqlalchemy.orm import aliased
 

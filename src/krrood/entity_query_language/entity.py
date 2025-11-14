@@ -124,6 +124,7 @@ def select_one_or_select_many_or_infer(
 
     raise ValueError(f"Invalid entity: {entity_}")
 
+
 def entity(
     selected_variable: T,
     *properties: ConditionType,
@@ -314,7 +315,7 @@ def exists(
     return Exists(universal_variable, condition)
 
 
-def create(type_: Type[T]) -> Union[Variable[T], Type[T]]:
+def inference(type_: Type[T]) -> Union[Variable[T], Type[T]]:
     """
     This returns a factory function that creates a new variable of the given type and takes keyword arguments for the
     type constructor.

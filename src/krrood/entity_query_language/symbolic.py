@@ -936,7 +936,7 @@ class Variable(CanBehaveLikeAVariable[T]):
     _domain_source_: Optional[From] = field(default=None, kw_only=True, repr=False)
     """
     An optional source for the variable domain. If not given, the global cache of the variable class type will be used
-    as the domain, or if kwargs are given the type and the kwargs will be used to create/infer new values for the
+    as the domain, or if kwargs are given the type and the kwargs will be used to inference/infer new values for the
     variable.
     """
     _domain_: HashedIterable = field(

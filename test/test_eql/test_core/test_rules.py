@@ -1,4 +1,4 @@
-from krrood.entity_query_language.entity import let, an, entity, and_, create, set_of
+from krrood.entity_query_language.entity import let, an, entity, and_, inference, set_of
 from krrood.entity_query_language.conclusion import Add, Set
 from krrood.entity_query_language.entity import infer
 from krrood.entity_query_language.predicate import HasType
@@ -36,7 +36,7 @@ def test_generate_drawers(handles_and_containers_world):
     )
 
     with query:
-        Add(drawers, create(Drawer)(handle=handle, container=container))
+        Add(drawers, inference(Drawer)(handle=handle, container=container))
 
     solutions = query.evaluate()
     all_solutions = list(solutions)
@@ -68,7 +68,7 @@ def test_add_conclusion(handles_and_containers_world):
         )
     )
     with query:
-        Add(drawers, create(Drawer)(handle=handle, container=container))
+        Add(drawers, inference(Drawer)(handle=handle, container=container))
 
     solutions = query.evaluate()
     all_solutions = list(solutions)
@@ -99,9 +99,9 @@ def test_rule_tree_with_a_refinement(doors_and_drawers_world):
     )
 
     with query:
-        Add(drawers_and_doors, create(Drawer)(handle=handle, container=body))
+        Add(drawers_and_doors, inference(Drawer)(handle=handle, container=body))
         with refinement(body.size > 1):
-            Add(drawers_and_doors, create(Door)(handle=handle, body=body))
+            Add(drawers_and_doors, inference(Door)(handle=handle, body=body))
 
     # query._render_tree_()
 
@@ -135,16 +135,16 @@ def test_rule_tree_with_multiple_refinements(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, create(Drawer)(handle=handle, container=body))
+        Add(views, inference(Drawer)(handle=handle, container=body))
         with refinement(body.size > 1):
-            Add(views, create(Door)(handle=handle, body=body))
+            Add(views, inference(Door)(handle=handle, body=body))
             with alternative(
                 body == revolute_connection.child,
                 container == revolute_connection.parent,
             ):
                 Add(
                     views,
-                    create(Wardrobe)(handle=handle, body=body, container=container),
+                    inference(Wardrobe)(handle=handle, body=body, container=container),
                 )
 
     # query._render_tree_()
@@ -179,11 +179,11 @@ def test_rule_tree_with_an_alternative(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, create(Drawer)(handle=handle, container=body))
+        Add(views, inference(Drawer)(handle=handle, container=body))
         with alternative(
             body == revolute_connection.parent, handle == revolute_connection.child
         ):
-            Add(views, create(Door)(handle=handle, body=body))
+            Add(views, inference(Door)(handle=handle, body=body))
 
     # query._render_tree_()
 
@@ -222,18 +222,21 @@ def test_rule_tree_with_multiple_alternatives(doors_and_drawers_world):
     )
 
     with query:
-        Add(views, create(Drawer)(handle=handle, container=body))
+        Add(views, inference(Drawer)(handle=handle, container=body))
         with alternative(
             revolute_connection.parent == body, revolute_connection.child == handle
         ):
-            Add(views, create(Door)(handle=handle, body=body))
+            Add(views, inference(Door)(handle=handle, body=body))
         with alternative(
             fixed_connection.parent == body,
             fixed_connection.child == handle,
             body == revolute_connection.child,
             container == revolute_connection.parent,
         ):
-            Add(views, create(Wardrobe)(handle=handle, body=body, container=container))
+            Add(
+                views,
+                inference(Wardrobe)(handle=handle, body=body, container=container),
+            )
 
     # query._render_tree_()
 
@@ -272,14 +275,14 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
     with query:
         Add(
             views,
-            create(Drawer)(
+            inference(Drawer)(
                 handle=fixed_connection.child, container=fixed_connection.parent
             ),
         )
         with alternative(HasType(revolute_connection.child, Handle)):
             Add(
                 views,
-                create(Door)(
+                inference(Door)(
                     handle=revolute_connection.child, body=revolute_connection.parent
                 ),
             )
@@ -290,7 +293,7 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
         ):
             Add(
                 views,
-                create(Wardrobe)(
+                inference(Wardrobe)(
                     handle=fixed_connection.child,
                     body=fixed_connection.parent,
                     container=revolute_connection.parent,
@@ -336,19 +339,19 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree(doors_and_drawers
 
     with query:
         with refinement(prismatic_connection.child == body):
-            Add(views, create(Drawer)(handle=handle, container=body))
+            Add(views, inference(Drawer)(handle=handle, container=body))
             with alternative(
                 body == revolute_connection.child,
                 container == revolute_connection.parent,
             ):
                 Add(
                     views,
-                    create(Wardrobe)(handle=handle, body=body, container=container),
+                    inference(Wardrobe)(handle=handle, body=body, container=container),
                 )
         with alternative(
             revolute_connection.parent == body, revolute_connection.child == handle
         ):
-            Add(views, create(Door)(handle=handle, body=body))
+            Add(views, inference(Door)(handle=handle, body=body))
 
     # query._render_tree_()
 
@@ -389,7 +392,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
         with refinement(prismatic_connection.child == fixed_connection.parent):
             Add(
                 views,
-                create(Drawer)(
+                inference(Drawer)(
                     handle=fixed_connection.child, container=fixed_connection.parent
                 ),
             )
@@ -399,7 +402,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
             ):
                 Add(
                     views,
-                    create(Wardrobe)(
+                    inference(Wardrobe)(
                         handle=fixed_connection.child,
                         body=fixed_connection.parent,
                         container=revolute_connection.parent,
@@ -408,7 +411,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
         with next_rule(HasType(revolute_connection.child, Handle)):
             Add(
                 views,
-                create(Door)(
+                inference(Door)(
                     handle=revolute_connection.child, body=revolute_connection.parent
                 ),
             )
