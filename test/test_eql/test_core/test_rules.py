@@ -1,5 +1,12 @@
 from krrood.entity_query_language.conclusion import Add
-from krrood.entity_query_language.entity import let, an, entity, and_, inference
+from krrood.entity_query_language.entity import (
+    let,
+    an,
+    entity,
+    and_,
+    inference,
+    DomainKind,
+)
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rule import refinement, alternative, next_rule
 from ...dataset.semantic_world_like_classes import (
@@ -127,7 +134,7 @@ def test_rule_tree_with_multiple_refinements(doors_and_drawers_world):
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             body == fixed_connection.parent,
             handle == fixed_connection.child,
         )
@@ -171,7 +178,7 @@ def test_rule_tree_with_an_alternative(doors_and_drawers_world):
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             body == fixed_connection.parent,
             handle == fixed_connection.child,
         )
@@ -213,7 +220,7 @@ def test_rule_tree_with_multiple_alternatives(doors_and_drawers_world):
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             body == fixed_connection.parent,
             handle == fixed_connection.child,
             body == prismatic_connection.child,
@@ -265,7 +272,7 @@ def test_rule_tree_with_multiple_alternatives_optimized(doors_and_drawers_world)
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             HasType(fixed_connection.child, Handle),
             fixed_connection.parent == prismatic_connection.child,
         )
@@ -330,7 +337,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree(doors_and_drawers
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             body == fixed_connection.parent,
             handle == fixed_connection.child,
         )
@@ -382,7 +389,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
 
     query = an(
         entity(
-            views := let(type_=View, domain=None),
+            views := let(type_=View, domain=DomainKind.INFERRED),
             HasType(fixed_connection.child, Handle),
         )
     )
