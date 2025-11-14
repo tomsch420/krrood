@@ -156,7 +156,7 @@ def extract_selected_variable_and_expression(
     Extracts a variable and constructs its expression tree for the given symbolic class.
 
     This function generates a variable of the specified `symbolic_cls` and uses the
-    provided domain, predicate type, and additional arguments to inference its expression
+    provided domain, predicate type, and additional arguments to create its expression
     tree. The domain can optionally be filtered when iterating through its elements
     if specified or retrieved from the cache keys associated with the symbolic class.
 

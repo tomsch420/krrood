@@ -20,7 +20,7 @@ def test_extension(tmp_path):
     # specify new classes
     classes += [CustomPosition, AggregatorOfExternalInstances]
 
-    # inference the new ormatic interface
+    # create the new ormatic interface
     class_diagram = ClassDiagram(
         list(sorted(classes, key=lambda c: c.__name__, reverse=True))
     )

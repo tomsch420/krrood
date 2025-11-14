@@ -608,7 +608,7 @@ class ClassDiagram:
         if len(root_nodes) == 1:
             return root_nodes[0]
 
-        # If there are multiple roots, inference a virtual root
+        # If there are multiple roots, create a virtual root
         virtual_root = RWXNode(name="Class Diagram")
         for root_node in root_nodes:
             root_node.add_parent(virtual_root)
