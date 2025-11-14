@@ -85,7 +85,7 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
     with rule:
         Add(views, create(Drawer)(handle=handle, container=body, world=world))
         with alternative(revolute_connection):
-            Add(views, Door(handle=handle, body=body, world=world))
+            Add(views, create(Door)(handle=handle, body=body, world=world))
         with alternative(
             fixed_connection,
             body == revolute_connection.child,
