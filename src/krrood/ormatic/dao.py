@@ -354,11 +354,10 @@ class DataAccessObject(HasGeneric[T]):
         if register:
             state.register(obj, result)
 
-        alt = cls.uses_alternative_mapping(base)
         # chose the correct building method
-        if alt:
+        if cls.uses_alternative_mapping(base):
             result.to_dao_if_subclass_of_alternative_mapping(
-                obj=dao_obj, base=base, alt=alt, state=state
+                obj=dao_obj, base=base, state=state
             )
         else:
             result.to_dao_default(obj=dao_obj, state=state)
@@ -371,20 +370,9 @@ class DataAccessObject(HasGeneric[T]):
         :param class_to_check: The class to check
         :return: If the class to check uses an alternative mapping to specify the DAO or not.
         """
-        if issubclass(class_to_check, DataAccessObject):
-            c = class_to_check
-
-            while c is not object:
-                if issubclass(c.original_class(), AlternativeMapping):
-                    return c.original_class()
-                # Try to step to the next base
-                bases = getattr(c, "__bases__", ())
-                if not bases:
-                    break
-                c = bases[0]
-
-        return False
-
+        return issubclass(class_to_check, DataAccessObject) and issubclass(
+            class_to_check.original_class(), AlternativeMapping
+        )
 
     def to_dao_default(self, obj: T, state: ToDAOState):
         """
@@ -408,7 +396,6 @@ class DataAccessObject(HasGeneric[T]):
         self,
         obj: T,
         base: Type[DataAccessObject],
-        alt,
         state: ToDAOState,
     ):
         """
@@ -430,7 +417,7 @@ class DataAccessObject(HasGeneric[T]):
             del state.memo[id(obj)]
 
         # create dao of alternatively mapped superclass
-        parent_dao = alt.to_dao(obj, state)
+        parent_dao = base.original_class().to_dao(obj, state)
 
         # Restore the object in the memo dictionary
         if temp_dao is not None:
