@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from enum import Enum
+
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
 
@@ -8,7 +10,17 @@ User interface (grammar & vocabulary) for entity query language.
 """
 import operator
 
-from typing_extensions import Any, Optional, Union, Iterable, TypeVar, Type, Tuple, List
+from typing_extensions import (
+    Any,
+    Optional,
+    Union,
+    Iterable,
+    TypeVar,
+    Type,
+    Tuple,
+    List,
+    Literal as TypingLiteral,
+)
 
 from .symbolic import (
     SymbolicExpression,
@@ -179,8 +191,17 @@ def _extract_variables_and_expression(
     return selected_variables, expression
 
 
+class DomainKind(Enum):
+    INFERRED = 1
+
+
+DomainType = Union[Iterable, TypingLiteral[DomainKind.INFERRED], None]
+
+
 def let(
-    type_: Type[T], domain: Optional[Iterable], name: Optional[str] = None
+    type_: Type[T],
+    domain: DomainType,
+    name: Optional[str] = None,
 ) -> Union[T, CanBehaveLikeAVariable[T], Variable[T]]:
     """
     Declare a symbolic variable that can be used inside queries.
@@ -189,26 +210,48 @@ def let(
 
     .. warning::
 
-        If no domain is provided, the domain will be inferred from the SymbolGraph, which may contain unnecessarily many
-        elements.
+        If no domain is provided, and the type_ is a Symbol type, then the domain will be inferred from the SymbolGraph,
+         which may contain unnecessarily many elements.
 
     :param type_: The type of variable.
-    :param domain: Iterable of potential values for the variable.
+    :param domain: Iterable of potential values for the variable or an INFERRED sentinel (for rules) or None.
+     If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
+      but by another evaluator (e.g., EQL To SQL converter in Ormatic).
     :param name: The variable name, only required for pretty printing.
     :return: A Variable that can be queried for.
     """
-    if domain is None:
-        domain = SymbolGraph().get_instances_of_type(type_)
-    else:
-        if is_iterable(domain):
-            domain = filter(lambda x: isinstance(x, type_), domain)
+    domain_source = _get_domain_source_from_domain_and_type_values(domain, type_)
 
     if name is None:
         name = type_.__name__
 
-    result = Variable(_type_=type_, _domain_source_=From(domain), _name__=name)
+    result = Variable(
+        _type_=type_,
+        _domain_source_=domain_source,
+        _name__=name,
+        _is_inferred_=domain is DomainKind.INFERRED,
+    )
 
     return result
+
+
+def _get_domain_source_from_domain_and_type_values(
+    domain: DomainType, type_: Type
+) -> Optional[From]:
+    """
+    Get the domain source from the domain and the type values.
+
+    :param domain: The domain value.
+    :param type_: The type of the variable.
+    :return: The domain source as a From object.
+    """
+    if domain is DomainKind.INFERRED:
+        domain = None
+    elif is_iterable(domain):
+        domain = filter(lambda x: isinstance(x, type_), domain)
+    elif domain is None and issubclass(type_, Symbol):
+        domain = SymbolGraph().get_instances_of_type(type_)
+    return From(domain)
 
 
 def and_(*conditions: ConditionType):
