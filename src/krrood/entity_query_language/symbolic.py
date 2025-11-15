@@ -1,29 +1,19 @@
-from __future__ import annotations
-
-from collections import UserDict
-from contextlib import contextmanager
-from copy import copy
-
-from . import logger
-from .enums import EQLMode, PredicateType
-from .rxnode import RWXNode, ColorLegend
-from .symbol_graph import SymbolGraph
-from ..class_diagrams import ClassRelation
-from ..class_diagrams.class_diagram import Association, WrappedClass
-from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
-from ..class_diagrams.wrapped_field import WrappedField
-
 """
 Core symbolic expression system used to build and evaluate entity queries.
 
 This module defines the symbolic types (variables, sources, logical and
 comparison operators) and the evaluation mechanics.
 """
+
+from __future__ import annotations
+
 import contextvars
 import operator
 import typing
 from abc import abstractmethod, ABC
-from dataclasses import dataclass, field, fields, MISSING
+from collections import UserDict
+from copy import copy
+from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
 
 from typing_extensions import (
@@ -39,26 +29,33 @@ from typing_extensions import (
     List,
     Tuple,
     Callable,
+    Self,
 )
 
-
+from . import logger
 from .cache_data import (
     is_caching_enabled,
     SeenSet,
     IndexedCache,
 )
+from .enums import EQLMode, PredicateType
 from .failures import (
     MultipleSolutionFound,
     NoSolutionFound,
-    UsageError,
     UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
     CardinalityConsistencyError,
     CardinalityValueError,
 )
-from .utils import IDGenerator, is_iterable, generate_combinations
 from .hashed_data import HashedValue, HashedIterable, T
+from .rxnode import RWXNode, ColorLegend
+from .symbol_graph import SymbolGraph
+from .utils import IDGenerator, is_iterable, generate_combinations
+from ..class_diagrams import ClassRelation
+from ..class_diagrams.class_diagram import Association, WrappedClass
+from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
+from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
     from .conclusion import Conclusion
@@ -369,11 +366,10 @@ class SymbolicExpression(Generic[T], ABC):
     def __invert__(self):
         return Not(self)
 
-    def __enter__(self, in_rule_mode: bool = False):
+    def __enter__(self) -> Self:
         node = self
-        if in_rule_mode or in_symbolic_mode(EQLMode.Rule):
-            if (node is self._root_) or (node._parent_ is self._root_):
-                node = node._conditions_root_
+        if (node is self._root_) or (node._parent_ is self._root_):
+            node = node._conditions_root_
         SymbolicExpression._symbolic_expression_stack_.append(node)
         return self
 
@@ -414,11 +410,6 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
-        if not in_symbolic_mode():
-            raise AttributeError(
-                f"{self.__class__.__name__} object has no attribute {name}, maybe you forgot to "
-                f"use the symbolic_mode context manager?"
-            )
         if name.startswith("__") and name.endswith("__"):
             raise AttributeError(
                 f"{self.__class__.__name__} object has no attribute {name}"
@@ -430,47 +421,32 @@ class CanBehaveLikeAVariable(SymbolicExpression[T], ABC):
         return self._var_._type_ if self._var_ else None
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
-        self._if_not_in_symbolic_mode_raise_error_("__getitem__")
         return Index(self, key)
 
     def __call__(self, *args, **kwargs) -> CanBehaveLikeAVariable[T]:
-        self._if_not_in_symbolic_mode_raise_error_("__call__")
+
         return Call(self, args, kwargs)
 
     def __eq__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__eq__")
         return Comparator(self, other, operator.eq)
 
     def __contains__(self, item) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__contains__")
         return Comparator(item, self, operator.contains)
 
     def __ne__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__ne__")
         return Comparator(self, other, operator.ne)
 
     def __lt__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__lt__")
         return Comparator(self, other, operator.lt)
 
     def __le__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__le__")
         return Comparator(self, other, operator.le)
 
     def __gt__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__gt__")
         return Comparator(self, other, operator.gt)
 
     def __ge__(self, other) -> Comparator:
-        self._if_not_in_symbolic_mode_raise_error_("__ge__")
         return Comparator(self, other, operator.ge)
-
-    def _if_not_in_symbolic_mode_raise_error_(self, method_name: str) -> None:
-        if not in_symbolic_mode():
-            raise AttributeError(
-                f"You are not in symbolic_mode {self.__class__.__name__} object has no attribute"
-                f" {method_name}"
-            )
 
     def __hash__(self):
         return super().__hash__()
@@ -513,17 +489,15 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         SymbolGraph().remove_dead_instances()
-        with symbolic_mode(mode=None):
-            results = self._evaluate__()
-            assert not in_symbolic_mode()
-            result_count = 0
-            for result in map(
-                self._process_result_, filter(lambda r: r.is_true, results)
-            ):
-                result_count += 1
-                self._assert_less_than_upper_limit_(result_count)
-                yield result
-            self._assert_more_than_lower_limit_(result_count)
+
+        results = self._evaluate__()
+
+        result_count = 0
+        for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
+            result_count += 1
+            self._assert_less_than_upper_limit_(result_count)
+            yield result
+        self._assert_more_than_lower_limit_(result_count)
         self._reset_cache_()
 
     def _validate_cardinality_constraints_(self):
@@ -962,7 +936,7 @@ class Variable(CanBehaveLikeAVariable[T]):
     _domain_source_: Optional[From] = field(default=None, kw_only=True, repr=False)
     """
     An optional source for the variable domain. If not given, the global cache of the variable class type will be used
-    as the domain, or if kwargs are given the type and the kwargs will be used to create/infer new values for the
+    as the domain, or if kwargs are given the type and the kwargs will be used to inference/infer new values for the
     variable.
     """
     _domain_: HashedIterable = field(
@@ -1201,16 +1175,24 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
 class Attribute(DomainMapping):
     """
     A symbolic attribute that can be used to access attributes of symbolic variables.
+
+    For instance, if Body.name is called, then the attribute name is "name" and `_owner_class_` is `Body`
     """
 
     _attr_name_: str
-    _child_type_: Type
+    """
+    The name of the attribute.
+    """
+
+    _owner_class_: Type
+    """
+    The class that owns this attribute.
+    """
 
     def __post_init__(self):
         super().__post_init__()
-        with symbolic_mode(mode=None):
-            if self._child_wrapped_cls_:
-                self._update_path_()
+        if self._wrapped_owner_class_:
+            self._update_path_()
 
     def _update_path_(self):
         if self._relation_:
@@ -1220,7 +1202,7 @@ class Attribute(DomainMapping):
     def _relation_(self):
         if self._wrapped_field_ and self._wrapped_type_:
             return Association(
-                self._child_wrapped_cls_, self._wrapped_type_, self._wrapped_field_
+                self._wrapped_owner_class_, self._wrapped_type_, self._wrapped_field_
             )
         return None
 
@@ -1232,19 +1214,28 @@ class Attribute(DomainMapping):
             return None
 
     @cached_property
-    def _type_(self):
-        if self._child_wrapped_cls_:
+    def _type_(self) -> Optional[Type]:
+        """
+        :return: The type of the accessed attribute.
+        """
+
+        if not is_dataclass(self._owner_class_):
+            return None
+
+        if self._wrapped_owner_class_:
             # try to get the type endpoint from a field
             try:
                 return self._wrapped_field_.type_endpoint
             except (KeyError, AttributeError):
                 return None
         else:
-            wrapped_cls = WrappedClass(self._child_type_)
+            wrapped_cls = WrappedClass(self._owner_class_)
             wrapped_cls._class_diagram = SymbolGraph().class_diagram
             wrapped_field = WrappedField(
                 wrapped_cls,
-                [f for f in fields(self._child_type_) if f.name == self._attr_name_][0],
+                [f for f in fields(self._owner_class_) if f.name == self._attr_name_][
+                    0
+                ],
             )
             try:
                 return wrapped_field.type_endpoint
@@ -1253,14 +1244,17 @@ class Attribute(DomainMapping):
 
     @cached_property
     def _wrapped_field_(self) -> Optional[WrappedField]:
-        return self._child_wrapped_cls_._wrapped_field_name_map_.get(
+        return self._wrapped_owner_class_._wrapped_field_name_map_.get(
             self._attr_name_, None
         )
 
     @cached_property
-    def _child_wrapped_cls_(self):
+    def _wrapped_owner_class_(self):
+        """
+        :return: The owner class of the attribute from the symbol graph.
+        """
         try:
-            return SymbolGraph().class_diagram.get_wrapped_class(self._child_type_)
+            return SymbolGraph().class_diagram.get_wrapped_class(self._owner_class_)
         except ClassIsUnMappedInClassDiagram:
             return None
 
@@ -1852,66 +1846,25 @@ def chained_logic(
     return prev_operation
 
 
-@contextmanager
-def rule_mode(query: Optional[SymbolicExpression] = None):
-    """
-    Wrapper around symbolic construction mode to easily enable rule mode
-    """
-    # delegate to symbolic_mode
-    with symbolic_mode(query, EQLMode.Rule) as ctx:
-        yield ctx
-
-
-@contextmanager
-def symbolic_mode(
-    query: Optional[SymbolicExpression] = None, mode: EQLMode = EQLMode.Query
-):
-    """
-    Context manager to temporarily enable symbolic construction mode.
-
-    Within the context, calling classes decorated with ``@symbol`` produces
-    symbolic Variables instead of real instances.
-
-    :param query: Optional symbolic expression to also enter/exit as a context.
-    :param mode: The symbolic mode to set. (Default: EQLMode.Query)
-    """
-    prev_mode = _symbolic_mode.get()
-    try:
-        if query is not None:
-            query.__enter__(in_rule_mode=True)
-        _set_symbolic_mode(mode)
-        yield SymbolicExpression._current_parent_()
-    finally:
-        if query is not None:
-            query.__exit__()
-        _set_symbolic_mode(prev_mode)
-
-
-def properties_to_expression_tree(
-    var: CanBehaveLikeAVariable, properties: Dict[str, Any]
-) -> SymbolicExpression:
-    """
-    Convert properties of a variable to a symbolic expression.
-    """
-    with symbolic_mode():
-        conditions = [getattr(var, k) == v for k, v in properties.items()]
-        expression = None
-        if len(conditions) == 1:
-            expression = conditions[0]
-        elif len(conditions) > 1:
-            expression = chained_logic(AND, *conditions)
-    return expression
-
-
 def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
-    with symbolic_mode(mode=None):
-        left_vars = left._unique_variables_.filter(
-            lambda v: not isinstance(v.value, Literal)
-        )
-        right_vars = right._unique_variables_.filter(
-            lambda v: not isinstance(v.value, Literal)
-        )
-        if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
-            return ElseIf(left, right)
-        else:
-            return Union(left, right)
+
+    left_vars = left._unique_variables_.filter(
+        lambda v: not isinstance(v.value, Literal)
+    )
+    right_vars = right._unique_variables_.filter(
+        lambda v: not isinstance(v.value, Literal)
+    )
+    if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
+        return ElseIf(left, right)
+    else:
+        return Union(left, right)
+
+
+def _any_of_the_kwargs_is_a_variable(bindings: Dict[str, Any]) -> bool:
+    """
+    :param bindings: A kwarg like dict mapping strings to objects
+    :return: Rather any of the objects is a variable or not.
+    """
+    return any(
+        isinstance(binding, CanBehaveLikeAVariable) for binding in bindings.values()
+    )

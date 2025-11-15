@@ -4,7 +4,6 @@ import pytest
 
 from krrood.entity_query_language.entity import an, entity, let
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.entity_query_language.symbolic import symbolic_mode
 from ..dataset.example_classes import Position
 
 try:
@@ -38,8 +37,7 @@ def test_memory_leak():
 
     create_data()
 
-    with symbolic_mode():
-        q = an(entity(let(Position, domain=None)))
+    q = an(entity(let(Position, domain=None)))
     result = list(q.evaluate())
 
     assert result == []

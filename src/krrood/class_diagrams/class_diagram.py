@@ -6,18 +6,25 @@ from copy import copy
 from dataclasses import dataclass
 from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
-from typing import Callable, Iterable
 
 import rustworkx as rx
-
-from .failures import ClassIsUnMappedInClassDiagram
 
 try:
     from rustworkx_utils import RWXNode
 except ImportError:
     RWXNode = None
-from typing_extensions import List, Optional, Dict, Union, Tuple
-from typing_extensions import Type, TYPE_CHECKING
+from typing_extensions import (
+    List,
+    Optional,
+    Dict,
+    Union,
+    Tuple,
+    Callable,
+    Iterable,
+    Type,
+    TYPE_CHECKING,
+)
+
 
 from .attribute_introspector import (
     AttributeIntrospector,
@@ -25,6 +32,8 @@ from .attribute_introspector import (
 )
 from .utils import Role, get_generic_type_param
 from .wrapped_field import WrappedField
+
+from .failures import ClassIsUnMappedInClassDiagram
 
 if TYPE_CHECKING:
     from ..entity_query_language.predicate import PropertyDescriptor

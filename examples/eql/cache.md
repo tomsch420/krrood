@@ -28,7 +28,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, an, let, contains, symbolic_mode, Symbol
+from krrood.entity_query_language.entity import entity, an, let, contains, Symbol
 
 
 @dataclass
@@ -44,15 +44,14 @@ class World:
 
 world = World(1, [Body("Body1"), Body("Body2")])
 
-with symbolic_mode():
-    body = let(Body, domain=None)  # no domain here
-    query = an(
-        entity(
-            body,
-            contains(body.name, "2"),
-            body.name.startswith("Body"),
-        )
+body = let(Body, domain=None)  # no domain here
+query = an(
+    entity(
+        body,
+        contains(body.name, "2"),
+        body.name.startswith("Body"),
     )
+)
 
 print(*query.evaluate(), sep="\n")
 ```

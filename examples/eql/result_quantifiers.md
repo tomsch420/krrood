@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List
 
-from krrood.entity_query_language.entity import entity, let, the, Symbol, symbolic_mode, an
+from krrood.entity_query_language.entity import entity, let, the, Symbol, an
 from krrood.entity_query_language.failures import MultipleSolutionFound, LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions
 
 
@@ -44,17 +44,17 @@ class World(Symbol):
 
 world = World(1, [Body("Body1"), Body("Body2")])
 
-with symbolic_mode():
-    query = the(entity(body := let(Body, domain=world.bodies),
-                       body.name.endswith("1")))
+
+query = the(entity(body := let(Body, domain=world.bodies),
+                   body.name.endswith("1")))
 print(query.evaluate())
 ```
 
 If there are multiple results, we get an informative exception.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    query = the(entity(body := let(Body, domain=world.bodies)))
+
+query = the(entity(body := let(Body, domain=world.bodies)))
 
 try:
     query.evaluate()
@@ -65,8 +65,8 @@ except MultipleSolutionFound as e:
 We can also get all results using `an`.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    query = an(entity(body := let(Body, domain=None)))
+
+query = an(entity(body := let(Body, domain=None)))
 
 print(*query.evaluate(), sep="\n")
 ```
@@ -79,12 +79,11 @@ EQL allows constraining the number of results produced by `an(...)` using the ke
 Below we reuse the same `World` and `Body` setup from above. The world contains exactly two bodies, so all the following examples will evaluate successfully.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    # Require at least two results
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        at_least=2,
-    )
+# Require at least two results
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    at_least=2,
+)
 
 print(len(list(query.evaluate())))  # -> 2
 ```
@@ -92,12 +91,12 @@ print(len(list(query.evaluate())))  # -> 2
 You can also bound the number of results within a range using both `at_least` and `at_most`:
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        at_least=1,
-        at_most=3,
-    )
+
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    at_least=1,
+    at_most=3,
+)
 
 print(len(list(query.evaluate())))  # -> 2
 ```
@@ -105,11 +104,11 @@ print(len(list(query.evaluate())))  # -> 2
 If you want an exact number of results, use `exactly`:
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        exactly=2,
-    )
+
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    exactly=2,
+)
 
 print(len(list(query.evaluate())))  # -> 2
 ```
@@ -124,33 +123,33 @@ The result count constraints will raise informative exceptions when the number o
 # The world from above has exactly two bodies: Body1 and Body2
 
 # at_least too high -> LessThanExpectedNumberOfSolutions
-with symbolic_mode():
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        at_least=3,
-    )
+
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    at_least=3,
+)
 try:
     list(query.evaluate())
 except LessThanExpectedNumberOfSolutions as e:
     print(e)
 
 # at_most too low -> GreaterThanExpectedNumberOfSolutions
-with symbolic_mode():
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        at_most=1,
-    )
+
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    at_most=1,
+)
 try:
     list(query.evaluate())
 except GreaterThanExpectedNumberOfSolutions as e:
     print(e)
 
 # exactly mismatch -> can raise either LessThan... or GreaterThan...
-with symbolic_mode():
-    query = an(
-        entity(body := let(Body, domain=world.bodies)),
-        exactly=1,
-    )
+
+query = an(
+    entity(body := let(Body, domain=world.bodies)),
+    exactly=1,
+)
 try:
     list(query.evaluate())
 except (LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions) as e:

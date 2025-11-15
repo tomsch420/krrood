@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 from krrood.entity_query_language.entity import (
-    entity, an, let, symbolic_mode, Symbol,
+    entity, an, let, Symbol,
     in_, contains, not_, and_, or_,
 )
 
@@ -53,12 +53,11 @@ world = World(
 
 ## Equality and inequality: `==` and `!=`
 
-Use Python’s comparison operators inside `symbolic_mode`. EQL overloads these on symbolic variables to produce comparator nodes.
+Use Python’s comparison operators. EQL overloads these on symbolic variables to produce comparator nodes.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    query = an(entity(b, b.name == "Container1"))
+b = let(Body, domain=world.bodies)
+query = an(entity(b, b.name == "Container1"))
 
 print(*query.evaluate(), sep="\n")
 ```
@@ -66,9 +65,8 @@ print(*query.evaluate(), sep="\n")
 Inequality `!=` works similarly:
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    query = an(entity(b, b.name != "Container1"))
+b = let(Body, domain=world.bodies)
+query = an(entity(b, b.name != "Container1"))
 
 print(*query.evaluate(), sep="\n")
 # => all bodies except the one with name == 'Container1'
@@ -77,11 +75,10 @@ print(*query.evaluate(), sep="\n")
 You can compare attributes between two variables as well:
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    left = let(Body, domain=world.bodies)
-    right = let(Body, domain=world.bodies)
-    # Same name, but different instances allowed by domain (not enforced here)
-    query = an(entity(left, left.name == right.name))
+left = let(Body, domain=world.bodies)
+right = let(Body, domain=world.bodies)
+# Same name, but different instances allowed by domain (not enforced here)
+query = an(entity(left, left.name == right.name))
 
 print(*query.evaluate(), sep="\n")
 ```
@@ -92,9 +89,8 @@ print(*query.evaluate(), sep="\n")
 These work for numeric and comparable attributes.
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    heavy = an(entity(b, b.weight >= 10))
+b = let(Body, domain=world.bodies)
+heavy = an(entity(b, b.weight >= 10))
 
 print(*heavy.evaluate(), sep="\n")
 # => bodies with weight >= 10
@@ -103,15 +99,14 @@ print(*heavy.evaluate(), sep="\n")
 Chaining with logical operators (implicit AND when multiple conditions are given):
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    query = an(
-        entity(
-            b,
-            b.weight >= 10,
-            b.name.startswith("C"),  # attribute/property comparisons can be mixed
-        )
+b = let(Body, domain=world.bodies)
+query = an(
+    entity(
+        b,
+        b.weight >= 10,
+        b.name.startswith("C"),  # attribute/property comparisons can be mixed
     )
+)
 
 print(*query.evaluate(), sep="\n")
 ```
@@ -124,14 +119,12 @@ Writing `item in literal_list` will be evaluated immediately by Python and not p
 
 
 ```{code-cell} ipython3
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    query = an(entity(b, in_(b.name, {"Container1", "Handle1"})))
+b = let(Body, domain=world.bodies)
+query = an(entity(b, in_(b.name, {"Container1", "Handle1"})))
 print(*query.evaluate(), sep="\n")
 
-with symbolic_mode():
-    b = let(Body, domain=world.bodies)
-    query = an(entity(b, contains({"metal", "wood"}, b.tags[0])))
+b = let(Body, domain=world.bodies)
+query = an(entity(b, contains({"metal", "wood"}, b.tags[0])))
 print(*query.evaluate(), sep="\n")
 ```
 

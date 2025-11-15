@@ -3,14 +3,19 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Iterable
 
-from typing_extensions import Any, Optional, List, Dict
+from typing_extensions import Any, Optional, List, Dict, Iterable
 
 from .enums import RDREdge
 from .hashed_data import HashedValue
 from .rxnode import ColorLegend
-from .symbolic import SymbolicExpression, T, Variable, OperationResult, An
+from .symbolic import (
+    SymbolicExpression,
+    T,
+    Variable,
+    OperationResult,
+    ResultQuantifier,
+)
 
 
 @dataclass(eq=False)
@@ -101,7 +106,7 @@ class Add(Conclusion[T]):
 
 
 @dataclass(eq=False)
-class Infer(An[T]):
+class Infer(ResultQuantifier[T]):
 
     def __post_init__(self):
         super().__post_init__()

@@ -319,6 +319,47 @@ class DataAccessObject(HasGeneric[T]):
     This class implements the necessary functionality.
     """
 
+    def __init__(self, *args, **kwargs):
+        """
+        Allow constructing DAO instances with positional arguments that map to
+        data columns (non-PK, non-FK, non-polymorphic) in declaration order.
+
+        Falls back to the default SQLAlchemy initialization if positional
+        arguments do not match the number of data columns or if keyword
+        arguments are provided.
+        """
+        if args and not kwargs:
+            try:
+                mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                data_columns = [c for c in mapper.columns if is_data_column(c)]
+                if len(args) == len(data_columns):
+                    kwargs = {col.name: value for col, value in zip(data_columns, args)}
+                    super().__init__(**kwargs)
+                    return
+            except Exception:
+                # If inspection fails or mapping is not aligned, defer to default behavior
+                pass
+        super().__init__(*args, **kwargs)
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        original_init = getattr(cls, "__init__", None)
+
+        def init_with_positional(self, *args, **kw):
+            if args and not kw:
+                try:
+                    mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+                    data_columns = [c for c in mapper.columns if is_data_column(c)]
+                    if len(args) == len(data_columns):
+                        built = {col.name: value for col, value in zip(data_columns, args)}
+                        return original_init(self, **built) if original_init else super(cls, self).__init__(**built)
+                except Exception:
+                    pass
+            return original_init(self, *args, **kw) if original_init else super(cls, self).__init__(*args, **kw)
+
+        # Inject only if the class did not already define a positional-friendly constructor
+        cls.__init__ = init_with_positional
+
     @classmethod
     def to_dao(
         cls,
@@ -348,16 +389,32 @@ class DataAccessObject(HasGeneric[T]):
 
         dao_obj = state.apply_alternative_mapping_if_needed(cls, obj)
 
-        base: Type[DataAccessObject] = cls.__bases__[0]
+        # Determine the appropriate DAO base to consider for alternative mappings.
+        # The previous implementation only looked at the immediate base class, which
+        # fails when an alternatively-mapped parent exists higher up the hierarchy
+        # (e.g., a grandparent). We now scan the MRO to find the nearest DAO ancestor
+        # whose original class uses AlternativeMapping.
+        alt_base: Optional[Type[DataAccessObject]] = None
+        for b in cls.__mro__[1:]:  # skip cls itself
+            try:
+                if issubclass(b, DataAccessObject) and issubclass(
+                    b.original_class(), AlternativeMapping
+                ):
+                    alt_base = b
+                    break
+            except Exception:
+                # Some bases may not be DAOs or may not have generic info; skip safely
+                continue
+
         result = cls()
 
         if register:
             state.register(obj, result)
 
-        # chose the correct building method
-        if cls.uses_alternative_mapping(base):
+        # choose the correct building method
+        if alt_base is not None:
             result.to_dao_if_subclass_of_alternative_mapping(
-                obj=dao_obj, base=base, state=state
+                obj=dao_obj, base=alt_base, state=state
             )
         else:
             result.to_dao_default(obj=dao_obj, state=state)
@@ -437,8 +494,23 @@ class DataAccessObject(HasGeneric[T]):
         # copy values from superclass dao
         self.get_columns_from(parent_dao, columns_of_parent)
 
-        # copy values that only occur in this dao
+        # copy values that only occur in this dao (current table)
         self.get_columns_from(obj, columns_of_this_table)
+
+        # Also ensure that columns declared on intermediate ancestors (between the
+        # alternatively-mapped base and this DAO) are populated. SQLAlchemy may not
+        # include those columns in the current table's column collection, so we walk
+        # all column attributes visible on this mapper and fill any data columns that
+        # are not owned by the alternatively-mapped base.
+        parent_column_names = {c.name for c in columns_of_parent}
+        for prop in mapper.column_attrs:
+            try:
+                col = prop.columns[0]
+            except Exception:
+                continue
+            if is_data_column(col) and prop.key not in parent_column_names:
+                # take the value from the original object; attribute names match
+                setattr(self, prop.key, getattr(obj, prop.key))
 
         # split relationships in relationships by parent and relationships by child
         all_relationships = mapper.relationships
@@ -706,6 +778,21 @@ class DataAccessObject(HasGeneric[T]):
         Replace circular placeholder DAOs with their finalized domain objects using the state.
         """
         state.apply_circular_fixes(result, circular_refs)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, self.__class__):
+            return False
+        try:
+            mapper: sqlalchemy.orm.Mapper = sqlalchemy.inspection.inspect(type(self))
+            # Compare only data columns, ignoring PK/FK/polymorphic columns
+            for column in mapper.columns:
+                if is_data_column(column):
+                    if getattr(self, column.name) != getattr(other, column.name):
+                        return False
+            return True
+        except Exception:
+            # Fallback to identity comparison if we cannot inspect
+            return self is other
 
     def __repr__(self):
         if not hasattr(_repr_thread_local, "seen"):

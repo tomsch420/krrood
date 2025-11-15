@@ -118,6 +118,78 @@ class InheritanceLevel2WithoutSymbolButAlternativelyMappedMappingDAO(
     }
 
 
+class ParentAlternativelyMappedMappingDAO(
+    Base,
+    DataAccessObject[test.dataset.example_classes.ParentAlternativelyMappedMapping],
+):
+
+    __tablename__ = "ParentAlternativelyMappedMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    derived_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "ParentAlternativelyMappedMappingDAO",
+    }
+
+
+class ChildLevel1NormallyMappedDAO(
+    ParentAlternativelyMappedMappingDAO,
+    DataAccessObject[test.dataset.example_classes.ChildLevel1NormallyMapped],
+):
+
+    __tablename__ = "ChildLevel1NormallyMappedDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ParentAlternativelyMappedMappingDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_one_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ChildLevel1NormallyMappedDAO",
+        "inherit_condition": database_id
+        == ParentAlternativelyMappedMappingDAO.database_id,
+    }
+
+
+class ChildLevel2NormallyMappedDAO(
+    ChildLevel1NormallyMappedDAO,
+    DataAccessObject[test.dataset.example_classes.ChildLevel2NormallyMapped],
+):
+
+    __tablename__ = "ChildLevel2NormallyMappedDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ChildLevel1NormallyMappedDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    level_two_attribute: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ChildLevel2NormallyMappedDAO",
+        "inherit_condition": database_id == ChildLevel1NormallyMappedDAO.database_id,
+    }
+
+
 class PredicateClassRelationDAO(
     Base,
     DataAccessObject[krrood.entity_query_language.symbol_graph.PredicateClassRelation],

@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import wraps
+from functools import wraps, lru_cache
 
 from typing_extensions import (
     Callable,
@@ -12,9 +12,11 @@ from typing_extensions import (
     Type,
     Tuple,
     ClassVar,
+    Dict,
+    List,
 )
 
-from .enums import PredicateType, EQLMode
+from .enums import PredicateType
 from .symbol_graph import (
     WrappedInstance,
     SymbolGraph,
@@ -22,12 +24,9 @@ from .symbol_graph import (
 from .symbolic import (
     T,
     SymbolicExpression,
-    in_symbolic_mode,
     Variable,
-    An,
-    Entity,
-    properties_to_expression_tree,
     From,
+    _any_of_the_kwargs_is_a_variable,
 )
 from .utils import is_iterable
 from ..utils import recursive_subclasses
@@ -54,17 +53,12 @@ def symbolic_function(
 
     @wraps(function)
     def wrapper(*args, **kwargs) -> Optional[Any]:
-        if in_symbolic_mode():
-            function_arg_names = [
-                pname
-                for pname, p in inspect.signature(function).parameters.items()
-                if p.default == inspect.Parameter.empty
-            ]
-            kwargs.update(dict(zip(function_arg_names, args)))
+        all_kwargs = merge_args_and_kwargs(function, args, kwargs)
+        if _any_of_the_kwargs_is_a_variable(all_kwargs):
             return Variable(
                 _name__=function.__name__,
                 _type_=function,
-                _kwargs_=kwargs,
+                _kwargs_=all_kwargs,
                 _predicate_type_=PredicateType.DecoratedMethod,
             )
         return function(*args, **kwargs)
@@ -77,38 +71,9 @@ class Symbol:
     """Base class for things that can be described by property descriptors."""
 
     def __new__(cls, *args, **kwargs):
-        if in_symbolic_mode():
-            return cls._symbolic_new_(cls, *args, **kwargs)
-        else:
-            instance = super().__new__(cls)
-            update_cache(instance)
-            return instance
-
-    @classmethod
-    def _symbolic_new_(cls, *args, **kwargs):
-        predicate_type = (
-            PredicateType.SubClassOfPredicate if issubclass(cls, Predicate) else None
-        )
-        domain, kwargs = update_domain_and_kwargs_from_args(cls, *args, **kwargs)
-        # This mode is when we try to infer new instances of variables, this includes also evaluating predicates
-        # because they also need to be inferred. So basically this mode is when there is no domain available and
-        # we need to infer new values.
-        if not domain and (in_symbolic_mode(EQLMode.Rule) or predicate_type):
-            var = Variable(
-                _name__=cls.__name__,
-                _type_=cls,
-                _kwargs_=kwargs,
-                _predicate_type_=predicate_type,
-            )
-            return var
-        else:
-            # In this mode, we either have a domain through the `domain` provided here, or through the cache if
-            # the domain is not provided. Then we filter this domain by the provided constraints on the variable
-            # attributes given as keyword arguments.
-            var, expression = extract_selected_variable_and_expression(
-                cls, domain, predicate_type, **kwargs
-            )
-            return An(Entity(expression, [var])) if expression else var
+        instance = super().__new__(cls)
+        update_cache(instance)
+        return instance
 
 
 @dataclass(eq=False)
@@ -118,6 +83,19 @@ class Predicate(Symbol, ABC):
     """
 
     is_expensive: ClassVar[bool] = False
+
+    def __new__(cls, *args, **kwargs):
+        all_kwargs = merge_args_and_kwargs(
+            cls.__init__, args, kwargs, ignore_first=True
+        )
+        if _any_of_the_kwargs_is_a_variable(all_kwargs):
+            return Variable(
+                _type_=cls,
+                _name__=cls.__name__,
+                _kwargs_=all_kwargs,
+                _predicate_type_=PredicateType.SubClassOfPredicate,
+            )
+        return super().__new__(cls)
 
     @abstractmethod
     def __call__(self) -> bool:
@@ -165,32 +143,6 @@ class HasTypes(HasType):
     """
     A tuple containing Type objects that are associated with this instance.
     """
-
-
-def update_domain_and_kwargs_from_args(symbolic_cls: Type, *args, **kwargs):
-    """
-    Set the domain if provided as the first argument and update the kwargs with the remaining arguments.
-
-    :param symbolic_cls: The constructed class.
-    :param args: The positional arguments to the class constructor and optionally the domain.
-    :param kwargs: The keyword arguments to the class constructor.
-    :return: The domain and updated kwargs.
-    """
-    domain = None
-    update_cls_args(symbolic_cls)
-    init_args = cls_args[symbolic_cls]
-    for i, arg in enumerate(args):
-        if isinstance(arg, From):
-            domain = arg
-            if i != 1:
-                raise ValueError(
-                    f"First non-keyword-argument to {symbolic_cls.__name__} in symbolic mode should be"
-                    f" a domain using `From()`."
-                )
-        elif i > 0:
-            arg_name = init_args[i]  # to skip `self`
-            kwargs[arg_name] = arg
-    return domain, kwargs
 
 
 def extract_selected_variable_and_expression(
@@ -246,21 +198,34 @@ def update_cache(instance: Symbol):
         SymbolGraph().add_node(WrappedInstance(instance))
 
 
-def update_cls_args(symbolic_cls: Type):
+@lru_cache
+def get_function_argument_names(function: Callable) -> List[str]:
     """
-    Updates the global `cls_args` dictionary with the constructor arguments
-    of the given symbolic class, if it is not already present. The keys in
-    `cls_args` are symbolic class types, and the values are lists of
-    constructor parameter names for those classes.
-
-    This function inspects the signature of the `__init__` method of the
-    given symbolic class and stores the parameter names if the class
-    is not already in the global `cls_args`.
-
-    :param symbolic_cls: A symbolic class type to be inspected.
+    :param function: A function to inspect
+    :return: The argument names of the function
     """
-    global cls_args
-    if symbolic_cls not in cls_args:
-        cls_args[symbolic_cls] = list(
-            inspect.signature(symbolic_cls.__init__).parameters.keys()
+    return list(inspect.signature(function).parameters.keys())
+
+
+def merge_args_and_kwargs(
+    function: Callable, args, kwargs, ignore_first: bool = True
+) -> Dict[str, Any]:
+    """
+    Merge the arguments and keyword-arguments of a function into a dict of keyword-arguments.
+
+    :param function: The function to get the argument names from
+    :param args: The arguments passed to the function
+    :param kwargs: The keyword arguments passed to the function
+    :param ignore_first: Rather to ignore the first argument or not.
+    Use this when `function` contains something like `self`
+    :return: The dict of assigned keyword-arguments.
+    """
+    starting_index = 1 if ignore_first else 0
+    all_kwargs = {
+        name: arg
+        for name, arg in zip(
+            get_function_argument_names(function)[starting_index:], args
         )
+    }
+    all_kwargs.update(kwargs)
+    return all_kwargs

@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+from enum import Enum
+
 from .symbol_graph import SymbolGraph
+from .utils import is_iterable
 
 """
 User interface (grammar & vocabulary) for entity query language.
 """
 import operator
 
-from typing_extensions import Any, Optional, Union, Iterable, TypeVar, Type, Tuple, List
+from typing_extensions import (
+    Any,
+    Optional,
+    Union,
+    Iterable,
+    TypeVar,
+    Type,
+    Tuple,
+    List,
+    Literal as TypingLiteral,
+)
 
 from .symbolic import (
     SymbolicExpression,
@@ -21,7 +34,6 @@ from .symbolic import (
     CanBehaveLikeAVariable,
     ResultQuantifier,
     From,
-    symbolic_mode,
     Variable,
     optimize_or,
     Flatten,
@@ -65,7 +77,7 @@ def an(
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    return select_one_or_select_many_or_infer(
+    return select_one_or_select_many_or_an(
         An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
     )
 
@@ -86,31 +98,37 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_infer(The, entity_)
+    return select_one_or_select_many_or_an(The, entity_)
 
 
-def infer(
-    entity_: EntityType,
-) -> Infer[T]:
-    return select_one_or_select_many_or_infer(Infer, entity_)
-
-
-def select_one_or_select_many_or_infer(
+def select_one_or_select_many_or_an(
     quantifier: Type[ResultQuantifier],
     entity_: EntityType,
     **kwargs,
-) -> Union[An[T], The[T], Infer[T]]:
-    if isinstance(entity_, (Entity, SetOf)):
-        q = quantifier(entity_, **kwargs)
-    elif isinstance(entity_, ResultQuantifier):
+) -> ResultQuantifier[T]:
+    """
+    Selects one or many entities or infers the result based on the provided quantifier
+    and entity type. This function facilitates creating or managing quantified results
+    depending on the entity type and additional keyword arguments.
+
+    :param quantifier: A type of ResultQuantifier used to quantify the entity.
+    :param entity_: The entity or quantifier to be selected or converted to a quantifier.
+    :param kwargs: Additional keyword arguments for quantifier initialization.
+    :return: A result quantifier of the provided type, inferred type, or directly the
+        one provided.
+    :raises ValueError: If the provided entity is invalid.
+    """
+    if isinstance(entity_, ResultQuantifier):
         if isinstance(entity_, quantifier):
-            q = entity_
-        else:
-            entity_._child_._parent_ = None
-            q = quantifier(entity_._child_, **kwargs)
-    else:
-        raise ValueError(f"Invalid entity: {entity_}")
-    return q
+            return entity_
+
+        entity_._child_._parent_ = None
+        return quantifier(entity_._child_, **kwargs)
+
+    if isinstance(entity_, (Entity, SetOf)):
+        return quantifier(entity_, **kwargs)
+
+    raise ValueError(f"Invalid entity: {entity_}")
 
 
 def entity(
@@ -173,36 +191,67 @@ def _extract_variables_and_expression(
     return selected_variables, expression
 
 
+class DomainKind(Enum):
+    INFERRED = 1
+
+
+DomainType = Union[Iterable, TypingLiteral[DomainKind.INFERRED], None]
+
+
 def let(
-    type_: Type[T], domain: Optional[Iterable[T]], name: Optional[str] = None
+    type_: Type[T],
+    domain: DomainType,
+    name: Optional[str] = None,
 ) -> Union[T, CanBehaveLikeAVariable[T], Variable[T]]:
     """
-    Declare a symbolic variable or source.
+    Declare a symbolic variable that can be used inside queries.
 
-    If a domain is provided, the variable will iterate over that domain; otherwise
-    a free variable is returned that can be bound by constraints.
+    Filters the domain to elements that are instances of T.
 
-    :param type_: The expected Python type of items in the domain.
-    :type type_: Type[T]
-    :param domain: A value or a set of values to constrain the variable to.
-    :type domain: Optional[Any]
-    :param name: Variable or source name.
-    :type name: str
-    :return: A Variable with the given type, name, and domain.
-    :rtype: T
-    :raises ValueError: If the type is not registered as a symbol.
+    .. warning::
+
+        If no domain is provided, and the type_ is a Symbol type, then the domain will be inferred from the SymbolGraph,
+         which may contain unnecessarily many elements.
+
+    :param type_: The type of variable.
+    :param domain: Iterable of potential values for the variable or an INFERRED sentinel (for rules) or None.
+     If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
+      but by another evaluator (e.g., EQL To SQL converter in Ormatic).
+    :param name: The variable name, only required for pretty printing.
+    :return: A Variable that can be queried for.
     """
-    if not issubclass(type_, Symbol):
-        raise ValueError(
-            f"Type {type_} is not registered as symbol, did you forget to decorate it with @symbol?"
-        )
-    with symbolic_mode():
-        if domain is None:
-            domain = SymbolGraph().get_instances_of_type(type_)
-        var = type_(From(domain))
-    if name is not None:
-        var._name__ = name
-    return var
+    domain_source = _get_domain_source_from_domain_and_type_values(domain, type_)
+
+    if name is None:
+        name = type_.__name__
+
+    result = Variable(
+        _type_=type_,
+        _domain_source_=domain_source,
+        _name__=name,
+        _is_inferred_=domain is DomainKind.INFERRED,
+    )
+
+    return result
+
+
+def _get_domain_source_from_domain_and_type_values(
+    domain: DomainType, type_: Type
+) -> Optional[From]:
+    """
+    Get the domain source from the domain and the type values.
+
+    :param domain: The domain value.
+    :param type_: The type of the variable.
+    :return: The domain source as a From object.
+    """
+    if domain is DomainKind.INFERRED:
+        domain = None
+    elif is_iterable(domain):
+        domain = filter(lambda x: isinstance(x, type_), domain)
+    elif domain is None and issubclass(type_, Symbol):
+        domain = SymbolGraph().get_instances_of_type(type_)
+    return From(domain)
 
 
 def and_(*conditions: ConditionType):
@@ -301,3 +350,16 @@ def exists(
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
     return Exists(universal_variable, condition)
+
+
+def inference(type_: Type[T]) -> Union[Variable[T], Type[T]]:
+    """
+    This returns a factory function that creates a new variable of the given type and takes keyword arguments for the
+    type constructor.
+
+    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :return: The factory function for creating a new variable.
+    """
+    return lambda **kwargs: Variable(
+        _type_=type_, _name__=type_.__name__, _kwargs_=kwargs, _is_inferred_=True
+    )
