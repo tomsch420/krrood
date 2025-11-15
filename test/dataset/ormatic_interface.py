@@ -129,7 +129,9 @@ class ParentAlternativelyMappedMappingDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    derived_attribute: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    derived_attribute: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
 
     polymorphic_type: Mapped[str] = mapped_column(
         String(255), nullable=False, use_existing_column=True

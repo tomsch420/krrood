@@ -503,6 +503,7 @@ class InheritanceLevel2WithoutSymbolButAlternativelyMappedMapping(
     def create_instance(cls, obj: T):
         return cls(obj.base_attribute, obj.level_one_attribute, obj.level_two_attribute)
 
+
 @dataclass
 class ParentAlternativelyMapped:
     base_attribute: float = 0
@@ -520,11 +521,11 @@ class ChildLevel2NormallyMapped(ChildLevel1NormallyMapped):
 
 @dataclass
 class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMapped]):
-    derived_attribute: float = 0
+    derived_attribute: str
 
     @classmethod
     def create_instance(cls, obj: T) -> Self:
-        return cls(obj.base_attribute)
+        return cls(str(obj.base_attribute))
 
     def create_from_dao(self) -> T:
         raise NotImplementedError
