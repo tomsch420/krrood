@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing_extensions import TYPE_CHECKING
 
-from .failures import NegativeQuantificationError, QuantificationConsistencyError
+from .failures import (
+    NegativeQuantificationError,
+    QuantificationConsistencyError,
+    GreaterThanExpectedNumberOfSolutions,
+    LessThanExpectedNumberOfSolutions,
+)
+
+if TYPE_CHECKING:
+    from .symbolic import An, ResultQuantifier
 
 
 @dataclass
@@ -11,6 +20,20 @@ class ResultQuantificationConstraint(ABC):
     """
     A base class that represents a constraint for quantification.
     """
+
+    @abstractmethod
+    def assert_satisfaction(
+        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+    ) -> None:
+        """
+        Check if the constraint is satisfied, if not, raise a QuantificationNotSatisfiedError exception.
+
+        :param number_of_solutions: The current number of solutions.
+        :param quantifier: The quantifier expression of the query.
+        :param done: Whether all results have been found.
+        :raises: QuantificationNotSatisfiedError: If the constraint is not satisfied.
+        """
+        ...
 
     @abstractmethod
     def __repr__(self): ...
@@ -41,6 +64,16 @@ class Exactly(SingleValueQuantificationConstraint):
     def __repr__(self):
         return f"n=={self.value}"
 
+    def assert_satisfaction(
+        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+    ) -> None:
+        if number_of_solutions > self.value:
+            raise GreaterThanExpectedNumberOfSolutions(quantifier, self.value)
+        elif done and number_of_solutions < self.value:
+            raise LessThanExpectedNumberOfSolutions(
+                quantifier, self.value, number_of_solutions
+            )
+
 
 @dataclass
 class AtLeast(SingleValueQuantificationConstraint):
@@ -51,6 +84,14 @@ class AtLeast(SingleValueQuantificationConstraint):
     def __repr__(self):
         return f"n>={self.value}"
 
+    def assert_satisfaction(
+        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+    ) -> None:
+        if done and number_of_solutions < self.value:
+            raise LessThanExpectedNumberOfSolutions(
+                quantifier, self.value, number_of_solutions
+            )
+
 
 @dataclass
 class AtMost(SingleValueQuantificationConstraint):
@@ -60,6 +101,12 @@ class AtMost(SingleValueQuantificationConstraint):
 
     def __repr__(self):
         return f"n<={self.value}"
+
+    def assert_satisfaction(
+        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+    ) -> None:
+        if number_of_solutions > self.value:
+            raise GreaterThanExpectedNumberOfSolutions(quantifier, self.value)
 
 
 @dataclass
@@ -85,6 +132,12 @@ class Range(ResultQuantificationConstraint):
             raise QuantificationConsistencyError(
                 message=f"at_most {self.at_most} cannot be less than at_least {self.at_least}."
             )
+
+    def assert_satisfaction(
+        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+    ) -> None:
+        self.at_least.assert_satisfaction(number_of_solutions, quantifier, done)
+        self.at_most.assert_satisfaction(number_of_solutions, quantifier, done)
 
     def __repr__(self):
         return f"{self.at_least}<=n<={self.at_most}"

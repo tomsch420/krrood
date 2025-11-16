@@ -500,61 +500,35 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         result_count = 0
         for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
             result_count += 1
-            self._assert_less_than_upper_limit_(result_count)
+            self._assert_satisfaction_of_quantification_constraints_(
+                result_count, done=False
+            )
             yield result
-        self._assert_more_than_lower_limit_(result_count)
+        self._assert_satisfaction_of_quantification_constraints_(
+            result_count, done=True
+        )
         self._reset_cache_()
 
-    @cached_property
-    def _upper_limit_(self) -> Optional[int]:
+    def _assert_satisfaction_of_quantification_constraints_(
+        self, result_count: int, done: bool
+    ):
         """
-        :return: The upper limit for the number of results if exists.
-        """
-        if isinstance(self._quantification_constraint_, (Exactly, AtMost)):
-            return self._quantification_constraint_.value
-        elif isinstance(self._quantification_constraint_, Range):
-            return self._quantification_constraint_.at_most.value
-        else:
-            return None
+        Assert the satisfaction of quantification constraints.
 
-    @cached_property
-    def _lower_limit_(self) -> Optional[int]:
+        :param result_count: The current count of results
+        :param done: Whether all results have been processed
+        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
         """
-        :return: The lower limit for the number of results if exists.
-        """
-        if isinstance(self._quantification_constraint_, (Exactly, AtLeast)):
-            return self._quantification_constraint_.value
-        elif isinstance(self._quantification_constraint_, Range):
-            return self._quantification_constraint_.at_least.value
-        else:
-            return None
+        if self._quantification_constraint_:
+            self._quantification_constraint_.assert_satisfaction(
+                result_count, self, done
+            )
 
     def __repr__(self):
         name = f"{self.__class__.__name__}"
         if self._quantification_constraint_:
             name += f"({self._quantification_constraint_})"
         return name
-
-    def _assert_less_than_upper_limit_(self, count: int):
-        """
-        Assert that the count is less than the upper limit.
-
-        :param count:
-        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
-        """
-        if self._upper_limit_ and count > self._upper_limit_:
-            raise GreaterThanExpectedNumberOfSolutions(self, self._upper_limit_)
-
-    def _assert_more_than_lower_limit_(self, count: int):
-        """
-        Assert that the count is more than the lower limit.
-
-        :param count: The current count.
-        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
-        :raises NoSolutionFound: If no solution is found.
-        """
-        if self._lower_limit_ and count < self._lower_limit_:
-            raise LessThanExpectedNumberOfSolutions(self, self._lower_limit_, count)
 
     def _evaluate__(
         self,

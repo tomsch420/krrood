@@ -16,9 +16,9 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class QuantificationError(DataclassException, ABC):
+class QuantificationNotSatisfiedError(DataclassException, ABC):
     """
-    Represents a custom exception specific to quantification errors.
+    Represents a custom exception where the quantification constraints are not satisfied.
 
     This exception is used to indicate errors related to the quantification
     of the query results.
@@ -35,7 +35,7 @@ class QuantificationError(DataclassException, ABC):
 
 
 @dataclass
-class GreaterThanExpectedNumberOfSolutions(QuantificationError):
+class GreaterThanExpectedNumberOfSolutions(QuantificationNotSatisfiedError):
     """
     Represents an error when the number of solutions exceeds the
     expected threshold.
@@ -47,7 +47,7 @@ class GreaterThanExpectedNumberOfSolutions(QuantificationError):
 
 
 @dataclass
-class LessThanExpectedNumberOfSolutions(QuantificationError):
+class LessThanExpectedNumberOfSolutions(QuantificationNotSatisfiedError):
     """
     Represents an error that occurs when the number of solutions found
     is lower than the expected number.
