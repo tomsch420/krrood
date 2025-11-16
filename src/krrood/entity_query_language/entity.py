@@ -40,6 +40,7 @@ from .symbolic import (
     Exists,
     Literal,
 )
+from .result_quantification_constraint import ResultQuantificationConstraint
 
 from .predicate import (
     Predicate,
@@ -61,21 +62,17 @@ The possible types for entities.
 
 def an(
     entity_: EntityType,
-    at_least: Optional[int] = None,
-    at_most: Optional[int] = None,
-    exactly: Optional[int] = None,
+    quantification: Optional[ResultQuantificationConstraint] = None,
 ) -> Union[An[T], T, SymbolicExpression[T]]:
     """
     Select a single element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :param at_least: Optional minimum number of results.
-    :param at_most: Optional maximum number of results.
-    :param exactly: Optional exact number of results.
+    :param quantification: Optional quantification constraint.
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    return An(entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly)
+    return An(entity_, _quantification_constraint_=quantification)
 
 
 a = an

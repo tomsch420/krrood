@@ -131,12 +131,12 @@ class CardinalityConsistencyError(CardinalitySpecificationError):
 
 
 @dataclass
-class CardinalityValueError(CardinalityConsistencyError):
+class NegativeCardinalityError(CardinalityConsistencyError):
     """
-    Raised when the cardinality constraints specified on the query results are invalid.
+    Raised when the cardinality constraints specified on the query results have a negative value.
     """
 
-    ...
+    message: str = f"ResultQuantificationConstraint must be a non-negative integer."
 
 
 @dataclass

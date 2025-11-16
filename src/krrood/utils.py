@@ -25,7 +25,7 @@ class DataclassException(Exception):
     then calling the super().__post_init__() method.
     """
 
-    message: str = field(init=False, default=None)
+    message: str = field(kw_only=True, default=None)
 
     def __post_init__(self):
         super().__init__(self.message)

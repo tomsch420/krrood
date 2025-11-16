@@ -45,11 +45,16 @@ from .failures import (
     UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
-    CardinalityConsistencyError,
-    CardinalityValueError,
     InvalidEntityType,
 )
 from .hashed_data import HashedValue, HashedIterable, T
+from .result_quantification_constraint import (
+    ResultQuantificationConstraint,
+    Exactly,
+    AtLeast,
+    AtMost,
+    Range,
+)
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
 from .utils import IDGenerator, is_iterable, generate_combinations
@@ -461,9 +466,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: QueryObjectDescriptor[T]
-    _at_least_: Optional[int] = None
-    _at_most_: Optional[int] = None
-    _exactly_: Optional[int] = None
+    _quantification_constraint_: Optional[ResultQuantificationConstraint] = None
 
     def __post_init__(self):
         if not isinstance(self._child_, QueryObjectDescriptor):
@@ -475,7 +478,6 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             else None
         )
         self._node_.wrap_subtree = True
-        self._validate_cardinality_constraints_()
 
     @cached_property
     def _type_(self):
@@ -503,64 +505,34 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         self._assert_more_than_lower_limit_(result_count)
         self._reset_cache_()
 
-    def _validate_cardinality_constraints_(self):
-        """
-        Validate cardinality constraints are consistent and non-negative.
-        """
-        if self._exactly_ and (self._at_least_ or self._at_most_):
-            raise CardinalityConsistencyError(
-                f"exactly is specified, but either at_least or at_most is also specified,"
-                f"cannot specify both."
-            )
-        if (
-            (self._at_least_ and self._at_least_ < 0)
-            or (self._at_most_ and self._at_most_ < 0)
-            or (self._exactly_ and self._exactly_ < 0)
-        ):
-            raise CardinalityValueError(
-                f"at_least, at_most, and exactly must be non-negative integers."
-            )
-        if self._at_most_ and self._at_least_ and self._at_most_ < self._at_least_:
-            raise CardinalityValueError(
-                f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
-            )
-
     @cached_property
     def _upper_limit_(self) -> Optional[int]:
         """
-        :return: The upper limit of the number of results if exists.
+        :return: The upper limit for the number of results if exists.
         """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_most_:
-            return self._at_most_
+        if isinstance(self._quantification_constraint_, (Exactly, AtMost)):
+            return self._quantification_constraint_.value
+        elif isinstance(self._quantification_constraint_, Range):
+            return self._quantification_constraint_.at_most.value
         else:
             return None
 
     @cached_property
     def _lower_limit_(self) -> Optional[int]:
         """
-        :return: The lower limit of the number of results if exists.
+        :return: The lower limit for the number of results if exists.
         """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_least_:
-            return self._at_least_
+        if isinstance(self._quantification_constraint_, (Exactly, AtLeast)):
+            return self._quantification_constraint_.value
+        elif isinstance(self._quantification_constraint_, Range):
+            return self._quantification_constraint_.at_least.value
         else:
             return None
 
     def __repr__(self):
         name = f"{self.__class__.__name__}"
-        if self._at_least_ or self._at_most_ or self._exactly_:
-            name += "("
-        if self._at_least_ and not self._at_most_:
-            name += f"n>={self._at_least_})"
-        elif self._at_most_ and not self._at_least_:
-            name += f"n<={self._at_most_})"
-        elif self._at_least_ and self._at_most_:
-            name += f"{self._at_least_}<=n<={self._at_most_})"
-        elif self._exactly_:
-            name += f"n={self._exactly_})"
+        if self._quantification_constraint_:
+            name += f"({self._quantification_constraint_})"
         return name
 
     def _assert_less_than_upper_limit_(self, count: int):
@@ -705,9 +677,9 @@ class The(ResultQuantifier[T]):
     Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
     """
 
-    _exactly_: int = field(init=False, default=1)
-    _at_least_: int = field(init=False, default=None)
-    _at_most_: int = field(init=False, default=None)
+    _quantification_constraint_: int = field(
+        init=False, default_factory=lambda: Exactly(1)
+    )
 
     def evaluate(
         self,
