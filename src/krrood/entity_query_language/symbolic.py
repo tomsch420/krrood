@@ -677,7 +677,7 @@ class The(ResultQuantifier[T]):
     Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
     """
 
-    _quantification_constraint_: int = field(
+    _quantification_constraint_: ResultQuantificationConstraint = field(
         init=False, default_factory=lambda: Exactly(1)
     )
 
