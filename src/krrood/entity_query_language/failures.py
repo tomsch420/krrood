@@ -12,7 +12,7 @@ from typing_extensions import TYPE_CHECKING, Type
 from ..utils import DataclassException
 
 if TYPE_CHECKING:
-    from .symbolic import SymbolicExpression
+    from .symbolic import SymbolicExpression, ResultQuantifier
 
 
 @dataclass
@@ -24,8 +24,14 @@ class QuantificationError(DataclassException, ABC):
     of the query results.
     """
 
-    expression: SymbolicExpression
+    expression: ResultQuantifier
+    """
+    The result quantifier expression where the error occurred.
+    """
     expected_number: int
+    """
+    Expected number of solutions (i.e, quantification constraint value).
+    """
 
 
 @dataclass
@@ -48,6 +54,9 @@ class LessThanExpectedNumberOfSolutions(QuantificationError):
     """
 
     found_number: int
+    """
+    The number of solutions found.
+    """
 
     def __post_init__(self):
         self.message = (
@@ -102,6 +111,9 @@ class UnsupportedNegation(UnsupportedOperation):
     """
 
     operation_type: Type[SymbolicExpression]
+    """
+    The type of the operation that is being negated.
+    """
 
     def __post_init__(self):
         self.message = (
@@ -146,11 +158,14 @@ class InvalidEntityType(UsageError):
     Raised when an invalid entity type is given to the quantification operation.
     """
 
-    entity_type: Type
+    invalid_entity_type: Type
+    """
+    The invalid entity type.
+    """
 
     def __post_init__(self):
         self.message = (
-            f"The entity type {self.entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
+            f"The entity type {self.invalid_entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
             f"e.g. Entity, or SetOf"
         )
         super().__post_init__()
