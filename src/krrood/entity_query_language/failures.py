@@ -7,9 +7,9 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from ..utils import DataclassException
-
 from typing_extensions import TYPE_CHECKING, Type
+
+from ..utils import DataclassException
 
 if TYPE_CHECKING:
     from .symbolic import SymbolicExpression
@@ -113,6 +113,8 @@ class UnsupportedNegation(UnsupportedOperation):
             f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
         super().__post_init__()
+
+
 @dataclass
 class QuantificationSpecificationError(UsageError):
     """
