@@ -24,7 +24,7 @@ Lets define our domain model and build a small world. We will then build a rule 
 instances to the world.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.entity import entity, an, let, and_, Symbol, inference, DomainKind
+from krrood.entity_query_language.entity import entity, an, let, and_, Symbol, inference
 
 from krrood.entity_query_language.rule import refinement, alternative
 from krrood.entity_query_language.conclusion import Add
@@ -121,7 +121,7 @@ from krrood.entity_query_language.predicate import HasType
 # Declare the variables
 fixed_connection = let(type_=FixedConnection, domain=world.connections)
 revolute_connection = let(type_=RevoluteConnection, domain=world.connections)
-views = let(type_=View, domain=DomainKind.INFERRED)
+views = inference(View)()
 
 # Define aliases for convenience
 handle = fixed_connection.child

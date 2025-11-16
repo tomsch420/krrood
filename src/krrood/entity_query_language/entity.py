@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Callable
 
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
@@ -154,11 +155,7 @@ def _extract_variables_and_expression(
     return selected_variables, expression
 
 
-class DomainKind(Enum):
-    INFERRED = 1
-
-
-DomainType = Union[Iterable, TypingLiteral[DomainKind.INFERRED], None]
+DomainType = Union[Iterable, None]
 
 
 def let(
@@ -177,7 +174,7 @@ def let(
          which may contain unnecessarily many elements.
 
     :param type_: The type of variable.
-    :param domain: Iterable of potential values for the variable or an INFERRED sentinel (for rules) or None.
+    :param domain: Iterable of potential values for the variable or None.
      If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
       but by another evaluator (e.g., EQL To SQL converter in Ormatic).
     :param name: The variable name, only required for pretty printing.
@@ -192,7 +189,6 @@ def let(
         _type_=type_,
         _domain_source_=domain_source,
         _name__=name,
-        _is_inferred_=domain is DomainKind.INFERRED,
     )
 
     return result
@@ -208,9 +204,7 @@ def _get_domain_source_from_domain_and_type_values(
     :param type_: The type of the variable.
     :return: The domain source as a From object.
     """
-    if domain is DomainKind.INFERRED:
-        domain = None
-    elif is_iterable(domain):
+    if is_iterable(domain):
         domain = filter(lambda x: isinstance(x, type_), domain)
     elif domain is None and issubclass(type_, Symbol):
         domain = SymbolGraph().get_instances_of_type(type_)
@@ -315,7 +309,9 @@ def exists(
     return Exists(universal_variable, condition)
 
 
-def inference(type_: Type[T]) -> Union[Variable[T], Type[T]]:
+def inference(
+    type_: Type[T],
+) -> Union[Type[T], Callable[[Any], Variable[T]]]:
     """
     This returns a factory function that creates a new variable of the given type and takes keyword arguments for the
     type constructor.
