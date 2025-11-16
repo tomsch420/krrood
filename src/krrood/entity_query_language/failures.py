@@ -151,3 +151,4 @@ class InvalidEntityType(UsageError):
             f"The entity type {self.entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
             f"e.g. Entity, or SetOf"
         )
+        super().__post_init__()
