@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing_extensions import List
 
 from krrood.entity_query_language.entity import entity, let, the, Symbol, an
+from krrood.entity_query_language.result_quantification_constraint import AtLeast, AtMost, Exactly, Range
 from krrood.entity_query_language.failures import MultipleSolutionFound, LessThanExpectedNumberOfSolutions, GreaterThanExpectedNumberOfSolutions
 
 
@@ -94,8 +95,7 @@ You can also bound the number of results within a range using both `at_least` an
 
 query = an(
     entity(body := let(Body, domain=world.bodies)),
-    at_least=1,
-    at_most=3,
+    quantification=Range(AtLeast(1), AtMost(3))
 )
 
 print(len(list(query.evaluate())))  # -> 2
@@ -107,7 +107,7 @@ If you want an exact number of results, use `exactly`:
 
 query = an(
     entity(body := let(Body, domain=world.bodies)),
-    exactly=2,
+    quantification=Exactly(2),
 )
 
 print(len(list(query.evaluate())))  # -> 2
@@ -126,7 +126,7 @@ The result count constraints will raise informative exceptions when the number o
 
 query = an(
     entity(body := let(Body, domain=world.bodies)),
-    at_least=3,
+    quantification=AtLeast(3),
 )
 try:
     list(query.evaluate())
@@ -137,7 +137,7 @@ except LessThanExpectedNumberOfSolutions as e:
 
 query = an(
     entity(body := let(Body, domain=world.bodies)),
-    at_most=1,
+    quantification=AtMost(1),
 )
 try:
     list(query.evaluate())
@@ -148,7 +148,7 @@ except GreaterThanExpectedNumberOfSolutions as e:
 
 query = an(
     entity(body := let(Body, domain=world.bodies)),
-    exactly=1,
+    quantification=Exactly(1),
 )
 try:
     list(query.evaluate())
