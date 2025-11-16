@@ -47,6 +47,7 @@ from .failures import (
     LessThanExpectedNumberOfSolutions,
     CardinalityConsistencyError,
     CardinalityValueError,
+    InvalidEntityType,
 )
 from .hashed_data import HashedValue, HashedIterable, T
 from .rxnode import RWXNode, ColorLegend
@@ -465,6 +466,8 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     _exactly_: Optional[int] = None
 
     def __post_init__(self):
+        if not isinstance(self._child_, QueryObjectDescriptor):
+            raise InvalidEntityType(type(self._child_))
         super().__post_init__()
         self._var_ = (
             self._child_._var_

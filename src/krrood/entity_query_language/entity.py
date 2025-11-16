@@ -32,7 +32,6 @@ from .symbolic import (
     Comparator,
     chained_logic,
     CanBehaveLikeAVariable,
-    ResultQuantifier,
     From,
     Variable,
     optimize_or,
@@ -41,7 +40,6 @@ from .symbolic import (
     Exists,
     Literal,
 )
-from .conclusion import Infer
 
 from .predicate import (
     Predicate,
@@ -77,9 +75,7 @@ def an(
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    return select_one_or_select_many_or_an(
-        An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
-    )
+    return An(entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly)
 
 
 a = an
@@ -98,37 +94,7 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_an(The, entity_)
-
-
-def select_one_or_select_many_or_an(
-    quantifier: Type[ResultQuantifier],
-    entity_: EntityType,
-    **kwargs,
-) -> ResultQuantifier[T]:
-    """
-    Selects one or many entities or infers the result based on the provided quantifier
-    and entity type. This function facilitates creating or managing quantified results
-    depending on the entity type and additional keyword arguments.
-
-    :param quantifier: A type of ResultQuantifier used to quantify the entity.
-    :param entity_: The entity or quantifier to be selected or converted to a quantifier.
-    :param kwargs: Additional keyword arguments for quantifier initialization.
-    :return: A result quantifier of the provided type, inferred type, or directly the
-        one provided.
-    :raises ValueError: If the provided entity is invalid.
-    """
-    if isinstance(entity_, ResultQuantifier):
-        if isinstance(entity_, quantifier):
-            return entity_
-
-        entity_._child_._parent_ = None
-        return quantifier(entity_._child_, **kwargs)
-
-    if isinstance(entity_, (Entity, SetOf)):
-        return quantifier(entity_, **kwargs)
-
-    raise ValueError(f"Invalid entity: {entity_}")
+    return The(entity_)
 
 
 def entity(
