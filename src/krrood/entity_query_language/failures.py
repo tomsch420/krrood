@@ -112,8 +112,7 @@ class UnsupportedNegation(UnsupportedOperation):
             f"To Negate Conditions do:"
             f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
-
-
+        super().__post_init__()
 @dataclass
 class QuantificationSpecificationError(UsageError):
     """
@@ -152,3 +151,4 @@ class InvalidEntityType(UsageError):
             f"The entity type {self.entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
             f"e.g. Entity, or SetOf"
         )
+        super().__post_init__()
