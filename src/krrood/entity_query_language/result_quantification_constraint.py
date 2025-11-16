@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from .failures import NegativeCardinalityError, CardinalityConsistencyError
+from .failures import NegativeQuantificationError, QuantificationConsistencyError
 
 
 @dataclass
@@ -29,7 +29,7 @@ class SingleValueQuantificationConstraint(ResultQuantificationConstraint, ABC):
 
     def __post_init__(self):
         if self.value < 0:
-            raise NegativeCardinalityError()
+            raise NegativeQuantificationError()
 
 
 @dataclass
@@ -79,10 +79,10 @@ class Range(ResultQuantificationConstraint):
 
     def __post_init__(self):
         """
-        Validate cardinality constraints are consistent.
+        Validate quantification constraints are consistent.
         """
         if self.at_most.value < self.at_least.value:
-            raise CardinalityConsistencyError(
+            raise QuantificationConsistencyError(
                 message=f"at_most {self.at_most} cannot be less than at_least {self.at_least}."
             )
 

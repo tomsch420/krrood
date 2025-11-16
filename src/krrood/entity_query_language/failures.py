@@ -115,25 +115,25 @@ class UnsupportedNegation(UnsupportedOperation):
 
 
 @dataclass
-class CardinalitySpecificationError(UsageError):
+class QuantificationSpecificationError(UsageError):
     """
-    Raised when the cardinality constraints specified on the query results are invalid or inconsistent.
+    Raised when the quantification constraints specified on the query results are invalid or inconsistent.
     """
 
 
 @dataclass
-class CardinalityConsistencyError(CardinalitySpecificationError):
+class QuantificationConsistencyError(QuantificationSpecificationError):
     """
-    Raised when the cardinality constraints specified on the query results are inconsistent.
+    Raised when the quantification constraints specified on the query results are inconsistent.
     """
 
     ...
 
 
 @dataclass
-class NegativeCardinalityError(CardinalityConsistencyError):
+class NegativeQuantificationError(QuantificationConsistencyError):
     """
-    Raised when the cardinality constraints specified on the query results have a negative value.
+    Raised when the quantification constraints specified on the query results have a negative value.
     """
 
     message: str = f"ResultQuantificationConstraint must be a non-negative integer."
