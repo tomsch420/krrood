@@ -125,6 +125,16 @@ class OperationResult:
     def __setitem__(self, key, value):
         self.bindings[key] = value
 
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return (
+            self.bindings == other.bindings
+            and self.is_true == other.is_true
+            and self.operand == other.operand
+        )
+
 
 @dataclass(eq=False)
 class SymbolicExpression(Generic[T], ABC):
@@ -713,31 +723,67 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
             values = self.update_data_from_child(values)
-            if self.any_selected_inferred_vars_are_unbound(values):
+            if self.any_selected_variable_is_inferred_and_unbound(values):
                 continue
-            self._warn_on_unbound_variables_(values.bindings, self.selected_variables)
-            if self.any_selected_not_inferred_vars_are_unbound(values):
-                for binding in self.generate_combinations_with_unbound_variables(
-                    values.bindings
-                ):
-                    yield OperationResult(binding, self._is_false_, self)
+            if self.any_selected_variable_is_unbound(values):
+                yield from self.evaluate_selected_variables(values.bindings)
             else:
                 yield values
 
-    def any_selected_inferred_vars_are_unbound(self, values: OperationResult) -> bool:
-        return any(
-            var._id_ not in values and (isinstance(var, Variable) and var._is_inferred_)
-            for var in self.selected_variables
-        )
+    def any_selected_variable_is_unbound(self, values: OperationResult) -> bool:
+        """
+        Check if any of the selected variables is unbound.
 
-    def any_selected_not_inferred_vars_are_unbound(
+        :param values: The current result with the current bindings.
+        :return: True if any of the selected variables is unbound, otherwise False.
+        """
+        return any(var._id_ not in values for var in self.selected_variables)
+
+    @staticmethod
+    def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
+        """
+        Whether the variable is inferred or not.
+
+        :param var: The variable.
+        :return: True if the variable is inferred, otherwise False.
+        """
+        return isinstance(var, Variable) and var._is_inferred_
+
+    def any_selected_variable_is_inferred_and_unbound(
         self, values: OperationResult
     ) -> bool:
+        """
+        Check if any of the selected variables is inferred and is not bound.
+
+        :param values: The current result with the current bindings.
+        :return: True if any of the selected variables is inferred and is not bound, otherwise False.
+        """
         return any(
-            var._id_ not in values
-            and not (isinstance(var, Variable) and var._is_inferred_)
+            not self.variable_is_bound_or_its_children_are_bound(var, values)
             for var in self.selected_variables
+            if self.variable_is_inferred(var)
         )
+
+    @lru_cache(maxsize=None)
+    def variable_is_bound_or_its_children_are_bound(
+        self, var: CanBehaveLikeAVariable[T], result: OperationResult
+    ) -> bool:
+        """
+        Whether the variable is directly bound or all its children are bound.
+
+        :param var: The variable.
+        :param result: The current result containing the current bindings.
+        :return: True if the variable is bound, otherwise False.
+        """
+        if var._id_ in result:
+            return True
+        unique_vars = [uv.value for uv in var._unique_variables_ if uv.value is not var]
+        if unique_vars and all(
+            self.variable_is_bound_or_its_children_are_bound(uv, result)
+            for uv in unique_vars
+        ):
+            return True
+        return False
 
     def update_data_from_child(self, child_result: OperationResult):
         if self._child_:
@@ -755,52 +801,33 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     def get_constrained_values(
         self, sources: Optional[Dict[int, HashedValue]]
     ) -> Iterable[OperationResult]:
+        """
+        Evaluate the child (i.e., the conditions that constrain the domain of the selected variables).
+
+        :param sources: The current bindings.
+        :return: The bindings after applying the constraints of the child.
+        """
         if self._child_:
             yield from self._child_._evaluate__(sources, parent=self)
         else:
             yield from [OperationResult(sources, False, self)]
 
-    def generate_combinations_with_unbound_variables(
+    def evaluate_selected_variables(
         self, sources: Dict[int, HashedValue]
-    ):
+    ) -> Iterable[OperationResult]:
+        """
+        Evaluate the selected variables by generating combinations of values from their evaluation generators.
+
+        :param sources: The current bindings.
+        :return: An Iterable of OperationResults for each combination of values.
+        """
         var_val_gen = {
             var: var._evaluate__(copy(sources), parent=self)
             for var in self.selected_variables
         }
         for sol in generate_combinations(var_val_gen):
             var_val = {var._id_: sol[var][var._id_] for var in self.selected_variables}
-            yield {**sources, **var_val}
-
-    def _warn_on_unbound_variables_(
-        self,
-        sources: Dict[int, HashedValue],
-        selected_vars: Iterable[CanBehaveLikeAVariable],
-    ):
-        """
-        Warn the user if there are unbound variables in the query descriptor, because this will result in a cartesian
-        product join operation.
-
-        :param sources: The bound values after applying the conditions.
-        :param selected_vars: The variables selected in the query descriptor.
-        """
-        unbound_variables = HashedIterable()
-        for var in selected_vars:
-            unbound_variables.update(
-                var._unique_variables_.difference(HashedIterable(values=sources))
-            )
-        unbound_variables_with_domain = HashedIterable()
-        for var in unbound_variables:
-            if var.value._domain_ and len(var.value._domain_.values) > 20:
-                if var not in self.warned_vars:
-                    self.warned_vars.add(var)
-                    unbound_variables_with_domain.add(var)
-        if unbound_variables_with_domain:
-            logger.warning(
-                f"\nCartesian Product: "
-                f"The following variables are not constrained "
-                f"{unbound_variables_with_domain.unwrapped_values}"
-                f"\nfor the query descriptor {self._name_}"
-            )
+            yield OperationResult({**sources, **var_val}, self._is_false_, self)
 
     @property
     @lru_cache(maxsize=None)
