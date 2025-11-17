@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "krrood"
 version = "2.0.0"
-description = "A university data generator based on the LUBM (Lehigh University Benchmark) ontology"
+description = "A python package for Knowledge Representation and Reasoning systems based on Object Oriented Design."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,7 +13,7 @@ authors = [
     {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"},
     {name = "Tom Schierenbeck", email = "tom_sch@uni-bremen.de"}
 ]
-keywords = ["lubm", "ontology", "data-generator", "university", "benchmark"]
+keywords = ["Knowledge-representation", "reasoning", "ontology", "orm", "query-langauge", "database", "python"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
