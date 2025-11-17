@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "krrood"
-version = "1.1.4"
+version = "1.1.5"
 description = "A university data generator based on the LUBM (Lehigh University Benchmark) ontology"
 readme = "README.md"
 requires-python = ">=3.10"
