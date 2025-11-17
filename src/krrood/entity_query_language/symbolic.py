@@ -506,17 +506,11 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         SymbolGraph().remove_dead_instances()
 
         results = self._evaluate__()
-
-        result_count = 0
-        for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
-            result_count += 1
-            self._assert_satisfaction_of_quantification_constraints_(
-                result_count, done=False
-            )
-            yield result
-        self._assert_satisfaction_of_quantification_constraints_(
-            result_count, done=True
-        )
+        for result in self._evaluate__():
+            if result.is_false:
+                continue
+            processed_result = self._process_result_(result)
+            yield processed_result
         self._reset_cache_()
 
     def _assert_satisfaction_of_quantification_constraints_(
@@ -550,12 +544,21 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
             return
+        result_count = 0
         values = self._child_._evaluate__(sources, parent=self)
         for value in values:
             self._is_false_ = value.is_false
+            if not self._is_false_:
+                result_count += 1
+                self._assert_satisfaction_of_quantification_constraints_(
+                    result_count, done=False
+                )
             if self._var_:
                 value[self._id_] = value[self._var_._id_]
             yield OperationResult(value.bindings, self._is_false_, self)
+        self._assert_satisfaction_of_quantification_constraints_(
+            result_count, done=True
+        )
 
     @lru_cache(maxsize=None)
     def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
@@ -668,8 +671,15 @@ class The(ResultQuantifier[T]):
     def evaluate(
         self,
     ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
+        return list(super().evaluate())[0]
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         try:
-            return list(super().evaluate())[0]
+            yield from super()._evaluate__(sources, parent=parent)
         except LessThanExpectedNumberOfSolutions:
             raise NoSolutionFound(self)
         except GreaterThanExpectedNumberOfSolutions:
@@ -827,6 +837,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         }
         for sol in generate_combinations(var_val_gen):
             var_val = {var._id_: sol[var][var._id_] for var in self.selected_variables}
+            self._is_false_ = self._is_false_ or any(
+                sol[var].is_false for var in self.selected_variables
+            )
             yield OperationResult({**sources, **var_val}, self._is_false_, self)
 
     @property
@@ -1118,13 +1131,16 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         sources = sources or {}
         self._eval_parent_ = parent
         if self._id_ in sources:
-            yield OperationResult(sources, not bool(sources[self._id_]), self)
+            yield OperationResult(sources, self._is_false_, self)
             return
         child_val = self._child_._evaluate__(sources, parent=self)
         for child_v in child_val:
             for v in self._apply_mapping_(child_v[self._child_._id_]):
+                self._is_false_ = not (child_v.is_true and bool(v))
                 yield OperationResult(
-                    {**child_v.bindings, self._id_: v}, not bool(v), self
+                    {**child_v.bindings, self._id_: v},
+                    self._is_false_,
+                    self,
                 )
 
     @abstractmethod
