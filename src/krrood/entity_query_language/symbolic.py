@@ -45,10 +45,16 @@ from .failures import (
     UnsupportedNegation,
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
-    CardinalityConsistencyError,
-    CardinalityValueError,
+    InvalidEntityType,
 )
 from .hashed_data import HashedValue, HashedIterable, T
+from .result_quantification_constraint import (
+    ResultQuantificationConstraint,
+    Exactly,
+    AtLeast,
+    AtMost,
+    Range,
+)
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
 from .utils import IDGenerator, is_iterable, generate_combinations
@@ -118,6 +124,16 @@ class OperationResult:
 
     def __setitem__(self, key, value):
         self.bindings[key] = value
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return (
+            self.bindings == other.bindings
+            and self.is_true == other.is_true
+            and self.operand == other.operand
+        )
 
 
 @dataclass(eq=False)
@@ -460,11 +476,11 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: QueryObjectDescriptor[T]
-    _at_least_: Optional[int] = None
-    _at_most_: Optional[int] = None
-    _exactly_: Optional[int] = None
+    _quantification_constraint_: Optional[ResultQuantificationConstraint] = None
 
     def __post_init__(self):
+        if not isinstance(self._child_, QueryObjectDescriptor):
+            raise InvalidEntityType(type(self._child_))
         super().__post_init__()
         self._var_ = (
             self._child_._var_
@@ -472,7 +488,6 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
             else None
         )
         self._node_.wrap_subtree = True
-        self._validate_cardinality_constraints_()
 
     @cached_property
     def _type_(self):
@@ -495,91 +510,35 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         result_count = 0
         for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
             result_count += 1
-            self._assert_less_than_upper_limit_(result_count)
+            self._assert_satisfaction_of_quantification_constraints_(
+                result_count, done=False
+            )
             yield result
-        self._assert_more_than_lower_limit_(result_count)
+        self._assert_satisfaction_of_quantification_constraints_(
+            result_count, done=True
+        )
         self._reset_cache_()
 
-    def _validate_cardinality_constraints_(self):
+    def _assert_satisfaction_of_quantification_constraints_(
+        self, result_count: int, done: bool
+    ):
         """
-        Validate cardinality constraints are consistent and non-negative.
-        """
-        if self._exactly_ and (self._at_least_ or self._at_most_):
-            raise CardinalityConsistencyError(
-                f"exactly is specified, but either at_least or at_most is also specified,"
-                f"cannot specify both."
-            )
-        if (
-            (self._at_least_ and self._at_least_ < 0)
-            or (self._at_most_ and self._at_most_ < 0)
-            or (self._exactly_ and self._exactly_ < 0)
-        ):
-            raise CardinalityValueError(
-                f"at_least, at_most, and exactly must be non-negative integers."
-            )
-        if self._at_most_ and self._at_least_ and self._at_most_ < self._at_least_:
-            raise CardinalityValueError(
-                f"at_most {self._at_most_} cannot be less than at_least {self._at_least_}."
-            )
+        Assert the satisfaction of quantification constraints.
 
-    @cached_property
-    def _upper_limit_(self) -> Optional[int]:
+        :param result_count: The current count of results
+        :param done: Whether all results have been processed
+        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
         """
-        :return: The upper limit of the number of results if exists.
-        """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_most_:
-            return self._at_most_
-        else:
-            return None
-
-    @cached_property
-    def _lower_limit_(self) -> Optional[int]:
-        """
-        :return: The lower limit of the number of results if exists.
-        """
-        if self._exactly_:
-            return self._exactly_
-        elif self._at_least_:
-            return self._at_least_
-        else:
-            return None
+        if self._quantification_constraint_:
+            self._quantification_constraint_.assert_satisfaction(
+                result_count, self, done
+            )
 
     def __repr__(self):
         name = f"{self.__class__.__name__}"
-        if self._at_least_ or self._at_most_ or self._exactly_:
-            name += "("
-        if self._at_least_ and not self._at_most_:
-            name += f"n>={self._at_least_})"
-        elif self._at_most_ and not self._at_least_:
-            name += f"n<={self._at_most_})"
-        elif self._at_least_ and self._at_most_:
-            name += f"{self._at_least_}<=n<={self._at_most_})"
-        elif self._exactly_:
-            name += f"n={self._exactly_})"
+        if self._quantification_constraint_:
+            name += f"({self._quantification_constraint_})"
         return name
-
-    def _assert_less_than_upper_limit_(self, count: int):
-        """
-        Assert that the count is less than the upper limit.
-
-        :param count:
-        :raises GreaterThanExpectedNumberOfSolutions: If the count exceeds the upper limit.
-        """
-        if self._upper_limit_ and count > self._upper_limit_:
-            raise GreaterThanExpectedNumberOfSolutions(self, self._upper_limit_)
-
-    def _assert_more_than_lower_limit_(self, count: int):
-        """
-        Assert that the count is more than the lower limit.
-
-        :param count: The current count.
-        :raises LessThanExpectedNumberOfSolutions: If the count is less than the lower limit.
-        :raises NoSolutionFound: If no solution is found.
-        """
-        if self._lower_limit_ and count < self._lower_limit_:
-            raise LessThanExpectedNumberOfSolutions(self, self._lower_limit_, count)
 
     def _evaluate__(
         self,
@@ -702,9 +661,9 @@ class The(ResultQuantifier[T]):
     Quantifier that expects exactly one result; raises MultipleSolutionFound if more.
     """
 
-    _exactly_: int = field(init=False, default=1)
-    _at_least_: int = field(init=False, default=None)
-    _at_most_: int = field(init=False, default=None)
+    _quantification_constraint_: ResultQuantificationConstraint = field(
+        init=False, default_factory=lambda: Exactly(1)
+    )
 
     def evaluate(
         self,
@@ -764,31 +723,67 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
             values = self.update_data_from_child(values)
-            if self.any_selected_inferred_vars_are_unbound(values):
+            if self.any_selected_variable_is_inferred_and_unbound(values):
                 continue
-            self._warn_on_unbound_variables_(values.bindings, self.selected_variables)
-            if self.any_selected_not_inferred_vars_are_unbound(values):
-                for binding in self.generate_combinations_with_unbound_variables(
-                    values.bindings
-                ):
-                    yield OperationResult(binding, self._is_false_, self)
+            if self.any_selected_variable_is_unbound(values):
+                yield from self.evaluate_selected_variables(values.bindings)
             else:
                 yield values
 
-    def any_selected_inferred_vars_are_unbound(self, values: OperationResult) -> bool:
-        return any(
-            var._id_ not in values and (isinstance(var, Variable) and var._is_inferred_)
-            for var in self.selected_variables
-        )
+    def any_selected_variable_is_unbound(self, values: OperationResult) -> bool:
+        """
+        Check if any of the selected variables is unbound.
 
-    def any_selected_not_inferred_vars_are_unbound(
+        :param values: The current result with the current bindings.
+        :return: True if any of the selected variables is unbound, otherwise False.
+        """
+        return any(var._id_ not in values for var in self.selected_variables)
+
+    @staticmethod
+    def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
+        """
+        Whether the variable is inferred or not.
+
+        :param var: The variable.
+        :return: True if the variable is inferred, otherwise False.
+        """
+        return isinstance(var, Variable) and var._is_inferred_
+
+    def any_selected_variable_is_inferred_and_unbound(
         self, values: OperationResult
     ) -> bool:
+        """
+        Check if any of the selected variables is inferred and is not bound.
+
+        :param values: The current result with the current bindings.
+        :return: True if any of the selected variables is inferred and is not bound, otherwise False.
+        """
         return any(
-            var._id_ not in values
-            and not (isinstance(var, Variable) and var._is_inferred_)
+            not self.variable_is_bound_or_its_children_are_bound(var, values)
             for var in self.selected_variables
+            if self.variable_is_inferred(var)
         )
+
+    @lru_cache(maxsize=None)
+    def variable_is_bound_or_its_children_are_bound(
+        self, var: CanBehaveLikeAVariable[T], result: OperationResult
+    ) -> bool:
+        """
+        Whether the variable is directly bound or all its children are bound.
+
+        :param var: The variable.
+        :param result: The current result containing the current bindings.
+        :return: True if the variable is bound, otherwise False.
+        """
+        if var._id_ in result:
+            return True
+        unique_vars = [uv.value for uv in var._unique_variables_ if uv.value is not var]
+        if unique_vars and all(
+            self.variable_is_bound_or_its_children_are_bound(uv, result)
+            for uv in unique_vars
+        ):
+            return True
+        return False
 
     def update_data_from_child(self, child_result: OperationResult):
         if self._child_:
@@ -806,52 +801,33 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     def get_constrained_values(
         self, sources: Optional[Dict[int, HashedValue]]
     ) -> Iterable[OperationResult]:
+        """
+        Evaluate the child (i.e., the conditions that constrain the domain of the selected variables).
+
+        :param sources: The current bindings.
+        :return: The bindings after applying the constraints of the child.
+        """
         if self._child_:
             yield from self._child_._evaluate__(sources, parent=self)
         else:
             yield from [OperationResult(sources, False, self)]
 
-    def generate_combinations_with_unbound_variables(
+    def evaluate_selected_variables(
         self, sources: Dict[int, HashedValue]
-    ):
+    ) -> Iterable[OperationResult]:
+        """
+        Evaluate the selected variables by generating combinations of values from their evaluation generators.
+
+        :param sources: The current bindings.
+        :return: An Iterable of OperationResults for each combination of values.
+        """
         var_val_gen = {
             var: var._evaluate__(copy(sources), parent=self)
             for var in self.selected_variables
         }
         for sol in generate_combinations(var_val_gen):
             var_val = {var._id_: sol[var][var._id_] for var in self.selected_variables}
-            yield {**sources, **var_val}
-
-    def _warn_on_unbound_variables_(
-        self,
-        sources: Dict[int, HashedValue],
-        selected_vars: Iterable[CanBehaveLikeAVariable],
-    ):
-        """
-        Warn the user if there are unbound variables in the query descriptor, because this will result in a cartesian
-        product join operation.
-
-        :param sources: The bound values after applying the conditions.
-        :param selected_vars: The variables selected in the query descriptor.
-        """
-        unbound_variables = HashedIterable()
-        for var in selected_vars:
-            unbound_variables.update(
-                var._unique_variables_.difference(HashedIterable(values=sources))
-            )
-        unbound_variables_with_domain = HashedIterable()
-        for var in unbound_variables:
-            if var.value._domain_ and len(var.value._domain_.values) > 20:
-                if var not in self.warned_vars:
-                    self.warned_vars.add(var)
-                    unbound_variables_with_domain.add(var)
-        if unbound_variables_with_domain:
-            logger.warning(
-                f"\nCartesian Product: "
-                f"The following variables are not constrained "
-                f"{unbound_variables_with_domain.unwrapped_values}"
-                f"\nfor the query descriptor {self._name_}"
-            )
+            yield OperationResult({**sources, **var_val}, self._is_false_, self)
 
     @property
     @lru_cache(maxsize=None)

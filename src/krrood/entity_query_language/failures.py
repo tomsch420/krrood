@@ -1,84 +1,101 @@
+"""
+This module defines some custom exception types used by the entity_query_language package.
+"""
+
 from __future__ import annotations
 
 from abc import ABC
+from dataclasses import dataclass
 
-"""
-Custom exception types used by entity_query_language.
-"""
 from typing_extensions import TYPE_CHECKING, Type
 
+from ..utils import DataclassException
+
 if TYPE_CHECKING:
-    from .symbolic import SymbolicExpression
+    from .symbolic import SymbolicExpression, ResultQuantifier
 
 
-class QuantificationError(Exception, ABC):
+@dataclass
+class QuantificationNotSatisfiedError(DataclassException, ABC):
     """
-    Represents a custom exception specific to quantification errors.
+    Represents a custom exception where the quantification constraints are not satisfied.
 
     This exception is used to indicate errors related to the quantification
     of the query results.
     """
 
+    expression: ResultQuantifier
+    """
+    The result quantifier expression where the error occurred.
+    """
+    expected_number: int
+    """
+    Expected number of solutions (i.e, quantification constraint value).
+    """
 
-class GreaterThanExpectedNumberOfSolutions(QuantificationError):
+
+@dataclass
+class GreaterThanExpectedNumberOfSolutions(QuantificationNotSatisfiedError):
     """
     Represents an error when the number of solutions exceeds the
     expected threshold.
     """
 
-    def __init__(self, expression: SymbolicExpression, expected_number: int):
-        super(GreaterThanExpectedNumberOfSolutions, self).__init__(
-            f"More than {expected_number} solutions found for the expression {expression}."
-        )
+    def __post_init__(self):
+        self.message = f"More than {self.expected_number} solutions found for the expression {self.expression}."
+        super().__post_init__()
 
 
-class LessThanExpectedNumberOfSolutions(QuantificationError):
+@dataclass
+class LessThanExpectedNumberOfSolutions(QuantificationNotSatisfiedError):
     """
     Represents an error that occurs when the number of solutions found
     is lower than the expected number.
     """
 
-    def __init__(
-        self, expression: SymbolicExpression, expected_number: int, found_number: int
-    ):
-        super(LessThanExpectedNumberOfSolutions, self).__init__(
-            f"Found {found_number} solutions which is less than the expected {expected_number} solutions for"
-            f" the expression {expression}."
+    found_number: int
+    """
+    The number of solutions found.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"Found {self.found_number} solutions which is less than the expected {self.expected_number} "
+            f"solutions for the expression {self.expression}."
         )
+        super().__post_init__()
 
 
+@dataclass
 class MultipleSolutionFound(GreaterThanExpectedNumberOfSolutions):
     """
     Raised when a query unexpectedly yields more than one solution where a single
     result was expected.
     """
 
-    def __init__(self, expression: SymbolicExpression):
-        super(MultipleSolutionFound, self).__init__(expression, 1)
+    expected_number: int = 1
 
 
+@dataclass
 class NoSolutionFound(LessThanExpectedNumberOfSolutions):
     """
     Raised when a query does not yield any solution.
     """
 
-    def __init__(self, expression: SymbolicExpression, expected_number: int = 1):
-        super(NoSolutionFound, self).__init__(
-            expression,
-            expected_number,
-            0,
-        )
+    expected_number: int = 1
+    found_number: int = 0
 
 
-class UsageError(Exception):
+@dataclass
+class UsageError(DataclassException):
     """
     Raised when there is an incorrect usage of the entity query language API.
     """
 
-    def __init__(self, message: str):
-        super(UsageError, self).__init__(message)
+    ...
 
 
+@dataclass
 class UnsupportedOperation(UsageError):
     """
     Raised when an operation is not supported by the entity query language API.
@@ -87,39 +104,68 @@ class UnsupportedOperation(UsageError):
     ...
 
 
+@dataclass
 class UnsupportedNegation(UnsupportedOperation):
     """
     Raised when negating quantifiers.
     """
 
-    def __init__(self, operation_type: Type[SymbolicExpression]):
-        super().__init__(
-            f"Symbolic NOT operations on {operation_type} types"
+    operation_type: Type[SymbolicExpression]
+    """
+    The type of the operation that is being negated.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"Symbolic NOT operations on {self.operation_type} types"
             f" operands are not allowed, you can negate the conditions instead,"
             f" as negating them is most likely not what you want"
             f" because it is ambiguous and can be very expensive to compute."
             f"To Negate Conditions do:"
             f" `not_(condition)` instead of `not_(an(entity(..., condition)))`."
         )
+        super().__post_init__()
 
 
-class CardinalitySpecificationError(UsageError):
+@dataclass
+class QuantificationSpecificationError(UsageError):
     """
-    Raised when the cardinality constraints specified on the query results are invalid or inconsistent.
-    """
-
-
-class CardinalityConsistencyError(CardinalitySpecificationError):
-    """
-    Raised when the cardinality constraints specified on the query results are inconsistent.
+    Raised when the quantification constraints specified on the query results are invalid or inconsistent.
     """
 
-    ...
 
-
-class CardinalityValueError(CardinalityConsistencyError):
+@dataclass
+class QuantificationConsistencyError(QuantificationSpecificationError):
     """
-    Raised when the cardinality constraints specified on the query results are invalid.
+    Raised when the quantification constraints specified on the query results are inconsistent.
     """
 
     ...
+
+
+@dataclass
+class NegativeQuantificationError(QuantificationConsistencyError):
+    """
+    Raised when the quantification constraints specified on the query results have a negative value.
+    """
+
+    message: str = f"ResultQuantificationConstraint must be a non-negative integer."
+
+
+@dataclass
+class InvalidEntityType(UsageError):
+    """
+    Raised when an invalid entity type is given to the quantification operation.
+    """
+
+    invalid_entity_type: Type
+    """
+    The invalid entity type.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"The entity type {self.invalid_entity_type} is not valid. It must be a subclass of QueryObjectDescriptor class."
+            f"e.g. Entity, or SetOf"
+        )
+        super().__post_init__()

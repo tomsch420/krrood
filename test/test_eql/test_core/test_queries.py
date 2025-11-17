@@ -30,6 +30,13 @@ from krrood.entity_query_language.predicate import (
     Predicate,
 )
 from krrood.entity_query_language.symbol_graph import SymbolGraph
+from krrood.entity_query_language.result_quantification_constraint import (
+    ResultQuantificationConstraint,
+    Exactly,
+    AtLeast,
+    AtMost,
+    Range,
+)
 from ...dataset.semantic_world_like_classes import (
     Handle,
     Body,
@@ -917,29 +924,25 @@ def test_unsupported_negation(handles_and_containers_world):
 def test_quantified_query(handles_and_containers_world):
     world = handles_and_containers_world
 
-    def get_quantified_query(
-        at_least: int = None, at_most: int = None, exactly: int = None
-    ):
+    def get_quantified_query(quantification: ResultQuantificationConstraint):
         query = an(
             entity(
                 body := let(type_=Body, domain=world.bodies),
                 contains(body.name, "Handle"),
             ),
-            at_least=at_least,
-            at_most=at_most,
-            exactly=exactly,
+            quantification=quantification,
         )
         return query
 
-    results = list(get_quantified_query(at_least=3).evaluate())
+    results = list(get_quantified_query(AtLeast(3)).evaluate())
     assert len(results) == 3
-    results = list(get_quantified_query(at_least=2, at_most=4).evaluate())
+    results = list(get_quantified_query(Range(AtLeast(2), AtMost(4))).evaluate())
     assert len(results) == 3
     with pytest.raises(LessThanExpectedNumberOfSolutions):
-        list(get_quantified_query(at_least=4).evaluate())
+        list(get_quantified_query(AtLeast(4)).evaluate())
     with pytest.raises(GreaterThanExpectedNumberOfSolutions):
-        list(get_quantified_query(at_most=2).evaluate())
+        list(get_quantified_query(AtMost(2)).evaluate())
     with pytest.raises(GreaterThanExpectedNumberOfSolutions):
-        list(get_quantified_query(exactly=2).evaluate())
+        list(get_quantified_query(Exactly(2)).evaluate())
     with pytest.raises(LessThanExpectedNumberOfSolutions):
-        list(get_quantified_query(exactly=4).evaluate())
+        list(get_quantified_query(Exactly(4)).evaluate())

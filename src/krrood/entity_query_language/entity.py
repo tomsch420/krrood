@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Callable
 
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
@@ -32,7 +33,6 @@ from .symbolic import (
     Comparator,
     chained_logic,
     CanBehaveLikeAVariable,
-    ResultQuantifier,
     From,
     Variable,
     optimize_or,
@@ -41,7 +41,7 @@ from .symbolic import (
     Exists,
     Literal,
 )
-from .conclusion import Infer
+from .result_quantification_constraint import ResultQuantificationConstraint
 
 from .predicate import (
     Predicate,
@@ -63,23 +63,17 @@ The possible types for entities.
 
 def an(
     entity_: EntityType,
-    at_least: Optional[int] = None,
-    at_most: Optional[int] = None,
-    exactly: Optional[int] = None,
+    quantification: Optional[ResultQuantificationConstraint] = None,
 ) -> Union[An[T], T, SymbolicExpression[T]]:
     """
     Select a single element satisfying the given entity description.
 
     :param entity_: An entity or a set expression to quantify over.
-    :param at_least: Optional minimum number of results.
-    :param at_most: Optional maximum number of results.
-    :param exactly: Optional exact number of results.
+    :param quantification: Optional quantification constraint.
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    return select_one_or_select_many_or_an(
-        An, entity_, _at_least_=at_least, _at_most_=at_most, _exactly_=exactly
-    )
+    return An(entity_, _quantification_constraint_=quantification)
 
 
 a = an
@@ -98,37 +92,7 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
-    return select_one_or_select_many_or_an(The, entity_)
-
-
-def select_one_or_select_many_or_an(
-    quantifier: Type[ResultQuantifier],
-    entity_: EntityType,
-    **kwargs,
-) -> ResultQuantifier[T]:
-    """
-    Selects one or many entities or infers the result based on the provided quantifier
-    and entity type. This function facilitates creating or managing quantified results
-    depending on the entity type and additional keyword arguments.
-
-    :param quantifier: A type of ResultQuantifier used to quantify the entity.
-    :param entity_: The entity or quantifier to be selected or converted to a quantifier.
-    :param kwargs: Additional keyword arguments for quantifier initialization.
-    :return: A result quantifier of the provided type, inferred type, or directly the
-        one provided.
-    :raises ValueError: If the provided entity is invalid.
-    """
-    if isinstance(entity_, ResultQuantifier):
-        if isinstance(entity_, quantifier):
-            return entity_
-
-        entity_._child_._parent_ = None
-        return quantifier(entity_._child_, **kwargs)
-
-    if isinstance(entity_, (Entity, SetOf)):
-        return quantifier(entity_, **kwargs)
-
-    raise ValueError(f"Invalid entity: {entity_}")
+    return The(entity_)
 
 
 def entity(
@@ -191,11 +155,7 @@ def _extract_variables_and_expression(
     return selected_variables, expression
 
 
-class DomainKind(Enum):
-    INFERRED = 1
-
-
-DomainType = Union[Iterable, TypingLiteral[DomainKind.INFERRED], None]
+DomainType = Union[Iterable, None]
 
 
 def let(
@@ -214,7 +174,7 @@ def let(
          which may contain unnecessarily many elements.
 
     :param type_: The type of variable.
-    :param domain: Iterable of potential values for the variable or an INFERRED sentinel (for rules) or None.
+    :param domain: Iterable of potential values for the variable or None.
      If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
       but by another evaluator (e.g., EQL To SQL converter in Ormatic).
     :param name: The variable name, only required for pretty printing.
@@ -229,7 +189,6 @@ def let(
         _type_=type_,
         _domain_source_=domain_source,
         _name__=name,
-        _is_inferred_=domain is DomainKind.INFERRED,
     )
 
     return result
@@ -245,9 +204,7 @@ def _get_domain_source_from_domain_and_type_values(
     :param type_: The type of the variable.
     :return: The domain source as a From object.
     """
-    if domain is DomainKind.INFERRED:
-        domain = None
-    elif is_iterable(domain):
+    if is_iterable(domain):
         domain = filter(lambda x: isinstance(x, type_), domain)
     elif domain is None and issubclass(type_, Symbol):
         domain = SymbolGraph().get_instances_of_type(type_)
@@ -352,7 +309,9 @@ def exists(
     return Exists(universal_variable, condition)
 
 
-def inference(type_: Type[T]) -> Union[Variable[T], Type[T]]:
+def inference(
+    type_: Type[T],
+) -> Union[Type[T], Callable[[Any], Variable[T]]]:
     """
     This returns a factory function that creates a new variable of the given type and takes keyword arguments for the
     type constructor.

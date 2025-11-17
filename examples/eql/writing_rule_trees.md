@@ -121,7 +121,7 @@ from krrood.entity_query_language.predicate import HasType
 # Declare the variables
 fixed_connection = let(type_=FixedConnection, domain=world.connections)
 revolute_connection = let(type_=RevoluteConnection, domain=world.connections)
-views = let(type_=View, domain=None)
+views = inference(View)()
 
 # Define aliases for convenience
 handle = fixed_connection.child
