@@ -24,26 +24,25 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     descriptor attached to the source instance.
     """
 
-    @property
+    @cached_property
     def transitive(self) -> bool:
         """
         If the relation is transitive or not.
         """
-        if self.wrapped_field.property_descriptor:
-            return isinstance(
-                self.wrapped_field.property_descriptor, TransitiveProperty
-            )
+        if self.property_descriptor_cls:
+            return issubclass(self.property_descriptor_cls, TransitiveProperty)
         else:
             return False
 
-    @property
+    @cached_property
     def inverse_of(self) -> Optional[Type[PropertyDescriptor]]:
         """
         The inverse of the relation if it exists.
         """
-        descriptor = self.wrapped_field.property_descriptor
-        if descriptor and isinstance(descriptor, HasInverseProperty):
-            return descriptor.get_inverse()
+        if self.property_descriptor_cls and issubclass(
+            self.property_descriptor_cls, HasInverseProperty
+        ):
+            return self.property_descriptor_cls.get_inverse()
         else:
             return None
 
@@ -86,7 +85,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 inverse_domain, self.source, inverse_field, inferred=True
             ).add_to_graph()
 
-    @property
+    @cached_property
     def super_relations(self) -> Iterable[Tuple[WrappedInstance, WrappedField]]:
         """
         Find neighboring symbols connected by super edges.
@@ -101,7 +100,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         yield from self.direct_super_relations
         yield from self.role_taker_super_relations
 
-    @property
+    @cached_property
     def direct_super_relations(self):
         """
         Return the direct super relations of the source.
@@ -115,7 +114,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             for f in property_descriptor_cls.get_fields_of_superproperties(source_type)
         )
 
-    @property
+    @cached_property
     def role_taker_super_relations(self):
         """
         Return the source role taker super relations.
@@ -140,13 +139,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 self.source_role_taker_association.target
             )
         )
-
-    @cached_property
-    def property_descriptor_cls(self) -> PropertyDescriptor:
-        """
-        Return the property descriptor class of the relation.
-        """
-        return self.wrapped_field.property_descriptor.__class__
 
     @cached_property
     def source_role_taker_association(self) -> Optional[Association]:
@@ -230,9 +222,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer transitive relations outgoing from the source.
         """
-        for nxt_relation in SymbolGraph().get_outgoing_relations_with_type(
-            self.target, self.__class__
-        ):
+        for nxt_relation in self.target_outgoing_relations_with_same_descriptor_type:
             self.__class__(
                 self.source,
                 nxt_relation.target,
@@ -244,12 +234,47 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer transitive relations incoming to the target.
         """
-        for nxt_relation in SymbolGraph().get_incoming_relations_with_type(
-            self.source, self.__class__
-        ):
+        for nxt_relation in self.source_incoming_relations_with_same_descriptor_type:
             self.__class__(
                 nxt_relation.source,
                 self.target,
                 nxt_relation.wrapped_field,
                 inferred=True,
             ).add_to_graph()
+
+    @property
+    def target_outgoing_relations_with_same_descriptor_type(
+        self,
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get the outgoing relations from the target that have the same property descriptor type as this relation.
+        """
+        relation_condition = (
+            lambda relation: relation.property_descriptor_cls
+            is self.property_descriptor_cls
+        )
+        yield from SymbolGraph().get_outgoing_relations_with_condition(
+            self.target, relation_condition
+        )
+
+    @property
+    def source_incoming_relations_with_same_descriptor_type(
+        self,
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get the incoming relations from the source that have the same property descriptor type as this relation.
+        """
+        relation_condition = (
+            lambda relation: relation.property_descriptor_cls
+            is self.property_descriptor_cls
+        )
+        yield from SymbolGraph().get_incoming_relations_with_condition(
+            self.source, relation_condition
+        )
+
+    @cached_property
+    def property_descriptor_cls(self) -> Type[PropertyDescriptor]:
+        """
+        Return the property descriptor class of the relation.
+        """
+        return self.wrapped_field.property_descriptor.__class__

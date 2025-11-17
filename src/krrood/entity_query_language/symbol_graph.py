@@ -327,7 +327,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         self,
         wrapped_instance: WrappedInstance,
         edge_condition: Callable[[PredicateClassRelation], bool],
-    ):
+    ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given condition that are incoming to the given wrapped instance.
 
