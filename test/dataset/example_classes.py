@@ -536,7 +536,7 @@ class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMap
 class CallableWrapper:
     func: FunctionType
 
-    def custom_instanc_method(self):
+    def custom_instance_method(self):
         return 2
 
     @classmethod
