@@ -481,6 +481,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         """
         Evaluate the query and map the results to the correct output data structure.
+        This is the exposed evaluation method for users.
         """
         SymbolGraph().remove_dead_instances()
         yield from map(self._process_result_, self._evaluate__())
@@ -493,20 +494,18 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         sources = sources or {}
         self._eval_parent_ = parent
         if self._id_ in sources:
-            yield OperationResult(sources, self._is_false_, self)
+            yield OperationResult(sources, False, self)
             return
         result_count = 0
         values = self._child_._evaluate__(sources, parent=self)
         for value in values:
-            self._is_false_ = value.is_false
-            if not self._is_false_:
-                result_count += 1
-                self._assert_satisfaction_of_quantification_constraints_(
-                    result_count, done=False
-                )
+            result_count += 1
+            self._assert_satisfaction_of_quantification_constraints_(
+                result_count, done=False
+            )
             if self._var_:
                 value[self._id_] = value[self._var_._id_]
-            yield OperationResult(value.bindings, self._is_false_, self)
+            yield OperationResult(value.bindings, False, self)
         self._assert_satisfaction_of_quantification_constraints_(
             result_count, done=True
         )
@@ -539,6 +538,14 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     def _process_result_(
         self, result: OperationResult
     ) -> TypingUnion[T, UnificationDict]:
+        """
+        Map the result to the correct output data structure for user usage. This returns the selected variables only.
+        In case of Entity, it returns the value of the selected variable, and in case of SetOf, it returns a dictionary
+         with the selected variables as keys and the values as values.
+
+        :param result: The result to be mapped.
+        :return: The mapped result.
+        """
         if isinstance(self._child_, Entity):
             return result[self._child_.selected_variable._id_].value
         elif isinstance(self._child_, SetOf):
