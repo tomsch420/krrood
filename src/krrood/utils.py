@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 from typing_extensions import TypeVar, Type, List
 
@@ -29,3 +30,6 @@ class DataclassException(Exception):
 
     def __post_init__(self):
         super().__init__(self.message)
+
+
+Function = type(lambda: None)

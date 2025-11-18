@@ -17,9 +17,10 @@ from krrood.entity_query_language.predicate import (
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import AlternativeMapping
 from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.alternative_mappings import *  # type ignore
 from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
-from krrood.utils import recursive_subclasses
+from krrood.utils import recursive_subclasses, Function
 from .dataset import example_classes
 from .dataset.example_classes import (
     PhysicalObject,
@@ -65,6 +66,8 @@ def generate_sqlalchemy_interface():
         for c in all_classes
         if is_dataclass(c) and not issubclass(c, AlternativeMapping)
     }
+
+    all_classes |= {Function}
 
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))

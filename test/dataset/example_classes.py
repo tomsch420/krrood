@@ -4,7 +4,7 @@ import importlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Self
+from typing import Self, Callable
 
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import Dict, Any, Sequence, Self
@@ -12,6 +12,7 @@ from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.dao import AlternativeMapping, T
+from krrood.utils import Function
 
 
 # check that custom enums works
@@ -529,3 +530,23 @@ class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMap
 
     def create_from_dao(self) -> T:
         raise NotImplementedError
+
+
+@dataclass
+class CallableWrapper:
+    func: Function
+
+    def custom_instanc_method(self):
+        return 2
+
+    @classmethod
+    def custom_class_method(cls):
+        return 3
+
+    @staticmethod
+    def custom_static_method():
+        return 4
+
+
+def module_level_function():
+    return 1
