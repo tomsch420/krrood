@@ -503,36 +503,12 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     def evaluate(
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        """
+        Evaluate the query and map the results to the correct output data structure.
+        """
         SymbolGraph().remove_dead_instances()
-
-        results = self._evaluate__()
-        for result in self._evaluate__():
-            if result.is_false:
-                continue
-            processed_result = self._process_result_(result)
-            yield processed_result
+        yield from map(self._process_result_, self._evaluate__())
         self._reset_cache_()
-
-    def _assert_satisfaction_of_quantification_constraints_(
-        self, result_count: int, done: bool
-    ):
-        """
-        Assert the satisfaction of quantification constraints.
-
-        :param result_count: The current count of results
-        :param done: Whether all results have been processed
-        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
-        """
-        if self._quantification_constraint_:
-            self._quantification_constraint_.assert_satisfaction(
-                result_count, self, done
-            )
-
-    def __repr__(self):
-        name = f"{self.__class__.__name__}"
-        if self._quantification_constraint_:
-            name += f"({self._quantification_constraint_})"
-        return name
 
     def _evaluate__(
         self,
@@ -605,6 +581,27 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
 
     def __invert__(self):
         raise UnsupportedNegation(self.__class__)
+
+    def _assert_satisfaction_of_quantification_constraints_(
+        self, result_count: int, done: bool
+    ):
+        """
+        Assert the satisfaction of quantification constraints.
+
+        :param result_count: The current count of results
+        :param done: Whether all results have been processed
+        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
+        """
+        if self._quantification_constraint_:
+            self._quantification_constraint_.assert_satisfaction(
+                result_count, self, done
+            )
+
+    def __repr__(self):
+        name = f"{self.__class__.__name__}"
+        if self._quantification_constraint_:
+            name += f"({self._quantification_constraint_})"
+        return name
 
     def visualize(
         self,
