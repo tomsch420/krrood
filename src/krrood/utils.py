@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from types import FunctionType
-from typing import Callable
 
 from typing_extensions import TypeVar, Type, List
 
