@@ -16,7 +16,6 @@ from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
 
-import line_profiler
 from typing_extensions import (
     Iterable,
     Any,
@@ -949,7 +948,6 @@ class Variable(CanBehaveLikeAVariable[T]):
                 self._child_vars_[k] = Literal(v, name=k)
         self._update_children_(*self._child_vars_.values())
 
-    @line_profiler.profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1089,7 +1087,6 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
     def _type_(self):
         return self._child_._type_
 
-    @line_profiler.profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1279,7 +1276,6 @@ class Flatten(DomainMapping):
         super().__post_init__()
         self._path_ = self._child_._path_
 
-    @line_profiler.profile
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
         for inner_v in value.value:
             yield HashedValue(inner_v)
@@ -1365,7 +1361,6 @@ class Comparator(BinaryOperator):
             return self.operation_name_map[self.operation]
         return self.operation.__name__
 
-    @line_profiler.profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1713,7 +1708,6 @@ class Exists(QuantifiedConditional):
     getting all the condition values that hold for one specific value of the variable.
     """
 
-    @line_profiler.profile
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1724,7 +1718,6 @@ class Exists(QuantifiedConditional):
         for var_val in self.variable._evaluate__(sources, parent=self):
             yield from self.evaluate_condition(var_val.bindings)
 
-    @line_profiler.profile
     def evaluate_condition(
         self, sources: Dict[int, HashedValue]
     ) -> Iterable[OperationResult]:
