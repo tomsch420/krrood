@@ -1,54 +1,12 @@
 from __future__ import annotations
 
-from copy import copy
-
-from .hashed_data import HashedIterable
-from .utils import All
-
 """
 Cache utilities.
 
 This module provides caching datastructures and utilities.
-It also exposes a runtime switch to enable/disable caching.
 """
-import contextvars
-from collections import UserDict
-from dataclasses import dataclass, field, InitVar
-from typing_extensions import Dict, Any, Iterable, Hashable, Optional, Tuple
-
-
-# Runtime switch to enable/disable caching paths
-_caching_enabled = contextvars.ContextVar("caching_enabled", default=True)
-
-
-def enable_caching() -> None:
-    """
-    Enable the caching fast-paths for query evaluation.
-
-    :return: None
-    :rtype: None
-    """
-    _caching_enabled.set(True)
-
-
-def disable_caching() -> None:
-    """
-    Disable the caching fast-paths for query evaluation.
-
-    :return: None
-    :rtype: None
-    """
-    _caching_enabled.set(False)
-
-
-def is_caching_enabled() -> bool:
-    """
-    Check whether caching is currently enabled.
-
-    :return: True if caching is enabled; False otherwise.
-    :rtype: bool
-    """
-    return _caching_enabled.get()
+from dataclasses import dataclass, field
+from typing_extensions import Dict
 
 
 @dataclass

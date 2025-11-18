@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing_extensions import Dict, Optional, Iterable
 
-from .cache_data import SeenSet, is_caching_enabled
+from .cache_data import SeenSet
 from .conclusion import Conclusion
 from .hashed_data import HashedIterable, HashedValue
 from .rxnode import ColorLegend
