@@ -43,7 +43,6 @@ from .failures import (
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
     InvalidEntityType,
-    UnsupportedOperation,
     UnSupportedOperand,
 )
 from .hashed_data import HashedValue, HashedIterable, T

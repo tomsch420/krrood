@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Callable
+from dataclasses import dataclass, field
+from functools import cached_property
+
+from typing import Callable, Dict, Generic, Type, Any, List, Optional
+
+from .hashed_data import T
 
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
@@ -20,7 +24,6 @@ from typing_extensions import (
     Type,
     Tuple,
     List,
-    Literal as TypingLiteral,
 )
 
 from .symbolic import (
@@ -45,8 +48,9 @@ from .result_quantification_constraint import ResultQuantificationConstraint
 
 from .predicate import (
     Predicate,
-    symbolic_function,  # type: ignore
+    # type: ignore
     Symbol,  # type: ignore
+    HasType,
 )
 
 T = TypeVar("T")  # Define type variable "T"
@@ -64,7 +68,7 @@ The possible types for entities.
 def an(
     entity_: EntityType,
     quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[An[T], T, SymbolicExpression[T]]:
+) -> Union[An[T], T]:
     """
     Select a single element satisfying the given entity description.
 
@@ -73,6 +77,8 @@ def an(
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
+    if isinstance(entity_, Match):
+        entity_ = entity_.expression
     return An(entity_, _quantification_constraint_=quantification)
 
 
@@ -92,6 +98,8 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
+    if isinstance(entity_, Match):
+        entity_ = entity_.expression
     return The(entity_)
 
 
@@ -322,3 +330,70 @@ def inference(
     return lambda **kwargs: Variable(
         _type_=type_, _name__=type_.__name__, _kwargs_=kwargs, _is_inferred_=True
     )
+
+
+@dataclass
+class Match(Generic[T]):
+    """
+    Construct a query that looks for the pattern provided by the type and the keyword arguments.
+    """
+
+    type_: Type[T]
+    """
+    The type of the variable.
+    """
+    kwargs: Dict[str, Any]
+    """
+    The keyword arguments to match against.
+    """
+    variable: CanBehaveLikeAVariable = field(init=False)
+    """
+    The created variable from the type and kwargs.
+    """
+    conditions: List[ConditionType] = field(init=False, default_factory=list)
+    """
+    The conditions that define the match.
+    """
+
+    def resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
+        """
+        Resolve the match by creating the variable and conditions expressions.
+
+        :param variable:
+        :return:
+        """
+        if variable is None:
+            self.variable = let(self.type_, None)
+        else:
+            self.variable = variable
+        for k, v in self.kwargs.items():
+            attr = getattr(self.variable, k)
+            if isinstance(v, Match):
+                v.resolve(attr)
+                self.conditions.append(HasType(attr, v.type_))
+                self.conditions.extend(v.conditions)
+            else:
+                self.conditions.append(attr == v)
+
+    @cached_property
+    def expression(self) -> Entity[T]:
+        """
+        Return the entity expression corresponding to the match query.
+        """
+        self.resolve()
+        return entity(self.variable, *self.conditions)
+
+
+def match(type_: Type[T]) -> Union[Type[T], Callable[[Dict[str, Any]], Match[T]]]:
+    """
+    This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
+    keyword arguments.
+
+    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :return: The factory function for creating the match query.
+    """
+
+    def match_factory(**kwargs) -> Match[T]:
+        return Match(type_, kwargs)
+
+    return match_factory
