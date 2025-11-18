@@ -381,7 +381,7 @@ class Match(Generic[T]):
         return entity(self.variable, *self.conditions)
 
 
-def match(type_: Type[T]) -> Union[Type[T], Callable[[Dict[str, Any]], Match[T]]]:
+def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
     """
     This returns a factory function that creates a Match instance that looks for the pattern provided by the type and the
     keyword arguments.
