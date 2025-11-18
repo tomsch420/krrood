@@ -7,7 +7,7 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, Type
+from typing_extensions import TYPE_CHECKING, Type, Any
 
 from ..utils import DataclassException
 
@@ -102,6 +102,29 @@ class UnsupportedOperation(UsageError):
     """
 
     ...
+
+
+@dataclass
+class UnSupportedOperand(UnsupportedOperation):
+    """
+    Raised when an operand is not supported by the operation.
+    """
+
+    operation: Type[SymbolicExpression]
+    """
+    The operation used.
+    """
+    unsupported_operand: Any
+    """
+    The operand that is not supported by the operation.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"{self.operation} type operands cannot be used as operands for "
+            f"{self.unsupported_operand} Operations."
+        )
+        super().__post_init__()
 
 
 @dataclass

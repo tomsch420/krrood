@@ -24,6 +24,7 @@ from krrood.entity_query_language.entity import (
     let,
     an,
     inference,
+    and_,
 )
 from krrood.entity_query_language.conclusion import Add
 
@@ -60,33 +61,28 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
     handle = let(Handle, domain=world.bodies)
     container = let(Container, domain=world.bodies)
 
-    fixed_connection = an(
-        entity(
-            f := let(FixedConnection, domain=world.connections),
-            f.parent == body,
-            f.child == handle,
-        )
+    fixed_connection = let(FixedConnection, domain=world.connections)
+    fixed_connection_condition = and_(
+        fixed_connection.parent == body, fixed_connection.child == handle
     )
-    prismatic_connection = an(
-        entity(p := let(PrismaticConnection, domain=world.connections), p.child == body)
-    )
-    revolute_connection = an(
-        entity(
-            r := let(RevoluteConnection, domain=world.connections),
-            r.parent == body,
-            r.child == handle,
-        )
-    )
+    prismatic_connection = let(PrismaticConnection, domain=world.connections)
+    revolute_connection = let(RevoluteConnection, domain=world.connections)
     rule = an(
-        entity(views := let(View, domain=None), fixed_connection, prismatic_connection)
+        entity(
+            views := let(View, domain=None),
+            fixed_connection_condition,
+            prismatic_connection.child == body,
+        )
     )
 
     with rule:
         Add(views, inference(Drawer)(handle=handle, container=body, world=world))
-        with alternative(revolute_connection):
+        with alternative(
+            revolute_connection.parent == body, revolute_connection.child == handle
+        ):
             Add(views, inference(Door)(handle=handle, body=body, world=world))
         with alternative(
-            fixed_connection,
+            fixed_connection_condition,
             body == revolute_connection.child,
             container == revolute_connection.parent,
             revolute_connection.world == world,

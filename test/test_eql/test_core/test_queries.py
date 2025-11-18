@@ -367,20 +367,16 @@ def test_generate_with_more_than_one_source(handles_and_containers_world):
 def test_generate_with_more_than_one_source_optimized(handles_and_containers_world):
     world = handles_and_containers_world
 
-    q1 = an(
-        entity(
-            fixed_connection := let(FixedConnection, world.connections),
+    fixed_connection = let(FixedConnection, world.connections)
+    prismatic_connection = let(PrismaticConnection, world.connections)
+    query = a(
+        set_of(
+            (fixed_connection, prismatic_connection),
             HasType(fixed_connection.parent, Container),
             HasType(fixed_connection.child, Handle),
-        )
-    )
-    q2 = an(
-        entity(
-            prismatic_connection := let(PrismaticConnection, world.connections),
             prismatic_connection.child == fixed_connection.parent,
         )
     )
-    query = a(set_of((fixed_connection, prismatic_connection), q1, q2))
 
     # query._render_tree_()
 
@@ -637,72 +633,6 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         for b3 in world.bodies
         if b1 != b2 and b2 != b3 and b1 != b3 and (b1, b2, b3) not in body_pairs
     ), ("All not generated items " "should not satisfy the " "predicate.")
-
-
-def test_nested_query_with_and(handles_and_containers_world):
-    world = handles_and_containers_world
-
-    original_query = the(
-        entity(
-            body := let(type_=Body, domain=world.bodies),
-            contains(body.name, "Handle") & contains(body.name, "1"),
-        )
-    )
-
-    original_query_handle = original_query.evaluate()
-    assert original_query_handle.name == "Handle1"
-
-    query_part1 = an(entity(body, contains(body.name, "Handle")))
-    query_part2 = an(entity(body, contains(body.name, "1")))
-    nested_query = the(entity(body, query_part1 & query_part2))
-
-    # nested_query._render_tree_()
-
-    nested_query_handle = nested_query.evaluate()
-    assert nested_query_handle == original_query_handle, "Should generate same results"
-
-
-def test_nested_query_with_multiple_sources(handles_and_containers_world):
-    world = handles_and_containers_world
-    container = let(type_=Container, domain=world.bodies)
-    handle = let(type_=Handle, domain=world.bodies)
-    fixed_connection = let(type_=FixedConnection, domain=world.connections)
-    prismatic_connection = let(type_=PrismaticConnection, domain=world.connections)
-    drawer_components = (container, handle, fixed_connection, prismatic_connection)
-
-    original_query = an(
-        set_of(
-            drawer_components,
-            container == fixed_connection.parent,
-            handle == fixed_connection.child,
-            container == prismatic_connection.child,
-        )
-    )
-    # original_query._render_tree_()
-    original_query_results = list(original_query.evaluate())
-    assert len(original_query_results) == 2, "Should generate 2 drawer components"
-
-    query1 = an(
-        set_of((container, fixed_connection), container == fixed_connection.parent)
-    )
-    query2 = an(
-        set_of(
-            drawer_components,
-            handle == fixed_connection.child,
-            container == prismatic_connection.child,
-        )
-    )
-    nested_query = an(set_of(drawer_components, query1 & query2))
-
-    nested_query_results = list(nested_query.evaluate())
-    assert len(nested_query_results) == 2, "Should generate 2 drawer components"
-    assert all(
-        nested_res[k] == original_res[k]
-        for nested_res, original_res in zip(
-            original_query_results, nested_query_results
-        )
-        for k in drawer_components
-    ), "Should generate same results"
 
 
 def test_contains_type():
