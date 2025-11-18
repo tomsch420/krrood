@@ -539,8 +539,7 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     ) -> TypingUnion[T, UnificationDict]:
         """
         Map the result to the correct output data structure for user usage. This returns the selected variables only.
-        In case of Entity, it returns the value of the selected variable, and in case of SetOf, it returns a dictionary
-         with the selected variables as keys and the values as values.
+        In case of Entity, it returns the value of the selected variable, and in case of SetOf, it returns a dictionary with the selected variables as keys and the values as values.
 
         :param result: The result to be mapped.
         :return: The mapped result.
