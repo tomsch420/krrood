@@ -488,10 +488,10 @@ def test_callable_alternative_mapping():
 
 def test_callable_alternative_mapping_instance_method():
     callable_mapping = FunctionMapping.create_instance(
-        CallableWrapper.custom_instanc_method
+        CallableWrapper.custom_instance_method
     )
     reconstructed = callable_mapping.create_from_dao()
-    assert reconstructed is CallableWrapper.custom_instanc_method
+    assert reconstructed is CallableWrapper.custom_instance_method
 
 
 def test_callable_alternative_mapping_class_method():
