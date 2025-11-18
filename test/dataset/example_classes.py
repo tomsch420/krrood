@@ -12,7 +12,7 @@ from typing_extensions import List, Optional, Type
 
 from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.dao import AlternativeMapping, T
-from krrood.utils import Function
+from types import FunctionType
 
 
 # check that custom enums works
@@ -534,7 +534,7 @@ class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMap
 
 @dataclass
 class CallableWrapper:
-    func: Function
+    func: FunctionType
 
     def custom_instanc_method(self):
         return 2

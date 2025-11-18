@@ -1,16 +1,39 @@
+from __future__ import annotations
+
 import importlib
 from dataclasses import dataclass
-from typing import Self
+from types import FunctionType
 
 from collections.abc import Callable
-from typing_extensions import Optional
+from typing_extensions import Optional, Self
 
 from .dao import AlternativeMapping, T
-from ..utils import Function
 
 
 @dataclass
-class FunctionMapping(AlternativeMapping[Function]):
+class UncallableFunction(NotImplementedError):
+    """
+    Exception raised when anonymous functions are reconstructed and then called.
+    """
+
+    function_mapping: FunctionMapping
+
+    def __post_init__(self):
+        super().__init__(
+            f"The reconstructed function was a lambda function and hence cannot be called again."
+            f"The function tried to be reconstructed from {self.function_mapping}"
+        )
+
+
+def raise_uncallable_function(function_mapping: FunctionMapping):
+    raise UncallableFunction(function_mapping)
+
+
+@dataclass
+class FunctionMapping(AlternativeMapping[FunctionType]):
+    """
+    Alternative mapping for functions.
+    """
 
     module_name: str
     """
@@ -44,7 +67,7 @@ class FunctionMapping(AlternativeMapping[Function]):
     def create_from_dao(self) -> T:
 
         if self.function_name == "<lambda>":
-            return lambda *args: NotImplementedError()
+            return lambda *args, **kwargs: raise_uncallable_function(self)
 
         module = importlib.import_module(self.module_name)
 

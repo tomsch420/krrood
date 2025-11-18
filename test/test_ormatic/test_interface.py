@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from krrood.ormatic.alternative_mappings import FunctionMapping
+from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunction
 from ..dataset.example_classes import *
 from ..dataset.ormatic_interface import *
 from krrood.ormatic.dao import (
@@ -515,7 +515,8 @@ def test_anonymous_function_mapping():
     func = lambda: 0
     callable_mapping = FunctionMapping.create_instance(func)
     reconstructed = callable_mapping.create_from_dao()
-    assert isinstance(reconstructed(), NotImplementedError)
+    with pytest.raises(UncallableFunction):
+        reconstructed()
 
 
 def test_callable_mapping(session, database):
