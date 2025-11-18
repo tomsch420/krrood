@@ -356,7 +356,7 @@ class Match(Generic[T]):
         """
         Resolve the match by creating the variable and conditions expressions.
 
-        :param variable:
+        :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
         :return:
         """
         if variable is None:
