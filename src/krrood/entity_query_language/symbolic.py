@@ -732,6 +732,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
+            if values.is_false:
+                # QueryObjectDescriptor does not yield when it's False
+                continue
             values = self.update_data_from_child(values)
             if self.any_selected_variable_is_inferred_and_unbound(values):
                 continue
