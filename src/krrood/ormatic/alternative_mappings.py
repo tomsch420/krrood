@@ -20,7 +20,7 @@ class UncallableFunction(NotImplementedError):
 
     def __post_init__(self):
         super().__init__(
-            f"The reconstructed function was a lambda function and hence cannot be called again."
+            f"The reconstructed function was a lambda function and hence cannot be called again. "
             f"The function tried to be reconstructed from {self.function_mapping}"
         )
 
