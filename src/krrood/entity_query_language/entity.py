@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-
-from typing import Callable, Dict, Generic, Type, Any, List, Optional
+from typing import Callable, Dict, Generic
 
 from .hashed_data import T
-
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
 
@@ -53,7 +51,6 @@ from .predicate import (
     HasType,
 )
 
-T = TypeVar("T")  # Define type variable "T"
 
 ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
