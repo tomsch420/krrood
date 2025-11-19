@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
+from black.strings import Match
+
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
@@ -57,7 +59,7 @@ ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
 The possible types for conditions.
 """
-EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T]]
+EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]
 """
 The possible types for entities.
 """
