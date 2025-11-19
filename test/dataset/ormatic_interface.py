@@ -19,11 +19,14 @@ import datetime
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
 import krrood.entity_query_language.symbol_graph
+import krrood.ormatic.alternative_mappings
 import krrood.ormatic.custom_types
+import sqlalchemy.sql.sqltypes
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
 import typing
 import typing_extensions
+import uuid
 
 
 from krrood.ormatic.dao import DataAccessObject
@@ -33,8 +36,30 @@ from krrood.ormatic.custom_types import TypeType
 class Base(DeclarativeBase):
     type_mappings = {
         test.dataset.example_classes.PhysicalObject: test.dataset.example_classes.ConceptType,
+        uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
         typing.Type: krrood.ormatic.custom_types.TypeType,
     }
+
+
+class CallableWrapperDAO(
+    Base, DataAccessObject[test.dataset.example_classes.CallableWrapper]
+):
+
+    __tablename__ = "CallableWrapperDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    func_id: Mapped[int] = mapped_column(
+        ForeignKey("FunctionMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    func: Mapped[FunctionMappingDAO] = relationship(
+        "FunctionMappingDAO", uselist=False, foreign_keys=[func_id], post_update=True
+    )
 
 
 class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
@@ -1186,6 +1211,19 @@ class TransformationMappedDAO(
     }
 
 
+class UUIDWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.UUIDWrapper]):
+
+    __tablename__ = "UUIDWrapperDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    identification: Mapped[sqlalchemy.sql.sqltypes.UUID] = mapped_column(
+        sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
+    )
+
+
 class VectorMappedDAO(
     SymbolDAO, DataAccessObject[test.dataset.example_classes.VectorMapped]
 ):
@@ -1665,4 +1703,25 @@ class WrappedInstanceMappingDAO(
 
     instance: Mapped[SymbolDAO] = relationship(
         "SymbolDAO", uselist=False, foreign_keys=[instance_id], post_update=True
+    )
+
+
+class FunctionMappingDAO(
+    Base, DataAccessObject[krrood.ormatic.alternative_mappings.FunctionMapping]
+):
+
+    __tablename__ = "FunctionMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    module_name: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+    function_name: Mapped[builtins.str] = mapped_column(
+        String(255), use_existing_column=True
+    )
+    class_name: Mapped[typing.Optional[builtins.str]] = mapped_column(
+        String(255), use_existing_column=True
     )

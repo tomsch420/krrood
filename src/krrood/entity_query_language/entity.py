@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Callable, Dict, Generic
 
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
@@ -18,10 +17,12 @@ from typing_extensions import (
     Optional,
     Union,
     Iterable,
-    TypeVar,
+    Dict,
+    Generic,
     Type,
     Tuple,
     List,
+    Callable,
 )
 
 from .symbolic import (
