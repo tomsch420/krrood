@@ -11,11 +11,11 @@ kernelspec:
   name: python3
 ---
 
-# Pattern matching with `match` and `match_entity`
+# Pattern matching with `match` and `entity_matching`
 
 EQL provides a concise pattern-matching API for building nested structural queries.
 Use `match(type_)(...)` to describe a nested pattern on attributes, and wrap the outermost match
-with `match_entity(type_, domain)(...)` when you also need to bind a search domain.
+with `entity_matching(type_, domain)(...)` when you also need to bind a search domain.
 
 The following example shows how nested patterns translate
 into an equivalent manual query built with `entity(...)` and predicates.
@@ -26,7 +26,7 @@ from typing_extensions import List
 
 from krrood.entity_query_language.entity import (
     let, entity, the,
-    match, match_entity, Symbol,
+    match, entity_matching, Symbol,
 )
 from krrood.entity_query_language.predicate import HasType
 
@@ -79,12 +79,12 @@ world = World(
 
 ## Matching a nested structure
 
-`match_entity(FixedConnection, world.connections)` selects from `world.connections` items of type
+`entity_matching(FixedConnection, world.connections)` selects from `world.connections` items of type
 `FixedConnection`. Inner `match(...)` clauses describe constraints on attributes of that selected item.
 
 ```{code-cell} ipython3
 fixed_connection_query = the(
-    match_entity(FixedConnection, world.connections)(
+    entity_matching(FixedConnection, world.connections)(
         parent=match(Container)(name="Container1"),
         child=match(Handle)(name="Handle1"),
     )
@@ -120,6 +120,6 @@ print(type(fixed_connection).__name__, fixed_connection.parent.name, fixed_conne
 ```
 
 Notes:
-- Use `match_entity` for the outer pattern when a domain is involved; inner attributes use `match`.
+- Use `entity_matching` for the outer pattern when a domain is involved; inner attributes use `match`.
 - Nested `match(...)` can be composed arbitrarily deep following your object graph.
 - The pattern API is syntactic sugar over the explicit `entity` + predicates form, so both are interchangeable.

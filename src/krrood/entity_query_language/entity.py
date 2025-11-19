@@ -420,7 +420,7 @@ def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
     return match_factory
 
 
-def match_entity(
+def entity_matching(
     type_: Type[T], domain: DomainType
 ) -> Union[Type[T], Callable[..., MatchEntity[T]]]:
     """
