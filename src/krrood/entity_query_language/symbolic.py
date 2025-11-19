@@ -32,11 +32,8 @@ from typing_extensions import (
     Self,
 )
 
-from . import logger
 from .cache_data import (
-    is_caching_enabled,
     SeenSet,
-    IndexedCache,
 )
 from .enums import EQLMode, PredicateType
 from .failures import (
@@ -46,14 +43,13 @@ from .failures import (
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
     InvalidEntityType,
+    UnsupportedOperation,
+    UnSupportedOperand,
 )
 from .hashed_data import HashedValue, HashedIterable, T
 from .result_quantification_constraint import (
     ResultQuantificationConstraint,
     Exactly,
-    AtLeast,
-    AtMost,
-    Range,
 )
 from .rxnode import RWXNode, ColorLegend
 from .symbol_graph import SymbolGraph
@@ -148,7 +144,6 @@ class SymbolicExpression(Generic[T], ABC):
     :ivar _id_: Unique identifier of this node.
     :ivar _node_: Backing anytree.Node for visualization and traversal.
     :ivar _conclusion_: Set of conclusion actions attached to this node.
-    :ivar _yield_when_false__: If True, may yield even when the expression is false.
     :ivar _is_false_: Internal flag indicating evaluation result for this node.
     """
 
@@ -158,7 +153,6 @@ class SymbolicExpression(Generic[T], ABC):
     _id_expression_map_: ClassVar[Dict[int, SymbolicExpression]] = {}
     _conclusion_: typing.Set[Conclusion] = field(init=False, default_factory=set)
     _symbolic_expression_stack_: ClassVar[List[SymbolicExpression]] = []
-    _yield_when_false_: bool = field(init=False, repr=False, default=False)
     _is_false_: bool = field(init=False, repr=False, default=False)
     _seen_parent_values_by_parent_: Dict[int, Dict[bool, SeenSet]] = field(
         default_factory=dict, init=False, repr=False
@@ -194,22 +188,6 @@ class SymbolicExpression(Generic[T], ABC):
 
     def _create_node_(self):
         self._node_ = RWXNode(self._name_, data=self, color=self._plot_color_)
-
-    def _reset_cache_(self) -> None:
-        """
-        Reset the cache of the symbolic expression and its children.
-        """
-        self._reset_only_my_cache_()
-        for child in self._children_:
-            child._reset_cache_()
-
-    def _reset_only_my_cache_(self) -> None:
-        """
-        Reset only the cache of this symbolic expression.
-        """
-        # Also reset per-parent duplicate tracking and runtime eval parent to ensure reevaluation works
-        self._seen_parent_values_by_parent_ = {}
-        self._eval_parent_ = None
 
     @abstractmethod
     def _evaluate__(
@@ -260,8 +238,7 @@ class SymbolicExpression(Generic[T], ABC):
         if value is not None and hasattr(value, "_child_"):
             value._child_ = self
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _conditions_root_(self) -> SymbolicExpression:
         """
         Get the root of the symbolic expression tree that contains conditions.
@@ -322,17 +299,15 @@ class SymbolicExpression(Generic[T], ABC):
         sources = set(HashedIterable(vars))
         return sources
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _unique_variables_(self) -> HashedIterable[Variable]:
         unique_variables = HashedIterable()
         for var in self._all_variable_instances_:
             unique_variables.add(var)
         return unique_variables
 
-    @property
+    @cached_property
     @abstractmethod
-    @lru_cache(maxsize=None)
     def _all_variable_instances_(self) -> List[Variable]:
         """
         Get the leaf instances of the symbolic expression.
@@ -503,42 +478,12 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
     def evaluate(
         self,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+        """
+        Evaluate the query and map the results to the correct output data structure.
+        This is the exposed evaluation method for users.
+        """
         SymbolGraph().remove_dead_instances()
-
-        results = self._evaluate__()
-
-        result_count = 0
-        for result in map(self._process_result_, filter(lambda r: r.is_true, results)):
-            result_count += 1
-            self._assert_satisfaction_of_quantification_constraints_(
-                result_count, done=False
-            )
-            yield result
-        self._assert_satisfaction_of_quantification_constraints_(
-            result_count, done=True
-        )
-        self._reset_cache_()
-
-    def _assert_satisfaction_of_quantification_constraints_(
-        self, result_count: int, done: bool
-    ):
-        """
-        Assert the satisfaction of quantification constraints.
-
-        :param result_count: The current count of results
-        :param done: Whether all results have been processed
-        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
-        """
-        if self._quantification_constraint_:
-            self._quantification_constraint_.assert_satisfaction(
-                result_count, self, done
-            )
-
-    def __repr__(self):
-        name = f"{self.__class__.__name__}"
-        if self._quantification_constraint_:
-            name += f"({self._quantification_constraint_})"
-        return name
+        yield from map(self._process_result_, self._evaluate__())
 
     def _evaluate__(
         self,
@@ -548,14 +493,21 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
         sources = sources or {}
         self._eval_parent_ = parent
         if self._id_ in sources:
-            yield OperationResult(sources, self._is_false_, self)
+            yield OperationResult(sources, False, self)
             return
+        result_count = 0
         values = self._child_._evaluate__(sources, parent=self)
         for value in values:
-            self._is_false_ = value.is_false
+            result_count += 1
+            self._assert_satisfaction_of_quantification_constraints_(
+                result_count, done=False
+            )
             if self._var_:
                 value[self._id_] = value[self._var_._id_]
-            yield OperationResult(value.bindings, self._is_false_, self)
+            yield OperationResult(value.bindings, False, self)
+        self._assert_satisfaction_of_quantification_constraints_(
+            result_count, done=True
+        )
 
     @lru_cache(maxsize=None)
     def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
@@ -578,14 +530,20 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
                 projection.update(conclusion._unique_variables_)
         return projection
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _all_variable_instances_(self) -> List[Variable]:
         return self._child_._all_variable_instances_
 
     def _process_result_(
         self, result: OperationResult
     ) -> TypingUnion[T, UnificationDict]:
+        """
+        Map the result to the correct output data structure for user usage. This returns the selected variables only.
+        In case of Entity, it returns the value of the selected variable, and in case of SetOf, it returns a dictionary with the selected variables as keys and the values as values.
+
+        :param result: The result to be mapped.
+        :return: The mapped result.
+        """
         if isinstance(self._child_, Entity):
             return result[self._child_.selected_variable._id_].value
         elif isinstance(self._child_, SetOf):
@@ -602,6 +560,27 @@ class ResultQuantifier(CanBehaveLikeAVariable[T], ABC):
 
     def __invert__(self):
         raise UnsupportedNegation(self.__class__)
+
+    def _assert_satisfaction_of_quantification_constraints_(
+        self, result_count: int, done: bool
+    ):
+        """
+        Assert the satisfaction of quantification constraints.
+
+        :param result_count: The current count of results
+        :param done: Whether all results have been processed
+        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
+        """
+        if self._quantification_constraint_:
+            self._quantification_constraint_.assert_satisfaction(
+                result_count, self, done
+            )
+
+    def __repr__(self):
+        name = f"{self.__class__.__name__}"
+        if self._quantification_constraint_:
+            name += f"({self._quantification_constraint_})"
+        return name
 
     def visualize(
         self,
@@ -668,8 +647,15 @@ class The(ResultQuantifier[T]):
     def evaluate(
         self,
     ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]:
+        return list(super().evaluate())[0]
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, HashedValue]] = None,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         try:
-            return list(super().evaluate())[0]
+            yield from super()._evaluate__(sources, parent=parent)
         except LessThanExpectedNumberOfSolutions:
             raise NoSolutionFound(self)
         except GreaterThanExpectedNumberOfSolutions:
@@ -719,25 +705,11 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        if self._id_ in sources:
-            yield OperationResult(sources, self._is_false_, self)
         for values in self.get_constrained_values(sources):
-            values = self.update_data_from_child(values)
+            self.evaluate_conclusions_and_update_bindings(values)
             if self.any_selected_variable_is_inferred_and_unbound(values):
                 continue
-            if self.any_selected_variable_is_unbound(values):
-                yield from self.evaluate_selected_variables(values.bindings)
-            else:
-                yield values
-
-    def any_selected_variable_is_unbound(self, values: OperationResult) -> bool:
-        """
-        Check if any of the selected variables is unbound.
-
-        :param values: The current result with the current bindings.
-        :return: True if any of the selected variables is unbound, otherwise False.
-        """
-        return any(var._id_ not in values for var in self.selected_variables)
+            yield from self.evaluate_selected_variables(values.bindings)
 
     @staticmethod
     def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
@@ -785,18 +757,19 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             return True
         return False
 
-    def update_data_from_child(self, child_result: OperationResult):
-        if self._child_:
-            self._is_false_ = child_result.is_false
-            if self._is_false_:
-                return child_result
-            for conclusion in self._child_._conclusion_:
-                child_result.bindings = next(
-                    iter(conclusion._evaluate__(child_result.bindings, parent=self))
-                ).bindings
-        else:
-            self._is_false_ = False
-        return child_result
+    def evaluate_conclusions_and_update_bindings(self, child_result: OperationResult):
+        """
+        Update the bindings of the results by evaluating the conclusions using the received bindings from the child as
+        sources.
+
+        :param child_result: The result of the child operation.
+        """
+        if not self._child_:
+            return
+        for conclusion in self._child_._conclusion_:
+            child_result.bindings = next(
+                iter(conclusion._evaluate__(child_result.bindings, parent=self))
+            ).bindings
 
     def get_constrained_values(
         self, sources: Optional[Dict[int, HashedValue]]
@@ -808,7 +781,10 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         :return: The bindings after applying the constraints of the child.
         """
         if self._child_:
-            yield from self._child_._evaluate__(sources, parent=self)
+            # QueryObjectDescriptor does not yield when it's False
+            yield from filter(
+                lambda v: v.is_true, self._child_._evaluate__(sources, parent=self)
+            )
         else:
             yield from [OperationResult(sources, False, self)]
 
@@ -827,10 +803,12 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         }
         for sol in generate_combinations(var_val_gen):
             var_val = {var._id_: sol[var][var._id_] for var in self.selected_variables}
+            self._is_false_ = self._is_false_ or any(
+                sol[var].is_false for var in self.selected_variables
+            )
             yield OperationResult({**sources, **var_val}, self._is_false_, self)
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _all_variable_instances_(self) -> List[Variable]:
         vars = []
         if self.selected_variables:
@@ -1037,8 +1015,7 @@ class Variable(CanBehaveLikeAVariable[T]):
     def _name_(self):
         return self._name__
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _all_variable_instances_(self) -> List[Variable]:
         variables = [self]
         for v in self._child_vars_.values():
@@ -1101,8 +1078,7 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         super().__post_init__()
         self._var_ = self
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _all_variable_instances_(self) -> List[Variable]:
         return self._child_._all_variable_instances_
 
@@ -1118,13 +1094,16 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         sources = sources or {}
         self._eval_parent_ = parent
         if self._id_ in sources:
-            yield OperationResult(sources, not bool(sources[self._id_]), self)
+            yield OperationResult(sources, self._is_false_, self)
             return
         child_val = self._child_._evaluate__(sources, parent=self)
         for child_v in child_val:
             for v in self._apply_mapping_(child_v[self._child_._id_]):
+                self._is_false_ = not bool(v)
                 yield OperationResult(
-                    {**child_v.bindings, self._id_: v}, not bool(v), self
+                    {**child_v.bindings, self._id_: v},
+                    self._is_false_,
+                    self,
                 )
 
     @abstractmethod
@@ -1314,50 +1293,12 @@ class BinaryOperator(SymbolicExpression, ABC):
     left: SymbolicExpression
     right: SymbolicExpression
     _child_: SymbolicExpression = field(init=False, default=None)
-    cache: IndexedCache = field(default_factory=IndexedCache, init=False)
-    right_cache: IndexedCache = field(default_factory=IndexedCache, init=False)
 
     def __post_init__(self):
         super().__post_init__()
         self.left, self.right = self._update_children_(self.left, self.right)
-        combined_vars = self.left._unique_variables_.union(
-            self.right._unique_variables_
-        )
-        self.cache.keys = [
-            v.id_
-            for v in combined_vars.filter(lambda v: not isinstance(v.value, Literal))
-        ]
-        right_vars = self.right._unique_variables_.filter(
-            lambda v: not isinstance(v, Literal)
-        )
-        self.right_cache.keys = [v.id_ for v in right_vars]
 
-    def _reset_only_my_cache_(self) -> None:
-        super()._reset_only_my_cache_()
-        self.cache.clear()
-        self.right_cache.clear()
-
-    def yield_final_output_from_cache(
-        self,
-        variables_sources: Dict[int, HashedValue],
-        cache: Optional[IndexedCache] = None,
-    ) -> Iterable[OperationResult]:
-        cache = self.cache if cache is None else cache
-        for output, is_false in cache.retrieve(variables_sources):
-            self._is_false_ = is_false
-            yield OperationResult(output, is_false, self)
-
-    def update_cache(
-        self, values: OperationResult, cache: Optional[IndexedCache] = None
-    ):
-        if not is_caching_enabled():
-            return
-        cache = self.cache if cache is None else cache
-        filtered = {k: v for k, v in values.bindings.items() if k in cache.keys}
-        cache.insert(filtered, output=self._is_false_)
-
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def _all_variable_instances_(self) -> List[Variable]:
         """
         Get the leaf instances of the symbolic expression.
@@ -1419,10 +1360,6 @@ class Comparator(BinaryOperator):
             return self.operation_name_map[self.operation]
         return self.operation.__name__
 
-    def _reset_only_my_cache_(self) -> None:
-        super()._reset_only_my_cache_()
-        self.cache.clear()
-
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1436,10 +1373,6 @@ class Comparator(BinaryOperator):
 
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
-            return
-
-        if is_caching_enabled() and self.cache.check(sources):
-            yield from self.yield_final_output_from_cache(sources)
             return
 
         first_operand, second_operand = self.get_first_second_operands(sources)
@@ -1463,7 +1396,6 @@ class Comparator(BinaryOperator):
         )
         self._is_false_ = not res
         operand_values[self._id_] = HashedValue(res)
-        self.update_cache(operand_values)
         return res
 
     def get_first_second_operands(
@@ -1507,6 +1439,11 @@ class Not(LogicalOperator[T]):
 
     _child_: SymbolicExpression[T]
 
+    def __post_init__(self):
+        if isinstance(self._child_, ResultQuantifier):
+            raise UnSupportedOperand(self.__class__, self._child_)
+        super().__post_init__()
+
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,
@@ -1524,7 +1461,13 @@ class Not(LogicalOperator[T]):
 
 
 @dataclass(eq=False, repr=False)
-class LogicalBinaryOperator(LogicalOperator[T], BinaryOperator, ABC): ...
+class LogicalBinaryOperator(LogicalOperator[T], BinaryOperator, ABC):
+    def __post_init__(self):
+        if isinstance(self.left, ResultQuantifier):
+            raise UnSupportedOperand(self.__class__, self.left)
+        if isinstance(self.right, ResultQuantifier):
+            raise UnSupportedOperand(self.__class__, self.right)
+        super().__post_init__()
 
 
 @dataclass(eq=False, repr=False)
@@ -1545,25 +1488,13 @@ class AND(LogicalBinaryOperator):
             self._is_false_ = left_value.is_false
             if self._is_false_:
                 yield OperationResult(left_value.bindings, self._is_false_, self)
-            elif self.check_right_cache(left_value):
-                yield from self.yield_final_output_from_cache(
-                    left_value.bindings, self.right_cache
-                )
             else:
                 yield from self.evaluate_right(left_value)
-
-    def check_right_cache(self, left_value: OperationResult):
-        return (
-            is_caching_enabled()
-            and self.right_cache.cache
-            and self.right_cache.check(left_value.bindings)
-        )
 
     def evaluate_right(self, left_value: OperationResult) -> Iterable[OperationResult]:
         right_values = self.right._evaluate__(left_value.bindings, parent=self)
         for right_value in right_values:
             self._is_false_ = right_value.is_false
-            self.update_cache(right_value, self.right_cache)
             yield OperationResult(right_value.bindings, self._is_false_, self)
 
 
@@ -1708,8 +1639,7 @@ class ForAll(QuantifiedConditional):
     values of the quantified variable. It short circuits by ignoring the bindings that doesn't satisfy the condition.
     """
 
-    @property
-    @lru_cache(maxsize=None)
+    @cached_property
     def condition_unique_variable_ids(self) -> List[int]:
         return [
             v.id_
