@@ -43,7 +43,6 @@ from .failures import (
     GreaterThanExpectedNumberOfSolutions,
     LessThanExpectedNumberOfSolutions,
     InvalidEntityType,
-    UnsupportedOperation,
     UnSupportedOperand,
 )
 from .hashed_data import HashedValue, HashedIterable, T
@@ -1091,20 +1090,39 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         sources: Optional[Dict[int, HashedValue]] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
+
         sources = sources or {}
+
         self._eval_parent_ = parent
+
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
             return
-        child_val = self._child_._evaluate__(sources, parent=self)
-        for child_v in child_val:
-            for v in self._apply_mapping_(child_v[self._child_._id_]):
-                self._is_false_ = not bool(v)
-                yield OperationResult(
-                    {**child_v.bindings, self._id_: v},
-                    self._is_false_,
-                    self,
-                )
+
+        yield from (
+            self._build_operation_result_and_update_truth_value_(
+                child_result, mapped_value
+            )
+            for child_result in self._child_._evaluate__(sources, parent=self)
+            for mapped_value in self._apply_mapping_(child_result[self._child_._id_])
+        )
+
+    def _build_operation_result_and_update_truth_value_(
+        self, child_result: OperationResult, current_value: Any
+    ) -> OperationResult:
+        """
+        Set the current truth value of the operation result, and build the operation result to be yielded.
+
+        :param child_result: The current result from the child operation.
+        :param current_value: The current value of this operation that is derived from the child result.
+        :return: The operation result.
+        """
+        self._is_false_ = not bool(current_value)
+        return OperationResult(
+            {**child_result.bindings, self._id_: current_value},
+            self._is_false_,
+            self,
+        )
 
     @abstractmethod
     def _apply_mapping_(self, value: HashedValue) -> Iterable[HashedValue]:
