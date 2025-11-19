@@ -360,7 +360,7 @@ class Match(Generic[T]):
         :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
         :return:
         """
-        self._create_variable_if_not_given(variable)
+        self.variable = variable if variable else self._create_variable()
         for k, v in self.kwargs.items():
             attr = getattr(self.variable, k)
             if isinstance(v, Match):
@@ -370,15 +370,11 @@ class Match(Generic[T]):
             else:
                 self.conditions.append(attr == v)
 
-    def _create_variable_if_not_given(
-        self, variable: Optional[CanBehaveLikeAVariable] = None
-    ) -> None:
+    def _create_variable(self) -> Variable[T]:
         """
-        Create a variable if not given.
-
-        :param variable: The optional variable to use.
+        Create a variable with the given type.
         """
-        self.variable = variable if variable else let(self.type_, None)
+        return let(self.type_, None)
 
     @cached_property
     def expression(self) -> Entity[T]:
@@ -402,10 +398,11 @@ class MatchEntity(Match[T]):
     The domain to use for the variable created by the match.
     """
 
-    def _create_variable_if_not_given(
-        self, variable: Optional[CanBehaveLikeAVariable] = None
-    ):
-        self.variable = variable if variable else let(self.type_, self.domain)
+    def _create_variable(self) -> Variable[T]:
+        """
+        Create a variable with the given type and domain.
+        """
+        return let(self.type_, self.domain)
 
 
 def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
