@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -549,3 +550,8 @@ class CallableWrapper:
 
 def module_level_function():
     return 1
+
+
+@dataclass
+class UUIDWrapper:
+    identification: uuid.UUID

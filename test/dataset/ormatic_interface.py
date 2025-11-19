@@ -21,10 +21,12 @@ import krrood.entity_query_language.predicate
 import krrood.entity_query_language.symbol_graph
 import krrood.ormatic.alternative_mappings
 import krrood.ormatic.custom_types
+import sqlalchemy.sql.sqltypes
 import test.dataset.example_classes
 import test.dataset.semantic_world_like_classes
 import typing
 import typing_extensions
+import uuid
 
 
 from krrood.ormatic.dao import DataAccessObject
@@ -34,6 +36,7 @@ from krrood.ormatic.custom_types import TypeType
 class Base(DeclarativeBase):
     type_mappings = {
         test.dataset.example_classes.PhysicalObject: test.dataset.example_classes.ConceptType,
+        uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
         typing.Type: krrood.ormatic.custom_types.TypeType,
     }
 
@@ -1206,6 +1209,19 @@ class TransformationMappedDAO(
         "polymorphic_identity": "TransformationMappedDAO",
         "inherit_condition": database_id == SymbolDAO.database_id,
     }
+
+
+class UUIDWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.UUIDWrapper]):
+
+    __tablename__ = "UUIDWrapperDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    identification: Mapped[sqlalchemy.sql.sqltypes.UUID] = mapped_column(
+        sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
+    )
 
 
 class VectorMappedDAO(

@@ -528,3 +528,13 @@ def test_callable_mapping(session, database):
 
     from_dao = dao.from_dao()
     assert from_dao.func() == 1
+
+
+def test_uuid(session, database):
+    obj = UUIDWrapper(uuid.uuid4())
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(UUIDWrapperDAO)).one()
+    assert queried.identification == obj.identification

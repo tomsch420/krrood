@@ -1,9 +1,11 @@
 import logging
 import os
 import traceback
+import uuid
 from dataclasses import is_dataclass
 
 import pytest
+import sqlalchemy
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 
@@ -74,9 +76,7 @@ def generate_sqlalchemy_interface():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings={
-            PhysicalObject: ConceptType,
-        },
+        type_mappings={PhysicalObject: ConceptType, uuid.UUID: sqlalchemy.UUID},
         alternative_mappings=recursive_subclasses(AlternativeMapping),
     )
 
