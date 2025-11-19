@@ -44,6 +44,7 @@ from .symbolic import (
     ForAll,
     Exists,
     Literal,
+    ResultQuantifier,
 )
 from .result_quantification_constraint import ResultQuantificationConstraint
 
@@ -77,9 +78,7 @@ def an(
     :return: A quantifier representing "an" element.
     :rtype: An[T]
     """
-    if isinstance(entity_, Match):
-        entity_ = entity_.expression
-    return An(entity_, _quantification_constraint_=quantification)
+    return _quantify_entity(An, entity_, _quantification_constraint_=quantification)
 
 
 a = an
@@ -98,9 +97,23 @@ def the(
     :return: A quantifier representing "an" element.
     :rtype: The[T]
     """
+    return _quantify_entity(The, entity_)
+
+
+def _quantify_entity(
+    quantifier: Type[ResultQuantifier], entity_: EntityType, **quantifier_kwargs
+) -> Union[ResultQuantifier[T], T]:
+    """
+    Apply the given quantifier to the given entity.
+
+    :param quantifier: The quantifier to apply.
+    :param entity_: The entity to quantify.
+    :param quantifier_kwargs: Keyword arguments to pass to the quantifier.
+    :return: The quantified entity.
+    """
     if isinstance(entity_, Match):
         entity_ = entity_.expression
-    return The(entity_)
+    return quantifier(entity_, **quantifier_kwargs)
 
 
 def entity(
