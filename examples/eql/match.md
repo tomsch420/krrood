@@ -122,4 +122,4 @@ print(type(fixed_connection).__name__, fixed_connection.parent.name, fixed_conne
 Notes:
 - Use `entity_matching` for the outer pattern when a domain is involved; inner attributes use `match`.
 - Nested `match(...)` can be composed arbitrarily deep following your object graph.
-- The pattern API is syntactic sugar over the explicit `entity` + predicates form, so both are interchangeable.
+- `entity_matching` is a syntactic sugar over the explicit `entity` + predicates form, so both are interchangeable.
