@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, Field
+from dataclasses import dataclass, Field, is_dataclass
 from dataclasses import fields as dc_fields
 
 from typing_extensions import List, Type, Optional, TYPE_CHECKING
@@ -52,8 +52,11 @@ class DataclassOnlyIntrospector(AttributeIntrospector):
     """Discover only public dataclass fields (no leading underscore)."""
 
     def discover(self, owner_cls: Type) -> List[DiscoveredAttribute]:
-        result: List[DiscoveredAttribute] = []
-        for f in dc_fields(owner_cls):
-            if not f.name.startswith("_"):
-                result.append(DiscoveredAttribute(public_name=f.name, field=f))
-        return result
+        if is_dataclass(owner_cls):
+            return [
+                DiscoveredAttribute(public_name=f.name, field=f)
+                for f in dc_fields(owner_cls)
+                if not f.name.startswith("_")
+            ]
+        else:
+            return []

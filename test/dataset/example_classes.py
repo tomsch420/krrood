@@ -4,7 +4,7 @@ import importlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Self
+from types import FunctionType
 
 from sqlalchemy import types, TypeDecorator
 from typing_extensions import Dict, Any, Sequence, Self
@@ -529,3 +529,23 @@ class ParentAlternativelyMappedMapping(AlternativeMapping[ParentAlternativelyMap
 
     def create_from_dao(self) -> T:
         raise NotImplementedError
+
+
+@dataclass
+class CallableWrapper:
+    func: FunctionType
+
+    def custom_instance_method(self):
+        return 2
+
+    @classmethod
+    def custom_class_method(cls):
+        return 3
+
+    @staticmethod
+    def custom_static_method():
+        return 4
+
+
+def module_level_function():
+    return 1

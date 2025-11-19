@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from enum import Enum
-from typing import Callable
-
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable
 
@@ -20,7 +17,7 @@ from typing_extensions import (
     Type,
     Tuple,
     List,
-    Literal as TypingLiteral,
+    Callable,
 )
 
 from .symbolic import (
@@ -45,7 +42,7 @@ from .result_quantification_constraint import ResultQuantificationConstraint
 
 from .predicate import (
     Predicate,
-    symbolic_function,  # type: ignore
+    # type: ignore
     Symbol,  # type: ignore
 )
 
