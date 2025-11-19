@@ -54,7 +54,6 @@ class DataclassOnlyIntrospector(AttributeIntrospector):
     def discover(self, owner_cls: Type) -> List[DiscoveredAttribute]:
         result: List[DiscoveredAttribute] = []
         if is_dataclass(owner_cls):
-            for f in dc_fields(owner_cls):
-                if not f.name.startswith("_"):
-                    result.append(DiscoveredAttribute(public_name=f.name, field=f))
+            for f in filter(lambda x: not x.name.startswith("_"), dc_fields(owner_cls)):
+                result.append(DiscoveredAttribute(public_name=f.name, field=f))
         return result
