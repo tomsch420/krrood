@@ -121,8 +121,7 @@ class UnSupportedOperand(UnsupportedOperation):
 
     def __post_init__(self):
         self.message = (
-            f"{self.operation} type operands cannot be used as operands for "
-            f"{self.unsupported_operand} Operations."
+            f"{self.unsupported_operand} cannot be used as an operand for {self.operation} operations."
         )
         super().__post_init__()
 
