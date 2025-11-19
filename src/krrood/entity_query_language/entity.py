@@ -369,6 +369,16 @@ class Match(Generic[T]):
             else:
                 self.conditions.append(attr == v)
 
+    def _create_variable_if_not_given(
+        self, variable: Optional[CanBehaveLikeAVariable] = None
+    ) -> None:
+        """
+        Create a variable if not given.
+
+        :param variable: The optional variable to use.
+        """
+        self.variable = variable if variable else let(self.type_, None)
+
     @cached_property
     def expression(self) -> Entity[T]:
         """
@@ -376,6 +386,25 @@ class Match(Generic[T]):
         """
         self._resolve()
         return entity(self.variable, *self.conditions)
+
+
+@dataclass
+class MatchEntity(Match[T]):
+    """
+    A match that can also take a domain and should be used as the outermost match in a nested match statement.
+    This is because the inner match statements derive their domain from the outer match as they are basically attributes
+    of the outer match variable.
+    """
+
+    domain: DomainType
+    """
+    The domain to use for the variable created by the match.
+    """
+
+    def _create_variable_if_not_given(
+        self, variable: Optional[CanBehaveLikeAVariable] = None
+    ):
+        self.variable = variable if variable else let(self.type_, self.domain)
 
 
 def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
@@ -389,5 +418,23 @@ def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
 
     def match_factory(**kwargs) -> Match[T]:
         return Match(type_, kwargs)
+
+    return match_factory
+
+
+def match_entity(
+    type_: Type[T], domain: DomainType
+) -> Union[Type[T], Callable[..., Match[T]]]:
+    """
+    Same as :py:func:`krrood.entity_query_language.entity.match` but with a domain to use for the variable created
+     by the match.
+
+    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :param domain: The domain used for the variable created by the match.
+    :return: The factory function for creating the match query.
+    """
+
+    def match_factory(**kwargs) -> Match[T]:
+        return MatchEntity(type_, kwargs, domain)
 
     return match_factory

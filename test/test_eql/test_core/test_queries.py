@@ -18,6 +18,7 @@ from krrood.entity_query_language.entity import (
     exists,
     flatten,
     match,
+    match_entity,
 )
 from krrood.entity_query_language.failures import (
     MultipleSolutionFound,
@@ -750,9 +751,10 @@ def test_quantified_query(handles_and_containers_world):
 
 
 def test_match(handles_and_containers_world):
+    world = handles_and_containers_world
 
     fixed_connection_query = the(
-        match(FixedConnection)(
+        match_entity(FixedConnection, world.connections)(
             parent=match(Container)(name="Container1"),
             child=match(Handle)(name="Handle1"),
         )
