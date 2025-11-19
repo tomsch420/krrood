@@ -343,7 +343,7 @@ class Match(Generic[T]):
     """
     The keyword arguments to match against.
     """
-    variable: CanBehaveLikeAVariable = field(init=False)
+    variable: CanBehaveLikeAVariable[T] = field(init=False)
     """
     The created variable from the type and kwargs.
     """
@@ -352,21 +352,18 @@ class Match(Generic[T]):
     The conditions that define the match.
     """
 
-    def resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
+    def _resolve(self, variable: Optional[CanBehaveLikeAVariable] = None):
         """
         Resolve the match by creating the variable and conditions expressions.
 
         :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
         :return:
         """
-        if variable is None:
-            self.variable = let(self.type_, None)
-        else:
-            self.variable = variable
+        self.variable = variable if variable else let(self.type_, None)
         for k, v in self.kwargs.items():
             attr = getattr(self.variable, k)
             if isinstance(v, Match):
-                v.resolve(attr)
+                v._resolve(attr)
                 self.conditions.append(HasType(attr, v.type_))
                 self.conditions.extend(v.conditions)
             else:
@@ -377,7 +374,7 @@ class Match(Generic[T]):
         """
         Return the entity expression corresponding to the match query.
         """
-        self.resolve()
+        self._resolve()
         return entity(self.variable, *self.conditions)
 
 
