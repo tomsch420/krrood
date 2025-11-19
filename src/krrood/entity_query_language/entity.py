@@ -432,7 +432,7 @@ def match_entity(
     :return: The factory function for creating the match query.
     """
 
-    def match_factory(**kwargs) -> Match[T]:
+    def match_factory(**kwargs) -> MatchEntity[T]:
         return MatchEntity(type_, kwargs, domain)
 
     return match_factory
