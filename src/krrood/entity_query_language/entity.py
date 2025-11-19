@@ -360,7 +360,7 @@ class Match(Generic[T]):
         :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will be created.
         :return:
         """
-        self.variable = variable if variable else let(self.type_, None)
+        self._create_variable_if_not_given(variable)
         for k, v in self.kwargs.items():
             attr = getattr(self.variable, k)
             if isinstance(v, Match):
