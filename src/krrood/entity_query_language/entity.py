@@ -422,7 +422,7 @@ def match(type_: Type[T]) -> Union[Type[T], Callable[..., Match[T]]]:
 
 def match_entity(
     type_: Type[T], domain: DomainType
-) -> Union[Type[T], Callable[..., Match[T]]]:
+) -> Union[Type[T], Callable[..., MatchEntity[T]]]:
     """
     Same as :py:func:`krrood.entity_query_language.entity.match` but with a domain to use for the variable created
      by the match.
