@@ -6,7 +6,7 @@ EXAMPLES_DIR="$(cd "$SCRIPT_DIR/../examples" && pwd)"
 cd "$EXAMPLES_DIR"
 rm -rf test_tmp
 mkdir test_tmp
-jupytext --to notebook eql/*.md
-mv *.ipynb test_tmp
+jupytext --to notebook */*.md
+mv */*.ipynb test_tmp
 cd test_tmp
 treon --thread 1 -v
