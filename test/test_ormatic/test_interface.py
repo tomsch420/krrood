@@ -1,4 +1,5 @@
 import pytest
+from requests import session
 from sqlalchemy import select
 
 from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunction
@@ -538,3 +539,15 @@ def test_uuid(session, database):
 
     queried = session.scalars(select(UUIDWrapperDAO)).one()
     assert queried.identification == obj.identification
+
+
+def test_list_of_custom_type(session, database):
+    obj = UUIDWrapper(uuid.uuid4(), [uuid.uuid4(), uuid.uuid4()])
+    dao = to_dao(obj)
+
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(UUIDWrapperDAO)).one()
+    assert queried.identification == obj.identification
+    assert queried.other_identifications == obj.other_identifications

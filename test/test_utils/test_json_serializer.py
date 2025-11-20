@@ -1,3 +1,5 @@
+import json
+import uuid
 from dataclasses import dataclass
 import pytest
 
@@ -9,6 +11,8 @@ from krrood.adapters.json_serializer import (
     ClassNotFoundError,
     InvalidSubclassError,
     SubclassJSONSerializer,
+    SubclassJSONEncoder,
+    SubclassJSONDecoder,
 )
 
 
@@ -186,6 +190,8 @@ def test_class_not_found_raises_class_not_found_error():
         )
 
 
-def test_invalid_subclass_raises_invalid_subclass_error():
-    with pytest.raises(InvalidSubclassError):
-        SubclassJSONSerializer.from_json({"type": "builtins.object"})
+def test_uuid_encoding():
+    u = uuid.uuid4()
+    encoded = json.dumps(u, cls=SubclassJSONEncoder)
+    result = json.loads(encoded, cls=SubclassJSONDecoder)
+    assert u == result

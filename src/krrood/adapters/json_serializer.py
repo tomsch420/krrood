@@ -4,6 +4,8 @@ import importlib
 from dataclasses import dataclass
 
 from typing_extensions import Dict, Any, Self
+import json
+import uuid
 
 
 def get_full_class_name(cls):
@@ -124,7 +126,48 @@ class SubclassJSONSerializer:
         except AttributeError as exc:
             raise ClassNotFoundError(class_name, module_name) from exc
 
-        if not issubclass(target_cls, SubclassJSONSerializer):
-            raise InvalidSubclassError(fully_qualified_class_name)
+        # if not issubclass(target_cls, SubclassJSONSerializer):
+        #   raise InvalidSubclassError(fully_qualified_class_name)
 
         return target_cls._from_json(data, **kwargs)
+
+
+class SubclassJSONEncoder(json.JSONEncoder):
+    """
+    Custom encoder to handle classes that inherit from SubClassJSONEncoder and UUIDs.
+    """
+
+    def default(self, obj):
+        if isinstance(obj, SubclassJSONSerializer):
+            return obj.to_json()
+
+        elif isinstance(obj, uuid.UUID):
+            # Convert the UUID to its string representation
+            return uuid_to_json(obj)
+        # Let the base class handle other objects
+        return json.JSONEncoder.default(self, obj)
+
+
+class SubclassJSONDecoder(json.JSONDecoder):
+
+    def decode(self, s, _w=json.decoder.WHITESPACE.match):
+        obj = super().decode(s, _w)
+        # Custom logic: Convert all dicts that containing a type using the SubClassJSONSerializer.from_json method
+        if "type" in obj:
+            obj = SubclassJSONSerializer.from_json(obj)
+        else:
+            return obj
+        return obj
+
+
+# %% Monkey patch UUID to behave like SubClassJSONSerializer
+def uuid_from_json(data):
+    return uuid.UUID(data["value"])
+
+
+def uuid_to_json(obj):
+    return {"type": get_full_class_name(obj.__class__), "value": str(obj)}
+
+
+uuid.UUID._from_json = lambda data: uuid_from_json(data)
+uuid.UUID.to_json = lambda self: uuid_to_json(self)

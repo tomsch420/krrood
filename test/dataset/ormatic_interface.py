@@ -1222,6 +1222,9 @@ class UUIDWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.UUIDWra
     identification: Mapped[sqlalchemy.sql.sqltypes.UUID] = mapped_column(
         sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
     )
+    other_identifications: Mapped[typing.List[uuid.UUID]] = mapped_column(
+        JSON, nullable=False, use_existing_column=True
+    )
 
 
 class VectorMappedDAO(

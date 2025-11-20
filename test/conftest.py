@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import traceback
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session, configure_mappers
 
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
+from krrood.adapters.json_serializer import SubclassJSONEncoder, SubclassJSONDecoder
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import (
     HasTypes,
@@ -145,7 +147,8 @@ def cleanup_after_test():
 @pytest.fixture(scope="session")
 def engine():
     configure_mappers()
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine("sqlite:///:memory:", json_serializer=lambda x: json.dumps(x, cls=SubclassJSONEncoder),
+                           json_deserializer=lambda x: json.loads(x, cls=SubclassJSONDecoder))
     yield engine
     engine.dispose()
 

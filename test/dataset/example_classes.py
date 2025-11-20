@@ -555,3 +555,5 @@ def module_level_function():
 @dataclass
 class UUIDWrapper:
     identification: uuid.UUID
+
+    other_identifications: List[uuid.UUID] = field(default_factory=list)
