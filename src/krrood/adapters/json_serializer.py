@@ -149,15 +149,27 @@ class SubclassJSONEncoder(json.JSONEncoder):
 
 
 class SubclassJSONDecoder(json.JSONDecoder):
+    """
+    Custom decoder to handle classes that inherit from SubClassJSONSerializer and UUIDs.
+    """
 
     def decode(self, s, _w=json.decoder.WHITESPACE.match):
         obj = super().decode(s, _w)
-        # Custom logic: Convert all dicts that containing a type using the SubClassJSONSerializer.from_json method
-        if "type" in obj:
-            obj = SubclassJSONSerializer.from_json(obj)
+        return self._deserialize_nested(obj)
+
+    def _deserialize_nested(self, obj):
+        """
+        Recursively deserialize nested objects.
+        """
+        if isinstance(obj, dict):
+            if "type" in obj:
+                return SubclassJSONSerializer.from_json(obj)
+            else:
+                return {k: self._deserialize_nested(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._deserialize_nested(item) for item in obj]
         else:
             return obj
-        return obj
 
 
 # %% Monkey patch UUID to behave like SubClassJSONSerializer

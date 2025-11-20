@@ -195,3 +195,8 @@ def test_uuid_encoding():
     encoded = json.dumps(u, cls=SubclassJSONEncoder)
     result = json.loads(encoded, cls=SubclassJSONDecoder)
     assert u == result
+
+    us = [uuid.uuid4(), uuid.uuid4()]
+    encoded = json.dumps(us, cls=SubclassJSONEncoder)
+    result = json.loads(encoded, cls=SubclassJSONDecoder)
+    assert us == result
