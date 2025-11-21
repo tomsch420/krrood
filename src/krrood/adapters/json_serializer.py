@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
+from json import JSONDecodeError
 
 from typing_extensions import Dict, Any, Self, Union
 import json
@@ -171,7 +172,20 @@ def from_json(data: str) -> Union[SubclassJSONSerializer, Any]:
     :return: The deserialized object
     """
 
-    return json.loads(data, cls=SubclassJSONDecoder)
+    # If we already have a Python container, recursively deserialize nested subclass payloads
+    if isinstance(data, dict) or isinstance(data, list):
+        decoder = SubclassJSONDecoder()
+        return decoder._deserialize_nested(data)
+
+    # If it is not a string (e.g., int, float, bool, None), return as-is
+    if not isinstance(data, str):
+        return data
+
+    # It is a string: try to parse as JSON; if that fails, treat it as a raw string
+    try:
+        return json.loads(data, cls=SubclassJSONDecoder)
+    except JSONDecodeError:
+        return data
 
 
 # %% Monkey patch UUID to behave like SubclassJSONSerializer

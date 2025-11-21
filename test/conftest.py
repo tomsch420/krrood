@@ -105,7 +105,7 @@ def pytest_configure(config):
 
 def pytest_sessionstart(session):
     try:
-        ...  # generate_sqlalchemy_interface()
+        generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 

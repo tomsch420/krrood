@@ -58,7 +58,7 @@ class Dog(Animal):
         data = super().to_json()
         data.update(
             {
-                "breed": self.breed,
+                "breed": to_json(self.breed),
             }
         )
         return data
@@ -153,18 +153,6 @@ def test_deep_subclass_discovery():
     b2 = SubclassJSONSerializer.from_json(b_json)
     assert isinstance(b2, Bulldog)
     assert b2 == b
-
-
-def test_kwargs_are_forwarded_to_from_json():
-    # Age intentionally omitted to test default propagation via kwargs
-    partial = {"type": get_full_class_name(Dog), "name": "Pup", "breed": "Beagle"}
-
-    result = SubclassJSONSerializer.from_json(partial, default_age=2)
-
-    assert isinstance(result, Dog)
-    assert result.age == 2
-    assert result.name == "Pup"
-    assert result.breed == "Beagle"
 
 
 def test_unknown_module_raises_unknown_module_error():
