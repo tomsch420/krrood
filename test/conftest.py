@@ -5,7 +5,6 @@ from dataclasses import is_dataclass
 
 import pytest
 import sqlalchemy
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, configure_mappers
 
 import krrood.entity_query_language.orm.model
@@ -19,7 +18,7 @@ from krrood.entity_query_language.predicate import (
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.alternative_mappings import *  # type: ignore
 from krrood.ormatic.ormatic import ORMatic
-from krrood.ormatic.utils import classes_of_module
+from krrood.ormatic.utils import classes_of_module, create_engine
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
 from .dataset import example_classes
@@ -145,9 +144,7 @@ def cleanup_after_test():
 @pytest.fixture(scope="session")
 def engine():
     configure_mappers()
-    engine = create_engine(
-        "sqlite:///:memory:", json_serializer=to_json, json_deserializer=from_json
-    )
+    engine = create_engine("sqlite:///:memory:")
     yield engine
     engine.dispose()
 
