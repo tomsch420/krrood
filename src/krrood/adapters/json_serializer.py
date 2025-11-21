@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib
 from dataclasses import dataclass
 
-from typing_extensions import Dict, Any, Self
+from typing_extensions import Dict, Any, Self, Union
 import json
 import uuid
 
@@ -72,7 +72,7 @@ class SubclassJSONSerializer:
         This method is called from the from_json method after the correct subclass is determined and should be
         overwritten by the subclass.
 
-        :param data: The json dict
+        :param data: The JSON dict
         :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
         :return: The deserialized object
         """
@@ -115,12 +115,11 @@ class SubclassJSONEncoder(json.JSONEncoder):
     """
 
     def default(self, obj):
-        if isinstance(obj, SubclassJSONSerializer):
+
+        # handle objects that are duck-typed like SubclassJSONSerializer
+        if hasattr(obj, "to_json"):
             return obj.to_json()
 
-        elif isinstance(obj, uuid.UUID):
-            # Convert the UUID to its string representation
-            return uuid_to_json(obj)
         # Let the base class handle other objects
         return json.JSONEncoder.default(self, obj)
 
@@ -131,7 +130,10 @@ class SubclassJSONDecoder(json.JSONDecoder):
     """
 
     def decode(self, s, _w=json.decoder.WHITESPACE.match):
-        obj = super().decode(s, _w)
+        if not isinstance(s, dict):
+            obj = super().decode(s, _w)
+        else:
+            obj = s
         return self._deserialize_nested(obj)
 
     def _deserialize_nested(self, obj):
@@ -147,6 +149,29 @@ class SubclassJSONDecoder(json.JSONDecoder):
             return [self._deserialize_nested(item) for item in obj]
         else:
             return obj
+
+
+def to_json(obj: Union[SubclassJSONSerializer, Any]) -> str:
+    """
+    Serialize an object to a JSON string.
+    This is a drop-in replacement for json.dumps which handles SubclassJSONSerializer-like objects.
+
+    :param obj: The object to serialize
+    :return: The JSON string
+    """
+    return json.dumps(obj, cls=SubclassJSONEncoder)
+
+
+def from_json(data: str) -> Union[SubclassJSONSerializer, Any]:
+    """
+    Deserialize a JSON string to an object.
+    This is a drop-in replacement for json.loads which handles SubclassJSONSerializer-like objects.
+
+    :param data: The JSON string
+    :return: The deserialized object
+    """
+
+    return json.loads(data, cls=SubclassJSONDecoder)
 
 
 # %% Monkey patch UUID to behave like SubclassJSONSerializer

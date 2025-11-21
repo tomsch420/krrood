@@ -1,8 +1,6 @@
-import json
 import logging
 import os
 import traceback
-import uuid
 from dataclasses import is_dataclass
 
 import pytest
@@ -12,15 +10,15 @@ from sqlalchemy.orm import Session, configure_mappers
 
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
-from krrood.adapters.json_serializer import SubclassJSONEncoder, SubclassJSONDecoder
+from krrood.adapters.json_serializer import to_json, from_json
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
 )
 from krrood.entity_query_language.symbol_graph import SymbolGraph
-from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.alternative_mappings import *  # type: ignore
+from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
@@ -107,7 +105,7 @@ def pytest_configure(config):
 
 def pytest_sessionstart(session):
     try:
-        generate_sqlalchemy_interface()
+        ...  # generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 
@@ -147,8 +145,9 @@ def cleanup_after_test():
 @pytest.fixture(scope="session")
 def engine():
     configure_mappers()
-    engine = create_engine("sqlite:///:memory:", json_serializer=lambda x: json.dumps(x, cls=SubclassJSONEncoder),
-                           json_deserializer=lambda x: json.loads(x, cls=SubclassJSONDecoder))
+    engine = create_engine(
+        "sqlite:///:memory:", json_serializer=to_json, json_deserializer=from_json
+    )
     yield engine
     engine.dispose()
 
