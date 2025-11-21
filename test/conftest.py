@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, configure_mappers
 
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.symbol_graph
-from krrood.adapters.json_serializer import to_json, from_json
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import (
     HasTypes,
@@ -27,6 +26,7 @@ from .dataset.example_classes import (
     NotMappedParent,
     ChildNotMapped,
     ConceptType,
+    JSONSerializableClass,
 )
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
@@ -58,7 +58,7 @@ def generate_sqlalchemy_interface():
 
     # remove classes that don't need persistence
     all_classes -= {HasType, HasTypes, ContainsType}
-    all_classes -= {NotMappedParent, ChildNotMapped}
+    all_classes -= {NotMappedParent, ChildNotMapped, JSONSerializableClass}
 
     # only keep dataclasses
     all_classes = {
@@ -75,7 +75,11 @@ def generate_sqlalchemy_interface():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings={PhysicalObject: ConceptType, uuid.UUID: sqlalchemy.UUID},
+        type_mappings={
+            PhysicalObject: ConceptType,
+            uuid.UUID: sqlalchemy.UUID,
+            JSONSerializableClass: JSON,
+        },
         alternative_mappings=recursive_subclasses(AlternativeMapping),
     )
 

@@ -550,3 +550,17 @@ def test_list_of_custom_type(session, database):
     queried = session.scalars(select(UUIDWrapperDAO)).one()
     assert queried.identification == obj.identification
     assert queried.other_identifications == obj.other_identifications
+
+
+def test_json_integration(session, database):
+    # obj = JSONWrapper(
+    #     [JSONSerializableClass(0.0, 1.0), JSONSerializableClass(3.0, 2.0)]
+    # )
+    obj = JSONWrapper(JSONSerializableClass(1, 2))
+    dao = to_dao(obj)
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(JSONWrapperDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj
