@@ -576,3 +576,4 @@ class JSONSerializableClass(SubclassJSONSerializer):
 @dataclass
 class JSONWrapper:
     json_serializable_object: JSONSerializableClass
+    more_objects: List[JSONSerializableClass] = field(default_factory=list)

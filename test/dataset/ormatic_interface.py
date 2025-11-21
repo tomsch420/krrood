@@ -155,6 +155,9 @@ class JSONWrapperDAO(Base, DataAccessObject[test.dataset.example_classes.JSONWra
     json_serializable_object: Mapped[sqlalchemy.sql.sqltypes.JSON] = mapped_column(
         sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
     )
+    more_objects: Mapped[
+        typing.List[test.dataset.example_classes.JSONSerializableClass]
+    ] = mapped_column(JSON, nullable=False, use_existing_column=True)
 
 
 class ParentAlternativelyMappedMappingDAO(
