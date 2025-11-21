@@ -1,15 +1,14 @@
 import pytest
-from requests import session
 from sqlalchemy import select
 
 from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunction
-from ..dataset.example_classes import *
-from ..dataset.ormatic_interface import *
 from krrood.ormatic.dao import (
     to_dao,
     is_data_column,
     NoDAOFoundError,
 )
+from ..dataset.example_classes import *
+from ..dataset.ormatic_interface import *
 
 
 def test_position(session, database):
