@@ -10,6 +10,8 @@ import uuid
 
 from krrood.utils import get_full_class_name
 
+JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
+
 
 class JSONSerializationError(Exception):
     """Base exception for JSON (de)serialization errors."""
@@ -64,7 +66,7 @@ class SubclassJSONSerializer:
     """
 
     def to_json(self) -> Dict[str, Any]:
-        return {"type": get_full_class_name(self.__class__)}
+        return {JSON_TYPE_NAME: get_full_class_name(self.__class__)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -88,7 +90,7 @@ class SubclassJSONSerializer:
         :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
         :return: The correct instance of the subclass
         """
-        fully_qualified_class_name = data.get("type")
+        fully_qualified_class_name = data.get(JSON_TYPE_NAME)
         if not fully_qualified_class_name:
             raise MissingTypeError()
 
@@ -142,7 +144,7 @@ class SubclassJSONDecoder(json.JSONDecoder):
         Recursively deserialize nested objects.
         """
         if isinstance(obj, dict):
-            if "type" in obj:
+            if JSON_TYPE_NAME in obj:
                 return SubclassJSONSerializer.from_json(obj)
             else:
                 return {k: self._deserialize_nested(v) for k, v in obj.items()}
@@ -194,7 +196,7 @@ def uuid_from_json(data):
 
 
 def uuid_to_json(obj):
-    return {"type": get_full_class_name(obj.__class__), "value": str(obj)}
+    return {**SubclassJSONSerializer.to_json(obj), "value": str(obj)}
 
 
 uuid.UUID._from_json = lambda data: uuid_from_json(data)

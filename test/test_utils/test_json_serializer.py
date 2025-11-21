@@ -15,6 +15,7 @@ from krrood.adapters.json_serializer import (
     SubclassJSONDecoder,
     to_json,
     from_json,
+    JSON_TYPE_NAME,
 )
 from krrood.utils import get_full_class_name
 
@@ -132,8 +133,8 @@ def test_roundtrip_dog_and_cat():
     dog_json = dog.to_json()
     cat_json = cat.to_json()
 
-    assert dog_json["type"] == get_full_class_name(Dog)
-    assert cat_json["type"] == get_full_class_name(Cat)
+    assert dog_json[JSON_TYPE_NAME] == get_full_class_name(Dog)
+    assert cat_json[JSON_TYPE_NAME] == get_full_class_name(Cat)
 
     dog2 = SubclassJSONSerializer.from_json(dog_json)
     cat2 = SubclassJSONSerializer.from_json(cat_json)
@@ -148,7 +149,7 @@ def test_deep_subclass_discovery():
     b = Bulldog(name="Butch", age=4, breed="Bulldog", stubborn=True)
     b_json = b.to_json()
 
-    assert b_json["type"] == get_full_class_name(Bulldog)
+    assert b_json[JSON_TYPE_NAME] == get_full_class_name(Bulldog)
 
     b2 = SubclassJSONSerializer.from_json(b_json)
     assert isinstance(b2, Bulldog)
@@ -157,7 +158,7 @@ def test_deep_subclass_discovery():
 
 def test_unknown_module_raises_unknown_module_error():
     with pytest.raises(UnknownModuleError):
-        SubclassJSONSerializer.from_json({"type": "non.existent.Class"})
+        SubclassJSONSerializer.from_json({JSON_TYPE_NAME: "non.existent.Class"})
 
 
 def test_missing_type_raises_missing_type_error():
@@ -167,7 +168,7 @@ def test_missing_type_raises_missing_type_error():
 
 def test_invalid_type_format_raises_invalid_type_format_error():
     with pytest.raises(InvalidTypeFormatError):
-        SubclassJSONSerializer.from_json({"type": "NotAQualifiedName"})
+        SubclassJSONSerializer.from_json({JSON_TYPE_NAME: "NotAQualifiedName"})
 
 
 essential_existing_module = "krrood.utils"
@@ -176,17 +177,17 @@ essential_existing_module = "krrood.utils"
 def test_class_not_found_raises_class_not_found_error():
     with pytest.raises(ClassNotFoundError):
         SubclassJSONSerializer.from_json(
-            {"type": f"{essential_existing_module}.DoesNotExist"}
+            {JSON_TYPE_NAME: f"{essential_existing_module}.DoesNotExist"}
         )
 
 
 def test_uuid_encoding():
     u = uuid.uuid4()
-    encoded = json.dumps(u, cls=SubclassJSONEncoder)
-    result = json.loads(encoded, cls=SubclassJSONDecoder)
+    encoded = to_json(u)
+    result = from_json(encoded)
     assert u == result
 
     us = [uuid.uuid4(), uuid.uuid4()]
-    encoded = json.dumps(us, cls=SubclassJSONEncoder)
-    result = json.loads(encoded, cls=SubclassJSONDecoder)
+    encoded = to_json(us)
+    result = from_json(encoded)
     assert us == result
