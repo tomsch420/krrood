@@ -4,16 +4,15 @@ from dataclasses import dataclass
 import pytest
 
 from krrood.adapters.json_serializer import (
-    get_full_class_name,
     MissingTypeError,
     InvalidTypeFormatError,
     UnknownModuleError,
     ClassNotFoundError,
-    InvalidSubclassError,
     SubclassJSONSerializer,
     SubclassJSONEncoder,
     SubclassJSONDecoder,
 )
+from krrood.utils import get_full_class_name
 
 
 @dataclass

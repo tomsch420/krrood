@@ -7,15 +7,7 @@ from typing_extensions import Dict, Any, Self
 import json
 import uuid
 
-
-def get_full_class_name(cls):
-    """
-    Returns the full name of a class, including the module name.
-
-    :param cls: The class.
-    :return: The full name of the class
-    """
-    return cls.__module__ + "." + cls.__name__
+from krrood.utils import get_full_class_name
 
 
 class JSONSerializationError(Exception):
@@ -59,18 +51,6 @@ class ClassNotFoundError(JSONSerializationError):
     def __post_init__(self):
         super().__init__(
             f"Class '{self.class_name}' not found in module '{self.module_name}'"
-        )
-
-
-@dataclass
-class InvalidSubclassError(JSONSerializationError):
-    """Raised when the resolved class is not a SubclassJSONSerializer subclass."""
-
-    fully_qualified_class_name: str
-
-    def __post_init__(self):
-        super().__init__(
-            f"Resolved type {self.fully_qualified_class_name} is not a SubclassJSONSerializer"
         )
 
 
@@ -126,9 +106,6 @@ class SubclassJSONSerializer:
         except AttributeError as exc:
             raise ClassNotFoundError(class_name, module_name) from exc
 
-        # if not issubclass(target_cls, SubclassJSONSerializer):
-        #   raise InvalidSubclassError(fully_qualified_class_name)
-
         return target_cls._from_json(data, **kwargs)
 
 
@@ -172,7 +149,7 @@ class SubclassJSONDecoder(json.JSONDecoder):
             return obj
 
 
-# %% Monkey patch UUID to behave like SubClassJSONSerializer
+# %% Monkey patch UUID to behave like SubclassJSONSerializer
 def uuid_from_json(data):
     return uuid.UUID(data["value"])
 
