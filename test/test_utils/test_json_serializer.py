@@ -1,15 +1,24 @@
+import json
+import uuid
 from dataclasses import dataclass
+from typing import Dict, Any, Self
+
 import pytest
 
+
 from krrood.adapters.json_serializer import (
-    get_full_class_name,
     MissingTypeError,
     InvalidTypeFormatError,
     UnknownModuleError,
     ClassNotFoundError,
-    InvalidSubclassError,
     SubclassJSONSerializer,
+    SubclassJSONEncoder,
+    SubclassJSONDecoder,
+    to_json,
+    from_json,
+    JSON_TYPE_NAME,
 )
+from krrood.utils import get_full_class_name
 
 
 @dataclass
@@ -25,18 +34,17 @@ class Animal(SubclassJSONSerializer):
         data = super().to_json()
         data.update(
             {
-                "name": self.name,
-                "age": self.age,
+                "name": to_json(self.name),
+                "age": to_json(self.age),
             }
         )
         return data
 
     @classmethod
     def _from_json(cls, data, **kwargs):
-        # This will not normally be called, subclasses should handle it.
         return cls(
-            name=data["name"],
-            age=data.get("age", kwargs.get("default_age", 0)),
+            name=from_json(data["name"]),
+            age=from_json(data["age"]),
         )
 
 
@@ -52,7 +60,7 @@ class Dog(Animal):
         data = super().to_json()
         data.update(
             {
-                "breed": self.breed,
+                "breed": to_json(self.breed),
             }
         )
         return data
@@ -60,9 +68,9 @@ class Dog(Animal):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=data["name"],
-            age=data.get("age", kwargs.get("default_age", 0)),
-            breed=data.get("breed", "mixed"),
+            name=from_json(data["name"]),
+            age=from_json(data["age"]),
+            breed=from_json(data["breed"]),
         )
 
 
@@ -78,7 +86,7 @@ class Bulldog(Dog):
         data = super().to_json()
         data.update(
             {
-                "stubborn": self.stubborn,
+                "stubborn": to_json(self.stubborn),
             }
         )
         return data
@@ -86,10 +94,10 @@ class Bulldog(Dog):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=data["name"],
-            age=data.get("age", kwargs.get("default_age", 0)),
-            breed=data.get("breed", "Bulldog"),
-            stubborn=data.get("stubborn", True),
+            name=from_json(data["name"]),
+            age=from_json(data["age"]),
+            breed=from_json(data["breed"]),
+            stubborn=from_json(data["stubborn"]),
         )
 
 
@@ -105,7 +113,7 @@ class Cat(Animal):
         data = super().to_json()
         data.update(
             {
-                "lives": self.lives,
+                "lives": to_json(self.lives),
             }
         )
         return data
@@ -113,10 +121,23 @@ class Cat(Animal):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=data["name"],
-            age=data.get("age", kwargs.get("default_age", 0)),
-            lives=data.get("lives", 9),
+            name=from_json(data["name"]),
+            age=from_json(data["age"]),
+            lives=from_json(data["lives"]),
         )
+
+
+@dataclass
+class ClassThatNeedsKWARGS(SubclassJSONSerializer):
+    a: int
+    b: float = 0
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "a": to_json(self.a)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(a=from_json(data["a"]), b=from_json(kwargs["b"]))
 
 
 def test_roundtrip_dog_and_cat():
@@ -126,8 +147,8 @@ def test_roundtrip_dog_and_cat():
     dog_json = dog.to_json()
     cat_json = cat.to_json()
 
-    assert dog_json["type"] == get_full_class_name(Dog)
-    assert cat_json["type"] == get_full_class_name(Cat)
+    assert dog_json[JSON_TYPE_NAME] == get_full_class_name(Dog)
+    assert cat_json[JSON_TYPE_NAME] == get_full_class_name(Cat)
 
     dog2 = SubclassJSONSerializer.from_json(dog_json)
     cat2 = SubclassJSONSerializer.from_json(cat_json)
@@ -142,28 +163,16 @@ def test_deep_subclass_discovery():
     b = Bulldog(name="Butch", age=4, breed="Bulldog", stubborn=True)
     b_json = b.to_json()
 
-    assert b_json["type"] == get_full_class_name(Bulldog)
+    assert b_json[JSON_TYPE_NAME] == get_full_class_name(Bulldog)
 
     b2 = SubclassJSONSerializer.from_json(b_json)
     assert isinstance(b2, Bulldog)
     assert b2 == b
 
 
-def test_kwargs_are_forwarded_to_from_json():
-    # Age intentionally omitted to test default propagation via kwargs
-    partial = {"type": get_full_class_name(Dog), "name": "Pup", "breed": "Beagle"}
-
-    result = SubclassJSONSerializer.from_json(partial, default_age=2)
-
-    assert isinstance(result, Dog)
-    assert result.age == 2
-    assert result.name == "Pup"
-    assert result.breed == "Beagle"
-
-
 def test_unknown_module_raises_unknown_module_error():
     with pytest.raises(UnknownModuleError):
-        SubclassJSONSerializer.from_json({"type": "non.existent.Class"})
+        SubclassJSONSerializer.from_json({JSON_TYPE_NAME: "non.existent.Class"})
 
 
 def test_missing_type_raises_missing_type_error():
@@ -173,7 +182,7 @@ def test_missing_type_raises_missing_type_error():
 
 def test_invalid_type_format_raises_invalid_type_format_error():
     with pytest.raises(InvalidTypeFormatError):
-        SubclassJSONSerializer.from_json({"type": "NotAQualifiedName"})
+        SubclassJSONSerializer.from_json({JSON_TYPE_NAME: "NotAQualifiedName"})
 
 
 essential_existing_module = "krrood.utils"
@@ -182,10 +191,24 @@ essential_existing_module = "krrood.utils"
 def test_class_not_found_raises_class_not_found_error():
     with pytest.raises(ClassNotFoundError):
         SubclassJSONSerializer.from_json(
-            {"type": f"{essential_existing_module}.DoesNotExist"}
+            {JSON_TYPE_NAME: f"{essential_existing_module}.DoesNotExist"}
         )
 
 
-def test_invalid_subclass_raises_invalid_subclass_error():
-    with pytest.raises(InvalidSubclassError):
-        SubclassJSONSerializer.from_json({"type": "builtins.object"})
+def test_uuid_encoding():
+    u = uuid.uuid4()
+    encoded = to_json(u)
+    result = from_json(encoded)
+    assert u == result
+
+    us = [uuid.uuid4(), uuid.uuid4()]
+    encoded = to_json(us)
+    result = from_json(encoded)
+    assert us == result
+
+
+def test_with_kwargs():
+    obj = ClassThatNeedsKWARGS(a=1, b=2.0)
+    data = obj.to_json()
+    result = from_json(data, b=2.0)
+    assert obj == result
