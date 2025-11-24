@@ -6,6 +6,7 @@ from krrood.ormatic.dao import (
     to_dao,
     is_data_column,
     NoDAOFoundError,
+    ToDAOState,
 )
 from ..dataset.example_classes import *
 from ..dataset.ormatic_interface import *
@@ -561,3 +562,27 @@ def test_json_integration(session, database):
     queried = session.scalars(select(JSONWrapperDAO)).one()
     reconstructed = queried.from_dao()
     assert reconstructed == obj
+
+
+def test_many_to_many_with_same_type(session, database):
+
+    state = ToDAOState()
+    position = Position(1, 2, 3)
+    ps1 = Positions([position], ["a"])
+    ps2 = Positions([position], ["a"])
+
+    ps1_dao = to_dao(ps1, state)
+    ps2_dao = to_dao(ps2, state)
+
+    session.add_all([ps1_dao, ps2_dao])
+    session.commit()
+    session.expunge_all()
+
+    q1 = select(PositionDAO)
+    r = session.scalars(q1).all()
+    assert len(r) == 1
+
+    q = select(PositionsDAO)
+    r_ps1, r_ps2 = session.scalars(q).all()
+
+    assert r_ps1.positions[0] is r_ps2.positions[0]
