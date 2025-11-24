@@ -553,9 +553,6 @@ def test_list_of_custom_type(session, database):
 
 
 def test_json_integration(session, database):
-    # obj = JSONWrapper(
-    #     [JSONSerializableClass(0.0, 1.0), JSONSerializableClass(3.0, 2.0)]
-    # )
     obj = JSONWrapper(JSONSerializableClass(1, 2), [JSONSerializableClass(3, 4)])
     dao = to_dao(obj)
     session.add(dao)

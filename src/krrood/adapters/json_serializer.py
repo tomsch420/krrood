@@ -139,17 +139,19 @@ class SubclassJSONDecoder(json.JSONDecoder):
             obj = s
         return self._deserialize_nested(obj)
 
-    def _deserialize_nested(self, obj):
+    def _deserialize_nested(self, obj, **kwargs):
         """
         Recursively deserialize nested objects.
         """
         if isinstance(obj, dict):
             if JSON_TYPE_NAME in obj:
-                return SubclassJSONSerializer.from_json(obj)
+                return SubclassJSONSerializer.from_json(obj, **kwargs)
             else:
-                return {k: self._deserialize_nested(v) for k, v in obj.items()}
+                return {
+                    k: self._deserialize_nested(v, **kwargs) for k, v in obj.items()
+                }
         elif isinstance(obj, list):
-            return [self._deserialize_nested(item) for item in obj]
+            return [self._deserialize_nested(item, **kwargs) for item in obj]
         else:
             return obj
 
@@ -165,7 +167,7 @@ def to_json(obj: Union[SubclassJSONSerializer, Any]) -> str:
     return json.dumps(obj, cls=SubclassJSONEncoder)
 
 
-def from_json(data: str) -> Union[SubclassJSONSerializer, Any]:
+def from_json(data: str, **kwargs) -> Union[SubclassJSONSerializer, Any]:
     """
     Deserialize a JSON string to an object.
     This is a drop-in replacement for json.loads which handles SubclassJSONSerializer-like objects.
@@ -177,7 +179,7 @@ def from_json(data: str) -> Union[SubclassJSONSerializer, Any]:
     # If we already have a Python container, recursively deserialize nested subclass payloads
     if isinstance(data, dict) or isinstance(data, list):
         decoder = SubclassJSONDecoder()
-        return decoder._deserialize_nested(data)
+        return decoder._deserialize_nested(data, **kwargs)
 
     # If it is not a string (e.g., int, float, bool, None), return as-is
     if not isinstance(data, str):

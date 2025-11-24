@@ -1,6 +1,7 @@
 import json
 import uuid
 from dataclasses import dataclass
+from typing import Dict, Any, Self
 
 import pytest
 
@@ -126,6 +127,19 @@ class Cat(Animal):
         )
 
 
+@dataclass
+class ClassThatNeedsKWARGS(SubclassJSONSerializer):
+    a: int
+    b: float = 0
+
+    def to_json(self) -> Dict[str, Any]:
+        return {**super().to_json(), "a": to_json(self.a)}
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        return cls(a=from_json(data["a"]), b=from_json(kwargs["b"]))
+
+
 def test_roundtrip_dog_and_cat():
     dog = Dog(name="Rex", age=5, breed="Shepherd")
     cat = Cat(name="Misty", age=3, lives=7)
@@ -191,3 +205,10 @@ def test_uuid_encoding():
     encoded = to_json(us)
     result = from_json(encoded)
     assert us == result
+
+
+def test_with_kwargs():
+    obj = ClassThatNeedsKWARGS(a=1, b=2.0)
+    data = obj.to_json()
+    result = from_json(data, b=2.0)
+    assert obj == result
