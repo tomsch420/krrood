@@ -87,6 +87,11 @@ class ORMatic:
     The wrapped tables instances for the SQLAlchemy conversion.
     """
 
+    association_tables: List = field(default_factory=list, init=False)
+    """
+    List of association tables for many-to-many relationships.
+    """
+
     def __post_init__(self):
         self.type_mappings[Type] = TypeType
         self.imported_modules.add(Type.__module__)

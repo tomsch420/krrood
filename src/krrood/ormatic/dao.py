@@ -11,7 +11,7 @@ from typing import _GenericAlias
 import sqlalchemy.inspection
 import sqlalchemy.orm
 from sqlalchemy import Column
-from sqlalchemy.orm import MANYTOONE, ONETOMANY, RelationshipProperty
+from sqlalchemy.orm import MANYTOONE, MANYTOMANY, ONETOMANY, RelationshipProperty
 from typing_extensions import (
     Type,
     get_args,
@@ -581,7 +581,7 @@ class DataAccessObject(HasGeneric[T]):
                     relationship=relationship,
                     state=state,
                 )
-            elif relationship.direction == ONETOMANY:
+            elif relationship.direction == ONETOMANY or relationship.direction == MANYTOMANY:
                 self._extract_collection_relationship(
                     obj=obj,
                     relationship=relationship,
@@ -727,7 +727,7 @@ class DataAccessObject(HasGeneric[T]):
                 if is_circular:
                     circular_refs[relationship.key] = value
                 rel_kwargs[relationship.key] = parsed
-            elif relationship.direction == ONETOMANY:
+            elif relationship.direction == ONETOMANY or relationship.direction == MANYTOMANY:
                 parsed_list, circular_list = state.parse_collection(value)
                 if circular_list:
                     circular_refs[relationship.key] = circular_list
