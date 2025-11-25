@@ -16,7 +16,7 @@ polymorphic dataclass instances (for example a base ``Shape`` with concrete
 hand‑crafted ``if/else`` type switches.
 
 
-.. warning
+.. warning::
     Be aware that due to the limitations of JSON this only works for ONE-TO-ONE/MANY relationships.
 
 How it works (in short)
@@ -94,13 +94,14 @@ are built in and already registered.
 
    from dataclasses import dataclass
    from decimal import Decimal
+   from krrood.utils import get_full_class_name
    from krrood.adapters.json_serializer import (
        JSON_TYPE_NAME, TypeRegistry, to_json, from_json
    )
 
    # 1) Provide pair of functions
    def serialize_decimal(obj: Decimal) -> dict:
-       return {JSON_TYPE_NAME: "decimal.Decimal", "value": str(obj)}
+       return {JSON_TYPE_NAME: get_full_class_name(type(obj)), "value": str(obj)}
 
    def deserialize_decimal(data: dict) -> Decimal:
        return Decimal(data["value"])
@@ -112,47 +113,5 @@ are built in and already registered.
    s = to_json({"price": Decimal("9.99")})
    restored = from_json(s)  # {"price": Decimal("9.99")}
 
-Error handling
---------------
-During deserialization the following exceptions can be raised from
-:mod:`krrood.adapters.json_serializer`:
 
-* :class:`MissingTypeError` – ``"__json_type__"`` is not present in a payload
-  that should represent an object.
-* :class:`InvalidTypeFormatError` – the type string is not a fully qualified
-  ``module.Class`` name.
-* :class:`UnknownModuleError` – the module part of the type cannot be imported.
-* :class:`ClassNotFoundError` – the class name is not found in the module.
 
-You can catch these to provide user‑friendly messages:
-
-.. code-block:: python
-
-   from krrood.adapters.json_serializer import from_json, MissingTypeError
-
-   try:
-       obj = from_json(user_supplied_string)
-   except MissingTypeError:
-       # inform the user or fall back to a default
-       obj = None
-
-Tips and best practices
------------------------
-* Keep ``to_json`` minimal and predictable; avoid side effects.
-* Do not store derived values if they can be recomputed on load.
-* Make ``_from_json`` resilient to missing optional keys by providing defaults.
-* Prefer dataclasses and short descriptive names to keep payloads readable.
-
-Reference
----------
-API surface used in this guide:
-
-* :class:`krrood.adapters.json_serializer.SubclassJSONSerializer`
-* :func:`krrood.adapters.json_serializer.to_json`
-* :func:`krrood.adapters.json_serializer.from_json`
-* :class:`krrood.adapters.json_serializer.TypeRegistry`
-* :data:`krrood.adapters.json_serializer.JSON_TYPE_NAME`
-* :class:`krrood.adapters.json_serializer.MissingTypeError`
-* :class:`krrood.adapters.json_serializer.InvalidTypeFormatError`
-* :class:`krrood.adapters.json_serializer.UnknownModuleError`
-* :class:`krrood.adapters.json_serializer.ClassNotFoundError`

@@ -274,7 +274,7 @@ def serialize_uuid(obj: uuid.UUID) -> Dict[str, Any]:
     :return: Dictionary with type information and UUID value
     """
     return {
-        JSON_TYPE_NAME: get_full_class_name(uuid.UUID),
+        JSON_TYPE_NAME: get_full_class_name(type(obj)),
         "value": str(obj),
     }
 
