@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import uuid
 from dataclasses import dataclass, field
+from types import NoneType
 
 from typing_extensions import Dict, Any, Self, Union, Callable, Type
 
@@ -19,6 +20,7 @@ leaf_types = (
     float,
     str,
     bool,
+    NoneType,
 )  # containers that can be serialized by the built-in JSON module
 
 
