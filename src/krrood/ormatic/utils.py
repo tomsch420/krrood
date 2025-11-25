@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import inspect
+import json
 import types
 from contextlib import suppress
 from enum import Enum
@@ -198,7 +199,7 @@ def create_engine(url: Union[str, URL], **kwargs: Any) -> Engine:
     """
     return create_sqlalchemy_engine(
         url,
-        json_serializer=to_json,
-        json_deserializer=from_json,
+        json_serializer=lambda x: json.dumps(to_json(x)),
+        json_deserializer=lambda x: from_json(json.loads(x)),
         **kwargs,
     )
