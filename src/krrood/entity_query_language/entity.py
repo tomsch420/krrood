@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from black.strings import Match
 
 from .hashed_data import T
 from .symbol_graph import SymbolGraph
@@ -25,6 +24,7 @@ from typing_extensions import (
     Tuple,
     List,
     Callable,
+    TypeVar,
 )
 
 from .symbolic import (
@@ -55,12 +55,14 @@ from .predicate import (
     HasType,
 )
 
-
 ConditionType = Union[SymbolicExpression, bool, Predicate]
 """
 The possible types for conditions.
 """
-EntityType = Union[SetOf[T], Entity[T], T, Iterable[T], Type[T], Match[T]]
+
+EntityType = Union[
+    SetOf[T], Entity[T], T, Iterable[T], Type[T]
+]  # include Match[T] after moving match to a module @bass
 """
 The possible types for entities.
 """
