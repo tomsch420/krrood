@@ -12,8 +12,6 @@ from krrood.adapters.json_serializer import (
     UnknownModuleError,
     ClassNotFoundError,
     SubclassJSONSerializer,
-    SubclassJSONEncoder,
-    SubclassJSONDecoder,
     to_json,
     from_json,
     JSON_TYPE_NAME,
@@ -34,8 +32,8 @@ class Animal(SubclassJSONSerializer):
         data = super().to_json()
         data.update(
             {
-                "name": to_json(self.name),
-                "age": to_json(self.age),
+                "name": self.name,
+                "age": self.age,
             }
         )
         return data
@@ -43,8 +41,8 @@ class Animal(SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=from_json(data["name"]),
-            age=from_json(data["age"]),
+            name=(data["name"]),
+            age=(data["age"]),
         )
 
 
@@ -60,7 +58,7 @@ class Dog(Animal):
         data = super().to_json()
         data.update(
             {
-                "breed": to_json(self.breed),
+                "breed": self.breed,
             }
         )
         return data
@@ -68,9 +66,9 @@ class Dog(Animal):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=from_json(data["name"]),
-            age=from_json(data["age"]),
-            breed=from_json(data["breed"]),
+            name=(data["name"]),
+            age=(data["age"]),
+            breed=(data["breed"]),
         )
 
 
@@ -86,7 +84,7 @@ class Bulldog(Dog):
         data = super().to_json()
         data.update(
             {
-                "stubborn": to_json(self.stubborn),
+                "stubborn": (self.stubborn),
             }
         )
         return data
@@ -94,10 +92,10 @@ class Bulldog(Dog):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=from_json(data["name"]),
-            age=from_json(data["age"]),
-            breed=from_json(data["breed"]),
-            stubborn=from_json(data["stubborn"]),
+            name=(data["name"]),
+            age=(data["age"]),
+            breed=(data["breed"]),
+            stubborn=(data["stubborn"]),
         )
 
 
@@ -113,7 +111,7 @@ class Cat(Animal):
         data = super().to_json()
         data.update(
             {
-                "lives": to_json(self.lives),
+                "lives": (self.lives),
             }
         )
         return data
@@ -121,9 +119,9 @@ class Cat(Animal):
     @classmethod
     def _from_json(cls, data, **kwargs):
         return cls(
-            name=from_json(data["name"]),
-            age=from_json(data["age"]),
-            lives=from_json(data["lives"]),
+            name=(data["name"]),
+            age=(data["age"]),
+            lives=(data["lives"]),
         )
 
 
@@ -133,11 +131,11 @@ class ClassThatNeedsKWARGS(SubclassJSONSerializer):
     b: float = 0
 
     def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "a": to_json(self.a)}
+        return {**super().to_json(), "a": (self.a)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(a=from_json(data["a"]), b=from_json(kwargs["b"]))
+        return cls(a=(data["a"]), b=(kwargs["b"]))
 
 
 def test_roundtrip_dog_and_cat():

@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 import importlib
+import uuid
 from dataclasses import dataclass, field
-from json import JSONDecodeError
 
 from typing_extensions import Dict, Any, Self, Union, Callable, Type
-import json
-import uuid
 
-from ..utils import get_full_class_name
 from ..singleton import SingletonMeta
+from ..utils import get_full_class_name
+
+list_like_classes = (
+    list,
+    tuple,
+    set,
+)  # classes that can be serialized by the built-in JSON module
+leaf_types = (
+    int,
+    float,
+    str,
+    bool,
+)  # containers that can be serialized by the built-in JSON module
+
 
 JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
+
+JSON_DICT_TYPE = Dict[str, Any]  # Commonly referred JSON dict
+JSON_RETURN_TYPE = Union[
+    JSON_DICT_TYPE, list[JSON_DICT_TYPE], *leaf_types
+]  # Commonly referred JSON types
 
 
 class JSONSerializationError(Exception):
@@ -59,15 +75,49 @@ class ClassNotFoundError(JSONSerializationError):
 
 
 @dataclass
-class TypeRegistry(metaclass=SingletonMeta):
-    """Singleton registry for custom serializers and deserializers."""
+class ClassNotSerializableError(JSONSerializationError):
+    """Raised when the class specified cannot be JSON-serialized."""
+
+    clazz: Type
+
+    def __post_init__(self):
+        super().__init__(f"Class '{self.clazz.__name__}' cannot be serialized")
+
+
+@dataclass
+class ClassNotDeserializableError(JSONSerializationError):
+    """Raised when the class specified cannot be JSON-deserialized."""
+
+    clazz: Type
+
+    def __post_init__(self):
+        super().__init__(f"Class '{self.clazz.__name__}' cannot be deserialized")
+
+
+@dataclass
+class JSONSerializableTypeRegistry(metaclass=SingletonMeta):
+    """
+    Singleton registry for custom serializers and deserializers.
+
+    Use this registry when you need to add custom JSON serialization/deserialization logic for a type where you cannot
+    control its inheritance.
+    """
 
     _serializers: Dict[Type, Callable[[Any], Dict[str, Any]]] = field(
         default_factory=dict
     )
-    _deserializers: Dict[str, Callable[[Dict[str, Any]], Any]] = field(
+    """
+    Dictionary mapping types to their respective serializer functions.
+    Signature of functions must be like `SubclassJSONSerializer.to_json`
+    """
+
+    _deserializers: Dict[Type, Callable[[Dict[str, Any]], Any]] = field(
         default_factory=dict
     )
+    """
+    Dictionary mapping types to their respective deserializer functions.
+    Signature of functions must be like `SubclassJSONSerializer._from_json`
+    """
 
     def register(
         self,
@@ -82,29 +132,30 @@ class TypeRegistry(metaclass=SingletonMeta):
         :param serializer: Function to serialize instances of the type
         :param deserializer: Function to deserialize instances of the type
         """
-        type_name = f"{type_class.__module__}.{type_class.__name__}"
         self._serializers[type_class] = serializer
-        self._deserializers[type_name] = deserializer
+        self._deserializers[type_class] = deserializer
 
-    def get_serializer(self, obj: Any) -> Callable[[Any], Dict[str, Any]] | None:
+    def get_serializer(
+        self, type_class: Type
+    ) -> Callable[[Any], Dict[str, Any]] | None:
         """
         Get the serializer for an object's type.
 
-        :param obj: The object to get the serializer for
+        :param type_class: The object to get the serializer for
         :return: The serializer function or None if not registered
         """
-        return self._serializers.get(type(obj))
+        return self._serializers.get(type_class)
 
     def get_deserializer(
-        self, type_name: str
+        self, type_class: Type
     ) -> Callable[[Dict[str, Any]], Any] | None:
         """
         Get the deserializer for a type name.
 
-        :param type_name: The fully qualified type name
+        :param type_class: The class to get the deserializer for
         :return: The deserializer function or None if not registered
         """
-        return self._deserializers.get(type_name)
+        return self._deserializers.get(type_class)
 
 
 class SubclassJSONSerializer:
@@ -140,6 +191,13 @@ class SubclassJSONSerializer:
         :param kwargs: Additional keyword arguments to pass to the constructor of the subclass.
         :return: The correct instance of the subclass
         """
+
+        if isinstance(data, leaf_types):
+            return data
+
+        if isinstance(data, list_like_classes):
+            return [from_json(d) for d in data]
+
         fully_qualified_class_name = data.get(JSON_TYPE_NAME)
         if not fully_qualified_class_name:
             raise MissingTypeError()
@@ -159,99 +217,52 @@ class SubclassJSONSerializer:
         except AttributeError as exc:
             raise ClassNotFoundError(class_name, module_name) from exc
 
-        return target_cls._from_json(data, **kwargs)
+        if issubclass(target_cls, SubclassJSONSerializer):
+            return target_cls._from_json(data, **kwargs)
+
+        registered_json_deserializer = JSONSerializableTypeRegistry().get_deserializer(
+            target_cls
+        )
+        if not registered_json_deserializer:
+            raise ClassNotDeserializableError(target_cls)
+
+        return registered_json_deserializer(data, **kwargs)
 
 
-class SubclassJSONEncoder(json.JSONEncoder):
+def from_json(data: Dict[str, Any], **kwargs) -> Union[SubclassJSONSerializer, Any]:
     """
-    Custom encoder to handle classes that inherit from SubClassJSONEncoder and UUIDs.
-    """
-
-    def default(self, obj):
-        # Check registry first
-        serializer = TypeRegistry().get_serializer(obj)
-        if serializer:
-            return serializer(obj)
-
-        # handle objects that are duck-typed like SubclassJSONSerializer
-        if hasattr(obj, "to_json"):
-            return obj.to_json()
-
-        # Let the base class handle other objects
-        return json.JSONEncoder.default(self, obj)
-
-
-class SubclassJSONDecoder(json.JSONDecoder):
-    """
-    Custom decoder to handle classes that inherit from SubClassJSONSerializer and UUIDs.
-    """
-
-    def decode(self, s, _w=json.decoder.WHITESPACE.match):
-        if not isinstance(s, dict):
-            obj = super().decode(s, _w)
-        else:
-            obj = s
-        return self._deserialize_nested(obj)
-
-    def _deserialize_nested(self, obj, **kwargs):
-        """
-        Recursively deserialize nested objects.
-        """
-        if isinstance(obj, dict):
-            if JSON_TYPE_NAME in obj:
-                type_name = obj[JSON_TYPE_NAME]
-
-                # Check registry first
-                deserializer = TypeRegistry().get_deserializer(type_name)
-                if deserializer:
-                    return deserializer(obj)
-
-                # Fall back to SubclassJSONSerializer.from_json
-                return SubclassJSONSerializer.from_json(obj, **kwargs)
-            else:
-                return {
-                    k: self._deserialize_nested(v, **kwargs) for k, v in obj.items()
-                }
-        elif isinstance(obj, list):
-            return [self._deserialize_nested(item, **kwargs) for item in obj]
-        else:
-            return obj
-
-
-def to_json(obj: Union[SubclassJSONSerializer, Any]) -> str:
-    """
-    Serialize an object to a JSON string.
-    This is a drop-in replacement for json.dumps which handles SubclassJSONSerializer-like objects.
-
-    :param obj: The object to serialize
-    :return: The JSON string
-    """
-    return json.dumps(obj, cls=SubclassJSONEncoder)
-
-
-def from_json(data: str, **kwargs) -> Union[SubclassJSONSerializer, Any]:
-    """
-    Deserialize a JSON string to an object.
-    This is a drop-in replacement for json.loads which handles SubclassJSONSerializer-like objects.
+    Deserialize a JSON dict to an object.
 
     :param data: The JSON string
     :return: The deserialized object
     """
+    return SubclassJSONSerializer.from_json(data, **kwargs)
 
-    # If we already have a Python container, recursively deserialize nested subclass payloads
-    if isinstance(data, (dict, list)):
-        decoder = SubclassJSONDecoder()
-        return decoder._deserialize_nested(data, **kwargs)
 
-    # If it is not a string (e.g., int, float, bool, None), return as-is
-    if not isinstance(data, str):
-        return data
+def to_json(obj: Union[SubclassJSONSerializer, Any]) -> JSON_RETURN_TYPE:
+    """
+    Serialize an object to a JSON dict.
 
-    # It is a string: try to parse as JSON; if that fails, treat it as a raw string
-    try:
-        return json.loads(data, cls=SubclassJSONDecoder)
-    except JSONDecodeError:
-        return data
+    :param obj: The object to serialize
+    :return: The JSON string
+    """
+
+    if isinstance(obj, leaf_types):
+        return obj
+
+    if isinstance(obj, list_like_classes):
+        return [to_json(item) for item in obj]
+
+    if isinstance(obj, SubclassJSONSerializer):
+        return obj.to_json()
+
+    registered_json_serializer = JSONSerializableTypeRegistry().get_serializer(
+        type(obj)
+    )
+    if not registered_json_serializer:
+        raise ClassNotSerializableError(type(obj))
+
+    return registered_json_serializer(obj)
 
 
 # %% UUID serialization functions
@@ -263,7 +274,7 @@ def serialize_uuid(obj: uuid.UUID) -> Dict[str, Any]:
     :return: Dictionary with type information and UUID value
     """
     return {
-        JSON_TYPE_NAME: f"{uuid.UUID.__module__}.{uuid.UUID.__name__}",
+        JSON_TYPE_NAME: get_full_class_name(uuid.UUID),
         "value": str(obj),
     }
 
@@ -279,4 +290,4 @@ def deserialize_uuid(data: Dict[str, Any]) -> uuid.UUID:
 
 
 # Register UUID with the type registry
-TypeRegistry().register(uuid.UUID, serialize_uuid, deserialize_uuid)
+JSONSerializableTypeRegistry().register(uuid.UUID, serialize_uuid, deserialize_uuid)
