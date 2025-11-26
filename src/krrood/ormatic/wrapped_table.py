@@ -277,7 +277,7 @@ class WrappedTable:
         key = self._to_wrapped_tables_key(resolved_parent_wrapped)
         return self.ormatic.wrapped_tables.get(key)
 
-    # ---------------------------- helper methods ---------------------------- #
+    # %% helper methods
 
     def _find_direct_parent_wrapped(self) -> Optional[WrappedClass]:
         """Return the directly inherited parent ``WrappedClass`` if present.
@@ -572,7 +572,9 @@ class WrappedTable:
         target_wrapped_table = self.get_table_of_wrapped_field(wrapped_field)
 
         # create association table name
-        association_table_name = f"{self.tablename.lower()}_{wrapped_field.field.name}_association"
+        association_table_name = (
+            f"{self.tablename.lower()}_{wrapped_field.field.name}_association"
+        )
 
         # create foreign key names for the association table
         left_fk_name = f"{self.tablename.lower()}{self.ormatic.foreign_key_postfix}"
