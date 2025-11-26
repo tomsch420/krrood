@@ -586,3 +586,20 @@ def test_many_to_many_with_same_type(session, database):
     r_ps1, r_ps2 = session.scalars(q).all()
 
     assert r_ps1.positions[0] is r_ps2.positions[0]
+
+
+def test_multiple_inheritance(session, database):
+    assert issubclass(MultipleInheritanceDAO, PrimaryBaseDAO)
+    obj = MultipleInheritance(
+        primary_attribute="p", mixin_attribute="m", extra_attribute="e"
+    )
+    dao = to_dao(obj)
+    assert hasattr(dao, "extra_attribute")
+    assert hasattr(dao, "mixin_attribute")
+    assert hasattr(dao, "primary_attribute")
+    session.add(dao)
+    session.commit()
+
+    queried = session.scalars(select(MultipleInheritanceDAO)).one()
+    reconstructed = queried.from_dao()
+    assert reconstructed == obj
