@@ -589,7 +589,7 @@ def test_many_to_many_with_same_type(session, database):
 
 
 def test_multiple_inheritance(session, database):
-    assert issubclass(MultipleInheritanceDAO, PrimaryBase)
+    assert issubclass(MultipleInheritanceDAO, PrimaryBaseDAO)
     obj = MultipleInheritance(
         primary_attribute="p", mixin_attribute="m", extra_attribute="e"
     )

@@ -447,16 +447,18 @@ class PrimaryBaseDAO(Base, DataAccessObject[test.dataset.example_classes.Primary
 
 
 class MultipleInheritanceDAO(
-    MixinDAO, DataAccessObject[test.dataset.example_classes.MultipleInheritance]
+    PrimaryBaseDAO, DataAccessObject[test.dataset.example_classes.MultipleInheritance]
 ):
 
     __tablename__ = "MultipleInheritanceDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(MixinDAO.database_id), primary_key=True, use_existing_column=True
+        ForeignKey(PrimaryBaseDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
     )
 
-    primary_attribute: Mapped[builtins.str] = mapped_column(
+    mixin_attribute: Mapped[builtins.str] = mapped_column(
         String(255), use_existing_column=True
     )
     extra_attribute: Mapped[builtins.str] = mapped_column(
@@ -465,7 +467,7 @@ class MultipleInheritanceDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "MultipleInheritanceDAO",
-        "inherit_condition": database_id == MixinDAO.database_id,
+        "inherit_condition": database_id == PrimaryBaseDAO.database_id,
     }
 
 
