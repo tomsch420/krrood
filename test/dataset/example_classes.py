@@ -577,3 +577,21 @@ class JSONSerializableClass(SubclassJSONSerializer):
 class JSONWrapper:
     json_serializable_object: JSONSerializableClass
     more_objects: List[JSONSerializableClass] = field(default_factory=list)
+
+
+# %% Multiple inheritance and MRO tests
+
+
+@dataclass
+class Mixin:
+    mixin_attribute: str
+
+
+@dataclass
+class PrimaryBase:
+    primary_attribute: str
+
+
+@dataclass
+class MultipleInheritance(PrimaryBase, Mixin):
+    extra_attribute: str
