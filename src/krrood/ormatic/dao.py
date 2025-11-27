@@ -529,8 +529,11 @@ class DataAccessObject(HasGeneric[T]):
         # split relationships in relationships by parent and relationships by child
         all_relationships = mapper.relationships
         relationships_of_parent = parent_mapper.relationships
+        relationship_names_of_parent = list(
+            map(lambda x: x.key, relationships_of_parent)
+        )
         relationships_of_this_table = [
-            r for r in all_relationships if r not in relationships_of_parent
+            r for r in all_relationships if r.key not in relationship_names_of_parent
         ]
 
         for relationship in relationships_of_parent:
