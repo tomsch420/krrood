@@ -2,24 +2,36 @@
 skinparam styleenclosing bold
 
 ' Define the components/nodes
+package "Persistence" {
 [ORMatic]
 [SQLAlchemy Interface]
 [Database]
-[Class Diagram]
-[Domain Definition as Python Dataclasses]
-[Domain Instances]
-[Expert]
+}
+
+package "Domain Specific Model" {
+    [Domain Definition as Python Dataclasses]
+    [Domain Instances as Python Objects]
+}
+
+
+:Expert:
+
+package "Inference" {
 [Ripple Down Rules]
 [Rules]
-[Entity Query Language]
+}
 
+package "Interface" {
+[Entity Query Language]
+[Class Diagram]
+}
 ' Define the relationships (arrows and labels)
 
 ' ORMatic relationships
 [ORMatic] --> [SQLAlchemy Interface] : imports
 [ORMatic] --> [SQLAlchemy Interface] : creates
 [ORMatic] --> [Class Diagram] : reads definitions
-[ORMatic] --> [Domain Instances] : to/from dao
+[ORMatic] --> [Domain Instances as Python Objects] : to/from dao
 
 ' SQLAlchemy Interface relationship
 [SQLAlchemy Interface] --> [Database] : CRUD
@@ -28,22 +40,22 @@ skinparam styleenclosing bold
 [Class Diagram] --> [Domain Definition as Python Dataclasses] : standardizes access to class definitions
 
 ' Domain Definition as Python Dataclasses relationships
-[Domain Definition as Python Dataclasses] --> [Domain Instances] : creates
+[Domain Definition as Python Dataclasses] --> [Domain Instances as Python Objects] : creates
 
 ' Expert relationships
-[Expert] --> [Ripple Down Rules] : writes rules
-[Expert] --> [Class Diagram] : writes definitions
+:Expert: --> [Ripple Down Rules] : writes rules
+:Expert: --> [Class Diagram] : writes definitions
 
 ' Ripple Down Rules relationships
 [Ripple Down Rules] --> [Rules] : maintains
 [Ripple Down Rules] --> [Class Diagram] : reads definitions
-[Ripple Down Rules] --> [Expert] : prompts
+[Ripple Down Rules] --> :Expert: : prompts
 
 ' Rules relationships
 [Rules] --> [Entity Query Language] : written in
 
 ' Entity Query Language relationship
-[Entity Query Language] --> [Domain Instances] : reasons
+[Entity Query Language] --> [Domain Instances as Python Objects] : reasons
 [Entity Query Language] --> [Class Diagram] : reads definitions
 
 @enduml
