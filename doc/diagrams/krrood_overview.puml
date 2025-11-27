@@ -1,0 +1,49 @@
+@startuml
+skinparam styleenclosing bold
+
+' Define the components/nodes
+[ORMatic]
+[SQLAlchemy Interface]
+[Database]
+[Class Diagram]
+[Domain Definition as Python Dataclasses]
+[Domain Instances]
+[Expert]
+[Ripple Down Rules]
+[Rules]
+[Entity Query Language]
+
+' Define the relationships (arrows and labels)
+
+' ORMatic relationships
+[ORMatic] --> [SQLAlchemy Interface] : imports
+[ORMatic] --> [SQLAlchemy Interface] : creates
+[ORMatic] --> [Class Diagram] : reads definitions
+[ORMatic] --> [Domain Instances] : to/from dao
+
+' SQLAlchemy Interface relationship
+[SQLAlchemy Interface] --> [Database] : CRUD
+
+' Class Diagram relationships
+[Class Diagram] --> [Domain Definition as Python Dataclasses] : standardizes access to class definitions
+
+' Domain Definition as Python Dataclasses relationships
+[Domain Definition as Python Dataclasses] --> [Domain Instances] : creates
+
+' Expert relationships
+[Expert] --> [Ripple Down Rules] : writes rules
+[Expert] --> [Class Diagram] : writes definitions
+
+' Ripple Down Rules relationships
+[Ripple Down Rules] --> [Rules] : maintains
+[Ripple Down Rules] --> [Class Diagram] : reads definitions
+[Ripple Down Rules] --> [Expert] : prompts
+
+' Rules relationships
+[Rules] --> [Entity Query Language] : written in
+
+' Entity Query Language relationship
+[Entity Query Language] --> [Domain Instances] : reasons
+[Entity Query Language] --> [Class Diagram] : reads definitions
+
+@enduml
