@@ -475,10 +475,18 @@ def test_inheritance_mapper_args(session, database):
 
 
 def test_to_dao_alternatively_mapped_parent(session, database):
-    ch2 = ChildLevel2NormallyMapped(1, 2, 3)
+    ch2 = ChildLevel2NormallyMapped(1, [Entity("a")], 2, 3)
     ch2_dao = to_dao(ch2)
 
-    assert ch2_dao == ChildLevel2NormallyMappedDAO("1", 2, 3)
+    assert isinstance(ch2_dao.entities[0], CustomEntityDAO)
+    assert ch2_dao.entities == [CustomEntityDAO(overwritten_name="a")]
+
+    assert ch2_dao == ChildLevel2NormallyMappedDAO(
+        derived_attribute="1",
+        entities=[CustomEntityDAO(overwritten_name="a")],
+        level_one_attribute=2,
+        level_two_attribute=3,
+    )
 
 
 def test_callable_alternative_mapping():

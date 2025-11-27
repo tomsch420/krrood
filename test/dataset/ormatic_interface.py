@@ -44,6 +44,15 @@ class Base(DeclarativeBase):
 
 
 # Association tables for many-to-many relationships
+parentalternativelymappedmappingdao_entities_association = Table(
+    "parentalternativelymappedmappingdao_entities_association",
+    Base.metadata,
+    Column(
+        "parentalternativelymappedmappingdao_id",
+        ForeignKey("ParentAlternativelyMappedMappingDAO.database_id"),
+    ),
+    Column("customentitydao_id", ForeignKey("CustomEntityDAO.database_id")),
+)
 alternativemappingaggregatordao_entities1_association = Table(
     "alternativemappingaggregatordao_entities1_association",
     Base.metadata,
@@ -331,6 +340,12 @@ class ParentAlternativelyMappedMappingDAO(
 
     polymorphic_type: Mapped[str] = mapped_column(
         String(255), nullable=False, use_existing_column=True
+    )
+
+    entities: Mapped[typing.List[CustomEntityDAO]] = relationship(
+        "CustomEntityDAO",
+        secondary="parentalternativelymappedmappingdao_entities_association",
+        cascade="save-update, merge",
     )
 
     __mapper_args__ = {
